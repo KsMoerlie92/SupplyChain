@@ -61,24 +61,29 @@ async function toggleHSMeasures(hsCode, trEl) {
     + `?sd=${date}&d=E&cc=${cleanCode}${country?`&co=${country}`:''}&cu=EUR&l=nl`;
 
   // Exact endpoint confirmed via browser DevTools
-  const base = `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures`;
-  const apiUrl = `${base}?count=50&offset=0&sortorder=A&simulationdate=${encodeURIComponent(date)}&tradedirection=E&commoditycode=${encodeURIComponent(cleanCode)}&currency=EUR`;
+  const base   = `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures`;
+  const params = `count=50&offset=0&sortorder=A&simulationdate=${encodeURIComponent(date)}&tradedirection=E&commoditycode=${encodeURIComponent(cleanCode)}&currency=EUR`;
+  const apiUrl = `${base}?${params}`;
 
-  const candidates = [apiUrl];
+  // Try direct first, then via CORS proxy (douane.nl blocks cross-origin from external domains)
+  const candidates = [
+    { url: apiUrl,                                           label: 'direct' },
+    { url: `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`, label: 'corsproxy.io' },
+  ];
 
-  let lastErr = '';
-  for (const apiUrl of candidates) {
+  let lastErr = '', lastUrl = apiUrl;
+  for (const { url: fetchUrl, label } of candidates) {
     try {
-      const resp = await fetch(apiUrl, { headers: { 'Accept': 'application/json', 'Accept-Language': 'nl' } });
-      if (!resp.ok) { lastErr = `HTTP ${resp.status}`; continue; }
+      const resp = await fetch(fetchUrl, { headers: { 'Accept': 'application/json', 'Accept-Language': 'nl' } });
+      if (!resp.ok) { lastErr = `HTTP ${resp.status} (${label})`; lastUrl = fetchUrl; continue; }
       const data = await resp.json();
-      if (!data || typeof data !== 'object') { lastErr = 'Ongeldig JSON formaat'; continue; }
+      if (!data || typeof data !== 'object') { lastErr = `Ongeldig JSON (${label})`; continue; }
 
       // Filter items by chosen country client-side:
       // Always show ERGA OMNES (1011 = all countries) + measures for the selected country
       if (country && Array.isArray(data.items)) {
         const sel = country.toUpperCase();
-        data._allItems = data.items;           // keep original for debug
+        data._allItems = data.items;
         data.items = data.items.filter(m => {
           const geo = (m.geographicalArea?.id || '').toUpperCase();
           return geo === '1011' || geo === sel;
@@ -90,21 +95,17 @@ async function toggleHSMeasures(hsCode, trEl) {
       td.querySelector('.hs-measures-panel').style.maxHeight = 'none';
       return;
     } catch (err) {
-      lastErr = err.message;
+      lastErr = `${err.message} (${label})`; lastUrl = fetchUrl;
     }
   }
 
-  // Fetch failed — show debug info
+  // Both failed
   td.querySelector('.hs-measures-inner').outerHTML =
     `<div class="hs-measures-inner hs-loading">
       <div style="margin-bottom:.35rem">⚠️ <strong>Kon maatregelen niet ophalen</strong> — ${esc(lastErr)}</div>
-      <div style="font-family:var(--mono);font-size:.58rem;color:var(--muted);word-break:break-all;margin-bottom:.4rem">
-        URL geprobeerd: ${esc(apiUrl)}
-      </div>
-      <div style="font-size:.68rem">
-        Waarschijnlijk CORS-blokkade bij lokaal gebruik (<code>file://</code>).
-        Draai de tool via <code>localhost</code> of Azure.<br>
-        <a href="${pageUrl}" target="_blank" style="color:var(--teal)">↗ Bekijk direct op douane.nl</a>
+      <div style="font-size:.68rem;margin-bottom:.3rem">
+        De douane.nl API is bereikbaar maar staat verzoeken van externe websites niet toe.<br>
+        <a href="${pageUrl}" target="_blank" style="color:var(--teal)">↗ Bekijk de maatregelen direct op douane.nl</a>
       </div>
     </div>`;
   td.querySelector('.hs-measures-panel').style.maxHeight = 'none';
