@@ -65,18 +65,37 @@ async function toggleHSMeasures(hsCode, trEl) {
   const params = `count=50&offset=0&sortorder=A&simulationdate=${encodeURIComponent(date)}&tradedirection=E&commoditycode=${encodeURIComponent(cleanCode)}&currency=EUR`;
   const apiUrl = `${base}?${params}`;
 
-  // Try direct first, then via CORS proxy (douane.nl blocks cross-origin from external domains)
+  // Try direct first, then multiple CORS proxies in order.
+  // douane.nl blocks cross-origin requests with 403 — proxies make server-side requests
+  // without the Origin header, bypassing the block.
+  const encoded = encodeURIComponent(apiUrl);
   const candidates = [
-    { url: apiUrl,                                           label: 'direct' },
-    { url: `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`, label: 'corsproxy.io' },
+    // Direct (works only from douane.nl's own domain)
+    { url: apiUrl,
+      parse: r => r.json(),
+      label: 'direct' },
+    // corsproxy.io — strips Origin, makes server-side request
+    { url: `https://corsproxy.io/?${encoded}`,
+      parse: r => r.json(),
+      label: 'corsproxy.io' },
+    // allorigins.win — wraps response in {contents, status}
+    { url: `https://api.allorigins.win/get?url=${encoded}`,
+      parse: async r => { const w = await r.json(); return JSON.parse(w.contents); },
+      label: 'allorigins.win' },
+    // codetabs proxy
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+      parse: r => r.json(),
+      label: 'codetabs' },
   ];
 
   let lastErr = '', lastUrl = apiUrl;
-  for (const { url: fetchUrl, label } of candidates) {
+  for (const { url: fetchUrl, parse, label } of candidates) {
     try {
-      const resp = await fetch(fetchUrl, { headers: { 'Accept': 'application/json', 'Accept-Language': 'nl' } });
+      const resp = await fetch(fetchUrl, {
+        headers: { 'Accept': 'application/json', 'Accept-Language': 'nl' }
+      });
       if (!resp.ok) { lastErr = `HTTP ${resp.status} (${label})`; lastUrl = fetchUrl; continue; }
-      const data = await resp.json();
+      const data = await parse(resp).catch(e => { throw new Error(`JSON parse: ${e.message}`); });
       if (!data || typeof data !== 'object') { lastErr = `Ongeldig JSON (${label})`; continue; }
 
       // Filter items by chosen country client-side:
