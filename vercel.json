@@ -1,6 +1,19 @@
 {
-  "rewrites": [
-    { "source": "/api/douane", "destination": "/api/douane" }
+  "version": 2,
+  "functions": {
+    "api/douane.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/douane",
+      "dest": "/api/douane.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
   ],
   "headers": [
     {
