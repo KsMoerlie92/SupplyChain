@@ -1,0 +1,33 @@
+// Vercel Serverless Function — CommonJS (werkt zonder package.json configuratie)
+const https = require('https');
+const url   = require('url');
+
+const TARGET_HOST = 'tarief.douane.nl';
+const TARGET_PATH = '/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures';
+
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin',  '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  const qs      = url.parse(req.url).query || '';
+  const fullUrl = `https://${TARGET_HOST}${TARGET_PATH}?${qs}`;
+
+  try {
+    const upRes  = await fetch(fullUrl, {
+      headers: {
+        'Accept':          'application/json',
+        'Accept-Language': 'nl',
+        'User-Agent':      'Mozilla/5.0',
+      },
+    });
+    const body = await upRes.text();
+    res.setHeader('Content-Type',  'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(upRes.status).send(body);
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
+  }
+};
