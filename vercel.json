@@ -1,19 +1,11 @@
 {
   "version": 2,
-  "functions": {
-    "api/douane.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
+  "builds": [
+    { "src": "api/douane.js", "use": "@vercel/node" }
+  ],
   "routes": [
-    {
-      "src": "/api/douane",
-      "dest": "/api/douane.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
+    { "src": "/api/douane", "dest": "/api/douane.js" },
+    { "src": "/(.*)",       "dest": "/$1" }
   ],
   "headers": [
     {
