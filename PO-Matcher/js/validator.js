@@ -501,11 +501,17 @@ function handleValFile(event) {
 
     _valOwners  = raw[0] || [];
     _valHeaders = raw[1] || [];
-    const hasVal = (v) => v !== null && v !== undefined && String(v).trim().length > 0;
+    const hasVal = (v) => {
+      if (v === null || v === undefined) return false;
+      if (typeof v === 'boolean') return v === true; // only TRUE counts, not FALSE
+      const s = String(v).trim();
+      if (!s || s === '0') return false;
+      if (s.startsWith('=')) return false; // Excel formula = not a real value
+      return true;
+    };
     _valRows    = (raw.slice(2) || [])
       .filter(r => {
         // Only validate rows that have BOTH Delivery ref (col A=0) AND IHC PO (col C=2)
-        // Rows missing either key field are skipped entirely
         return hasVal(r[0]) && hasVal(r[2]);
       })
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
