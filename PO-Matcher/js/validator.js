@@ -313,9 +313,9 @@ function renderValidationTable(usdPrice, usdRate) {
 
   const html = _valRows.map((row, ri) => {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
-    const rowCls = hasDG ? 'val-row-dg' : '';
     const anyErr = Object.keys(row.errors).length > 0;
     const anyWrn = Object.keys(row.warnings).length > 0;
+    const rowCls = hasDG ? 'val-row-dg' : anyErr ? 'val-row-err' : anyWrn ? 'val-row-warn' : 'val-row-ok';
 
     const cells = COLS_SHOW.map(col => {
       const ci  = COL[col];
@@ -356,8 +356,8 @@ function renderValidationTable(usdPrice, usdRate) {
         </td>`;
       }
 
-      const errIcon = err ? '❌ ' : wrn ? '⚠️ ' : '';
-      return `<td class="val-cell ${cls}" ${tAttr}>${errIcon}${esc(disp||'—')}</td>`;
+      // No icons in cells — row number colour indicates status, tooltip shows detail
+      return `<td class="val-cell ${cls}" ${tAttr}>${esc(disp||'—')}</td>`;
     }).join('');
 
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
@@ -471,7 +471,15 @@ function handleValFile(event) {
     _valOwners  = raw[0] || [];
     _valHeaders = raw[1] || [];
     _valRows    = (raw.slice(2) || [])
-      .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
+      .filter(r => {
+        // Skip rows where EVERY cell is null, undefined, empty string, or whitespace-only
+        return r.some(c => {
+          if (c === null || c === undefined) return false;
+          if (typeof c === 'boolean') return true; // TRUE/FALSE counts as filled
+          if (typeof c === 'number')  return true; // 0 also counts as filled
+          return String(c).trim().length > 0;
+        });
+      })
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
     // Load country codes from Master tab
