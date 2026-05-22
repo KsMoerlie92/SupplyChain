@@ -756,8 +756,11 @@ td strong { color: var(--white); }
 .val-row-ok   .val-cell-num { background: rgba(34,197,94,.15);  color: var(--green); }
 .val-table { width: max-content; border-collapse: collapse; font-size: .7rem; }
 .val-table thead th { background: var(--navy-mid); position: sticky; top: 0; z-index: 2; padding: .4rem .55rem; font-family: var(--mono); font-size: .6rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--steel); white-space: nowrap; text-align: left; }
-.val-table thead th.col-owner-ihc     { color: var(--teal); }
+.val-table thead th.col-owner-ihc     { color: var(--teal); background: rgba(0,180,216,.08); border-bottom: 2px solid var(--teal); }
 .val-table thead th.col-owner-sup     { color: var(--amber); }
+.val-cell-ihc { background: rgba(0,180,216,.05) !important; border-left: 2px solid rgba(0,180,216,.25) !important; }
+.val-cell-ihc .val-input { color: var(--teal); }
+.val-cell-ihc .val-input::placeholder { color: rgba(0,180,216,.45); }
 .val-cell { padding: .3rem .5rem; border-bottom: 1px solid var(--steel); border-right: 1px solid rgba(255,255,255,.04); vertical-align: top; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .val-cell-num { color: var(--muted); font-family: var(--mono); font-size: .65rem; }
 .val-cell-ok   { }
