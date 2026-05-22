@@ -94,10 +94,19 @@ function setFilter(filter, el) {
   currentFilter = filter;
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  // Show MR ID toggle only on "In beide lijsten" tab
+
+  const isVal  = filter === 'validator';
+  const rtw    = document.getElementById('result-table-wrap');
+  const valWrap= document.getElementById('validator-wrap');
   const mrWrap = document.getElementById('mr-toggle-wrap');
-  if (mrWrap) mrWrap.classList.toggle('visible', filter === 'match');
-  applyFilters();
+  const srch   = document.getElementById('search-box');
+
+  if (rtw)    rtw.style.display    = isVal ? 'none' : '';
+  if (valWrap)valWrap.style.display = isVal ? 'block': 'none';
+  if (srch)   srch.style.display   = isVal ? 'none' : '';
+  if (mrWrap) mrWrap.classList.toggle('visible', filter === 'match' && !isVal);
+
+  if (!isVal) applyFilters();
 }
 
 function applyFilters() {
