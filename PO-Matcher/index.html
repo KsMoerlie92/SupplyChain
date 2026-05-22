@@ -130,6 +130,7 @@
     <div class="filter-row" id="filter-row">
       <button class="filter-chip match-chip active" data-filter="match"   onclick="setFilter('match',this)">✓ In beide lijsten</button>
       <button class="filter-chip miss-chip"        data-filter="nomatch" onclick="setFilter('nomatch',this)">✗ Reeds Opgeboekt</button>
+      <button class="filter-chip val-chip"          data-filter="validator" onclick="setFilter('validator',this)">📋 Itemlijst Validator</button>
       <label class="mr-toggle-wrap" id="mr-toggle-wrap" title="Verberg rijen waarbij MR ID 'not received yet' is">
         <span class="mr-toggle-label">🚫 Verberg Not Received Yet</span>
         <span class="lp-toggle-switch">
@@ -162,6 +163,48 @@
     <div class="empty-state" id="empty-state">Geen resultaten voor dit filter.</div>
 
 
+    <!-- VALIDATOR PANEL -->
+    <div id="validator-wrap" style="display:none">
+      <div class="section-head"><span class="red-mark"></span>Itemlijst Validator</div>
+
+      <!-- Upload -->
+      <div class="val-dz" id="val-dz"
+        ondragover="valDragOver(event)" ondragleave="valDragLeave()" ondrop="valDrop(event)"
+        onclick="document.getElementById('val-file-input').click()">
+        <label class="val-dz-label">📋 Sleep een Itemlijst (.xlsx) hierheen of klik om te uploaden</label>
+        <div class="val-filename" id="val-filename"></div>
+        <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm" onchange="handleValFile(event)">
+      </div>
+
+      <!-- Toolbar -->
+      <div class="val-toolbar">
+        <button class="btn-val btn-val-run" id="btn-val-run" disabled onclick="runValidation()">▶ Valideer</button>
+        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
+        <div id="val-sheet-warnings"></div>
+      </div>
+
+      <!-- Summary -->
+      <div id="val-summary"></div>
+
+      <!-- Legend -->
+      <div class="val-legend">
+        <span><span class="lsq" style="background:rgba(34,197,94,.25)"></span> Correct</span>
+        <span><span class="lsq" style="background:rgba(239,68,68,.35)"></span> Fout (verplicht veld / ongeldige waarde)</span>
+        <span><span class="lsq" style="background:rgba(245,158,11,.25)"></span> Waarschuwing</span>
+        <span><span class="lsq" style="background:rgba(0,180,216,.2)"></span> IHC invullen (klik om te bewerken)</span>
+        <span>🔴 DG = Dangerous Goods</span>
+      </div>
+
+      <!-- Table -->
+      <div class="val-table-wrap">
+        <table class="val-table">
+          <thead id="val-thead"></thead>
+          <tbody id="val-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+
   </section>
 
 </div>
@@ -173,7 +216,7 @@
 <script src="js/parser.js"></script>
 <script src="js/matcher.js"></script>
 <script src="js/renderer.js"></script>
-<script src="js/legplan.js"></script>
 <script src="js/export.js"></script>
+<script src="js/validator.js"></script>
 </body>
 </html>
