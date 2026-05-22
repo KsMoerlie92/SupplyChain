@@ -766,8 +766,12 @@ td strong { color: var(--white); }
 .val-cell-ihc  { background: rgba(0,180,216,.07);  }
 .val-cell-dg   { background: rgba(239,68,68,.18); color: #f87171; font-weight: 700; }
 .val-row-dg td { border-left: 3px solid #ef4444 !important; }
-.val-input { background: rgba(0,180,216,.1); border: 1px solid var(--teal); color: var(--white); font-family: var(--mono); font-size: .65rem; padding: .15rem .35rem; border-radius: 2px; width: 100%; outline: none; }
-.val-input:focus { border-color: #00d4fa; }
+.val-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,.15); color: var(--white); font-family: var(--mono); font-size: .65rem; padding: .1rem .2rem; border-radius: 0; width: 100%; outline: none; min-width: 50px; transition: border-color .15s; }
+.val-input:focus { border-bottom-color: var(--teal); background: rgba(0,180,216,.07); border-radius: 2px; }
+.val-input:not(:placeholder-shown) { border-bottom-color: rgba(255,255,255,.1); }
+.val-cell-err  .val-input { border-bottom-color: rgba(239,68,68,.5); }
+.val-cell-err  .val-input:focus { border-bottom-color: #ef4444; }
+.val-cell-warn .val-input { border-bottom-color: rgba(245,158,11,.5); }
 .val-legend { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .6rem; font-size: .67rem; font-family: var(--mono); }
 .val-legend span { display: flex; align-items: center; gap: .3rem; }
 .val-legend .lsq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
