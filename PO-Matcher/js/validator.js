@@ -309,7 +309,8 @@ function renderValidationTable(usdPrice, usdRate) {
   if (!tbEl) return;
 
   const COLS_SHOW = ['C','D','E','F','G','H','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
-  const IHC_EDITABLE = new Set(['A','B','I','J','W','AA']);
+  // All cells are editable — supplier can correct any field, IHC fills their own fields too
+  const IHC_COLS = new Set(['A','B','I','J','W','AA']); // visually distinct but still editable
 
   const html = _valRows.map((row, ri) => {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
@@ -323,41 +324,56 @@ function renderValidationTable(usdPrice, usdRate) {
       const err = row.errors[col];
       const wrn = row.warnings[col];
       const cmp = row.computed?.[col] ?? row.computed?.[col+'_EUR'];
-      const editable = IHC_EDITABLE.has(col);
       const disp = val !== null && val !== undefined ? String(val) : '';
 
-      let cls = '';
-      if (err) cls = 'val-cell-err';
-      else if (wrn) cls = 'val-cell-warn';
-      else if (disp) cls = 'val-cell-ok';
+      let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
+      if (err) cellCls += ' val-cell-err';
+      else if (wrn) cellCls += ' val-cell-warn';
 
       const tooltip = err || wrn || (cmp ? `Berekend: ${cmp}` : '');
       const tAttr   = tooltip ? `title="${esc(tooltip)}"` : '';
 
-      if (editable && !disp) {
-        // IHC-fillable empty field — show input
-        return `<td class="val-cell val-cell-ihc" ${tAttr}>
-          <input class="val-input" data-row="${ri}" data-col="${ci}"
-            placeholder="${esc(_valHeaders[ci]||col)}"
-            value="" oninput="valCellEdit(${ri},${ci},this.value)">
+      // HS-code cell: show explicit ✓ / ✗ indicator
+      if (col === 'O') {
+        const hsOk = !err && disp;
+        const indicator = !disp ? '' : hsOk
+          ? `<span style="color:var(--green);font-weight:700;margin-right:.25rem">✓</span>`
+          : `<span style="color:#ef4444;font-weight:700;margin-right:.25rem">✗</span>`;
+        return `<td class="val-cell ${cellCls}" ${tAttr}>
+          <div style="display:flex;align-items:center">
+            ${indicator}
+            <input class="val-input" data-row="${ri}" data-col="${ci}"
+              value="${esc(disp)}"
+              oninput="valCellEdit(${ri},${ci},this.value)">
+          </div>
         </td>`;
       }
 
-      if (col === 'P' && usdPrice && cmp) {
-        return `<td class="val-cell ${cls}" ${tAttr}>
-          <div style="font-size:.7rem">${esc(disp)} USD</div>
-          <div style="font-size:.62rem;color:var(--teal)">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
-        </td>`;
-      }
-
+      // Dangerous Goods cell — checkbox, not text input
       if (col === 'Z') {
-        return `<td class="val-cell ${hasDG ? 'val-cell-dg' : 'val-cell-ok'}" ${tAttr}>
-          ${hasDG ? '🔴 DG' : '—'}
+        return `<td class="val-cell ${hasDG ? 'val-cell-dg' : ''}" ${tAttr} style="text-align:center">
+          <input type="checkbox" ${hasDG ? 'checked' : ''}
+            onchange="valCellEdit(${ri},${ci},this.checked)">
+          ${hasDG ? ' 🔴' : ''}
         </td>`;
       }
 
-      // No icons in cells — row number colour indicates status, tooltip shows detail
-      return `<td class="val-cell ${cls}" ${tAttr}>${esc(disp||'—')}</td>`;
+      // USD value — show EUR conversion below
+      if (col === 'P' && usdPrice && cmp) {
+        return `<td class="val-cell ${cellCls}" ${tAttr}>
+          <input class="val-input" data-row="${ri}" data-col="${ci}"
+            value="${esc(disp)}" oninput="valCellEdit(${ri},${ci},this.value)">
+          <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
+        </td>`;
+      }
+
+      // All other cells — editable input, pre-filled with current value
+      return `<td class="val-cell ${cellCls}" ${tAttr}>
+        <input class="val-input" data-row="${ri}" data-col="${ci}"
+          value="${esc(disp)}"
+          placeholder="${esc(_valHeaders[ci]||col)}"
+          oninput="valCellEdit(${ri},${ci},this.value)">
+      </td>`;
     }).join('');
 
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
