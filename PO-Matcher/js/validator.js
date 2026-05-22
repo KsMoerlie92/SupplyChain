@@ -308,9 +308,18 @@ function renderValidationTable(usdPrice, usdRate) {
   const tbEl = document.getElementById('val-tbody');
   if (!tbEl) return;
 
-  const COLS_SHOW = ['C','D','E','F','G','H','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
-  // All cells are editable — supplier can correct any field, IHC fills their own fields too
-  const IHC_COLS = new Set(['A','B','I','J','W','AA']); // visually distinct but still editable
+  // IHC columns shown first so they can be filled in immediately
+  // Supplier columns follow — all editable
+  const COLS_SHOW = [
+    'A','B',          // IHC: Delivery ref, Project
+    'C','D','E','F','G','H',
+    'I','J',          // IHC: Code supplier, Serial number
+    'K','L','M','N','O','P','Q','R','S','T','U','V',
+    'W',              // IHC: Volume (computed)
+    'X','Y','Z',
+    'AA'              // IHC: Inspection Level
+  ];
+  const IHC_COLS = new Set(['A','B','I','J','W','AA']); // teal tint = IHC to fill
 
   const html = _valRows.map((row, ri) => {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
@@ -443,7 +452,13 @@ function exportValidatedItemlijst() {
 function buildValHeader() {
   const thEl = document.getElementById('val-thead');
   if (!thEl) return;
-  const COLS_SHOW = ['C','D','E','F','G','H','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
+  const COLS_SHOW = [
+    'A','B',
+    'C','D','E','F','G','H',
+    'I','J',
+    'K','L','M','N','O','P','Q','R','S','T','U','V',
+    'W','X','Y','Z','AA'
+  ];
   const IHC_OWN   = new Set(['A','B','I','J','W','AA']);
   const ownerRow  = _valOwners;
   const headerRow = _valHeaders;
@@ -486,15 +501,12 @@ function handleValFile(event) {
 
     _valOwners  = raw[0] || [];
     _valHeaders = raw[1] || [];
+    const hasVal = (v) => v !== null && v !== undefined && String(v).trim().length > 0;
     _valRows    = (raw.slice(2) || [])
       .filter(r => {
-        // Skip rows where EVERY cell is null, undefined, empty string, or whitespace-only
-        return r.some(c => {
-          if (c === null || c === undefined) return false;
-          if (typeof c === 'boolean') return true; // TRUE/FALSE counts as filled
-          if (typeof c === 'number')  return true; // 0 also counts as filled
-          return String(c).trim().length > 0;
-        });
+        // Only validate rows that have BOTH Delivery ref (col A=0) AND IHC PO (col C=2)
+        // Rows missing either key field are skipped entirely
+        return hasVal(r[0]) && hasVal(r[2]);
       })
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
