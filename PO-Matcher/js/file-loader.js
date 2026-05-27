@@ -63,7 +63,7 @@ function handleFile(evt, role) {
       const ws   = wb.Sheets[sheetName];
       // For expediting: headers may be in row 3 — find row with most filled cells
       const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
-      const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+      const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
       let data;
       if (role === 'expediting' && hdrRow > 0) {
         const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
@@ -148,7 +148,7 @@ async function loadFromSP(role) {
 
     const ws   = wb.Sheets[sheetName];
     const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
-    const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+    const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
     let data;
     if (role === 'expediting' && hdrRow > 0) {
       const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
