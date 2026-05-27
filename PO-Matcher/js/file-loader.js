@@ -1,3 +1,19 @@
+// ── Find the best header row (most non-empty cells in first 5 rows) ──────────
+function _findHeaderRow(ws) {
+  if (!ws['!ref']) return 0;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  let bestRow = 0, bestCount = 0;
+  for (let R = range.s.r; R <= Math.min(range.s.r + 5, range.e.r); R++) {
+    let count = 0;
+    for (let C = range.s.c; C <= Math.min(range.s.c + 40, range.e.c); C++) {
+      const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
+      if (cell && cell.v !== null && cell.v !== undefined && String(cell.v).trim()) count++;
+    }
+    if (count > bestCount) { bestCount = count; bestRow = R; }
+  }
+  return bestRow;
+}
+
 // ── File loading: handleFile(), checkReady() ───────────────────────────────
 // ── File handling ──────────────────────────────────────────────────────────
 function handleFile(evt, role) {
@@ -45,8 +61,20 @@ function handleFile(evt, role) {
       }
 
       const ws   = wb.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-      fileData[role] = { data, name: file.name, sheet: sheetName };
+      // For expediting: headers may be in row 3 — find row with most filled cells
+      const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
+      const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+      let data;
+      if (role === 'expediting' && hdrRow > 0) {
+        const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
+        data = rawAll.slice(hdrRow + 1)
+          .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
+          .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
+        fileData[role] = { data, name: file.name, sheet: sheetName, headerRow: hdrRow, headers: hdrs };
+      } else {
+        data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+        fileData[role] = { data, name: file.name, sheet: sheetName };
+      }
       dz.classList.add('loaded');
       fn.textContent = `${file.name} — blad: "${sheetName}"`;
       checkReady();
@@ -55,6 +83,91 @@ function handleFile(evt, role) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+
+// ── SharePoint URL loader ─────────────────────────────────────────────────
+function toggleSP(role) {
+  const cb   = document.getElementById(`sp-toggle-${role}`);
+  const wrap = document.getElementById(`sp-wrap-${role}`);
+  const dz   = document.getElementById(`dz-${role}`);
+  wrap.classList.toggle('visible', cb.checked);
+  dz.style.opacity       = cb.checked ? '0.4' : '';
+  dz.style.pointerEvents = cb.checked ? 'none' : '';
+}
+
+async function loadFromSP(role) {
+  const urlEl = document.getElementById(`sp-url-${role}`);
+  const btn   = urlEl.nextElementSibling;
+  let url = (urlEl.value || '').trim();
+  if (!url) { setStatus('Vul een SharePoint URL in.', true); return; }
+
+  // Ensure download=1 is present so SharePoint returns the raw file
+  if (!url.includes('download=1') && !url.includes('?download='))
+    url += (url.includes('?') ? '&' : '?') + 'download=1';
+
+  btn.disabled = true; btn.textContent = '⏳ Laden…';
+  setStatus(`SharePoint bestand ophalen (${role})…`);
+
+  try {
+    // credentials:'include' sends the browser's SharePoint login cookie
+    const resp = await fetch(url, {
+      credentials: 'include',
+      headers: { Accept: 'application/octet-stream, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('text/html'))
+      throw new Error('SharePoint stuurde een loginpagina — open SharePoint eerst in dit browservenster en probeer opnieuw.');
+
+    const buf  = await resp.arrayBuffer();
+    const wb   = XLSX.read(buf, { type: 'array', cellDates: true });
+    const fn   = document.getElementById(`fn-${role}`);
+    const dz   = document.getElementById(`dz-${role}`);
+    const name = url.split('/').pop().split('?')[0] || `${role}.xlsx`;
+
+    let sheetName;
+    if (role === 'moeder') {
+      for (const sn of wb.SheetNames) {
+        const ws = wb.Sheets[sn];
+        if (!ws['!ref']) continue;
+        const rng = XLSX.utils.decode_range(ws['!ref']);
+        outer: for (let R = rng.s.r; R <= Math.min(rng.s.r+4, rng.e.r); R++)
+          for (let C = rng.s.c; C <= Math.min(rng.s.c+10, rng.e.c); C++) {
+            const cell = ws[XLSX.utils.encode_cell({r:R,c:C})];
+            if (cell && String(cell.v||'').trim().toLowerCase() === 'ihc po') { sheetName = sn; break outer; }
+          }
+        if (sheetName) break;
+      }
+      if (!sheetName) sheetName = wb.SheetNames[0];
+    } else {
+      sheetName = wb.SheetNames[0];
+    }
+
+    const ws   = wb.Sheets[sheetName];
+    const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
+    const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+    let data;
+    if (role === 'expediting' && hdrRow > 0) {
+      const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
+      data = rawAll.slice(hdrRow + 1)
+        .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
+        .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
+      fileData[role] = { data, name, sheet: sheetName, headerRow: hdrRow, headers: hdrs };
+    } else {
+      data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      fileData[role] = { data, name, sheet: sheetName };
+    }
+    dz.classList.add('loaded');
+    fn.textContent = `${name} — blad: "${sheetName}"`;
+    setStatus(`${name} geladen via SharePoint (${data.length} rijen)`);
+    checkReady();
+  } catch(err) {
+    setStatus('SharePoint fout: ' + err.message, true);
+  }
+  btn.disabled = false; btn.textContent = '⬇ Laden';
 }
 
 function checkReady() {

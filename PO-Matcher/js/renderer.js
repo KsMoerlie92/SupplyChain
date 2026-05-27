@@ -156,13 +156,13 @@ function applyFilters() {
 // ── Export naar Excel ─────────────────────────────────────────────────────
 
 // ── Late Items tab ─────────────────────────────────────────────────────────
-// Reads Expediting list directly.
-// Shows rows where Col U (delivery date) = past OR within next 30 days.
+// Reads Expediting list directly (headers from row 3 via file-loader).
+// Window: Col U (delivery date) in past OR within next 30 days.
 // Offset = Col T (index 19) − Col U (index 20).
-// Col E (index 4) = "Released" → orange highlight (needs order confirmation).
-// Visual separator between PAST and FUTURE groups.
+// Status col (idx 3): "Released" = amber row, "Confirmed" = neutral.
+// Detail panel per row: W, Z, __EMPTY_6/7 (real names after fix), AG, AH.
 
-let _lateSortDir = 'asc'; // 'asc' = laag→hoog (oudst/meest urgent eerst)
+let _lateSortDir = 'asc';
 
 function setLateSort(dir) {
   _lateSortDir = dir;
@@ -171,25 +171,29 @@ function setLateSort(dir) {
   renderLateItems();
 }
 
-// Convert Excel serial, date-string or number to a JS Date (or null)
 function _toDate(v) {
   if (v === null || v === undefined || String(v).trim() === '') return null;
   const n = parseFloat(String(v).replace(',', '.'));
-  if (!isNaN(n) && n > 1000) {
-    // Excel serial: days since 1900-01-01 (with Lotus 1-2-3 leap-year bug)
-    return new Date(Math.round((n - 25569) * 86400 * 1000));
-  }
-  // Try string parse
+  if (!isNaN(n) && n > 1000) return new Date(Math.round((n - 25569) * 86400 * 1000));
   const d = new Date(v);
   return isNaN(d) ? null : d;
 }
 
-// Format a Date as DD-MM-YYYY
 function _fmtDate(d) {
   if (!d) return '—';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}-${mm}-${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+}
+
+let _lateOpenRows = new Set(); // track which detail rows are open
+
+function toggleLateDetail(idx) {
+  const det = document.getElementById(`late-det-${idx}`);
+  if (!det) return;
+  const open = _lateOpenRows.has(idx);
+  if (open) { _lateOpenRows.delete(idx); det.style.display = 'none'; }
+  else       { _lateOpenRows.add(idx);    det.style.display = ''; }
+  const btn = document.getElementById(`late-tog-${idx}`);
+  if (btn) btn.textContent = _lateOpenRows.has(idx) ? '▲' : '▼';
 }
 
 function renderLateItems() {
@@ -199,60 +203,83 @@ function renderLateItems() {
   const expData = fileData?.expediting?.data;
   if (!expData || !expData.length) {
     document.getElementById('result-table').innerHTML =
-      '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1.5rem">Laad eerst de Expediting lijst.</td></tr>';
+      '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">Laad eerst de Expediting lijst.</td></tr>';
     return;
   }
 
-  const headers = Object.keys(expData[0]);
+  const headers = fileData.expediting.headers || Object.keys(expData[0]);
 
-  // Column indices (0-based positional)
-  const iA = 0;   // Kol A — PO combined key
-  const iE = 4;   // Kol E — Status (Released / Confirmed)
-  const iH = 7;   // Kol H
-  const iI = 8;   // Kol I
-  const iJ = 9;   // Kol J
-  const iW = 22;  // Kol W
-  const iZ = 25;  // Kol Z
-  const iT = 19;  // Kol T (planned/required)
-  const iU = 20;  // Kol U (actual delivery date)
+  // ── Column indices (0-based positional) ──────────────────────────────────
+  const iA      = 0;   // Kol A
+  const iStatus = 3;   // Kol D — Status (Released / Confirmed) — hidden, drives row color
+  const iH      = 7;   // Kol H  — visible
+  const iI      = 8;   // Kol I  — visible
+  const iJ      = 9;   // Kol J  — visible
+  const iE6     = 6;   // __EMPTY_6 → real name after header fix → detail
+  const iE7     = 7;   // __EMPTY_7 → BUT wait, iH is also 7. We use named lookup below.
+  const iW      = 22;  // Kol W  — detail
+  const iZ      = 25;  // Kol Z  — detail
+  const iT      = 19;  // Kol T
+  const iU      = 20;  // Kol U  — delivery date
+  const iAG     = 32;  // Kol AG — detail if filled
+  const iAH     = 33;  // Kol AH — detail if filled
+
+  // Resolve column name at a given index
+  const hdr = (idx) => headers[idx] ? String(headers[idx]).trim() : `Kol ${idx+1}`;
+  // Check if a header looks like a real name (not __COL_ or __EMPTY_)
+  const realName = (idx) => {
+    const h = hdr(idx);
+    return (!h.startsWith('__')) ? h : `Kolom ${String.fromCharCode(65 + idx)}`;
+  };
+
+  // For EMPTY_6/EMPTY_7: they are the 2 columns after J (idx 9)
+  // but we have iH=7 for the visible column. Let's use named lookup.
+  // The "EMPTY_6" and "EMPTY_7" in the OLD (row-1) reading were at indices 6 and 7.
+  // After row-3 reading they may overlap with H or have distinct names.
+  // Use a safe approach: find cols 5 and 6 (F and G area) as the "extra" detail cols.
+  // Specifically: EMPTY_6 = index 5, EMPTY_7 = index 6 based on user's description
+  // (they are between E=4 and H=7, so indices 5 and 6 = F and G)
+  const iExtraA = 5;   // was __EMPTY_6 → now has real name → detail
+  const iExtraB = 6;   // was __EMPTY_7 → now has real name → detail
 
   const today    = new Date(); today.setHours(0,0,0,0);
   const in30days = new Date(today); in30days.setDate(today.getDate() + 30);
 
-  // Build rows — only include where Col U is past or within 30 days
   const rows = expData.map(row => {
-    const vals   = Object.values(row);
-    const colA   = String(vals[iA] || '').trim();
+    const vals  = Object.values(row);
+    const colA  = String(vals[iA] || '').trim();
     if (!colA) return null;
 
-    const uDate  = _toDate(vals[iU]);
-    if (!uDate) return null;                           // no date → skip
-    if (uDate > in30days) return null;                 // beyond window → skip
+    const uDate = _toDate(vals[iU]);
+    if (!uDate) return null;
+    if (uDate > in30days) return null;
 
     const tDate  = _toDate(vals[iT]);
-    const offset = (tDate && uDate) ? Math.round(
-      (tDate.getTime() - uDate.getTime()) / 86400000
-    ) : null;
+    const offset = (tDate && uDate)
+      ? Math.round((tDate.getTime() - uDate.getTime()) / 86400000) : null;
 
-    const colE   = String(vals[iE] || '').trim();
-    const isPast = uDate < today;
+    const statusVal = String(vals[iStatus] || '').trim();
+    const isPast    = uDate < today;
+    const isReleased  = /released/i.test(statusVal);
+    const isConfirmed = /confirmed/i.test(statusVal);
 
     return {
       colA,
-      colE,
-      colH:    String(vals[iH] || '').trim(),
-      colI:    String(vals[iI] || '').trim(),
-      colJ:    String(vals[iJ] || '').trim(),
-      colW:    String(vals[iW] || '').trim(),
-      colZ:    String(vals[iZ] || '').trim(),
-      uDate,
-      offset,
-      isPast,
-      isReleased: /released/i.test(colE),
+      statusVal,
+      isReleased, isConfirmed,
+      colH:     String(vals[iH]      || '').trim(),
+      colI:     String(vals[iI]      || '').trim(),
+      colJ:     String(vals[iJ]      || '').trim(),
+      colW:     String(vals[iW]      || '').trim(),
+      colZ:     String(vals[iZ]      || '').trim(),
+      colExA:   String(vals[iExtraA] || '').trim(),
+      colExB:   String(vals[iExtraB] || '').trim(),
+      colAG:    String(vals[iAG]     || '').trim(),
+      colAH:    String(vals[iAH]     || '').trim(),
+      uDate, offset, isPast,
     };
   }).filter(Boolean);
 
-  // Sort within each group by offset (or by uDate if offset null)
   const sortFn = (a, b) => {
     const aO = a.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
     const bO = b.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
@@ -262,74 +289,82 @@ function renderLateItems() {
   const pastRows   = rows.filter(r =>  r.isPast).sort(sortFn);
   const futureRows = rows.filter(r => !r.isPast).sort(sortFn);
 
-  // Header names
-  const hA = headers[iA] || 'Kol A';
-  const hE = headers[iE] || 'Status';
-  const hH = headers[iH] || 'Kol H';
-  const hI = headers[iI] || 'Kol I';
-  const hJ = headers[iJ] || 'Kol J';
-  const hW = headers[iW] || 'Kol W';
-  const hZ = headers[iZ] || 'Kol Z';
-  const hU = headers[iU] || 'Leverdatum (U)';
-  const hT = headers[iT] || 'Kol T';
-
   const thead = `<thead><tr>
+    <th style="width:22px"></th>
     <th style="width:26px">#</th>
-    <th>${esc(hA)}</th>
-    <th title="Released = orderbevestiging nodig">${esc(hE)}</th>
-    <th>${esc(hH)}</th>
-    <th>${esc(hI)}</th>
-    <th>${esc(hJ)}</th>
-    <th>${esc(hW)}</th>
-    <th>${esc(hZ)}</th>
-    <th>Leverdatum (U)</th>
-    <th title="${esc(hT)} − ${esc(hU)}">Offset (T−U)</th>
+    <th>${esc(realName(iA))}</th>
+    <th>${esc(realName(iH))}</th>
+    <th>${esc(realName(iI))}</th>
+    <th>${esc(realName(iJ))}</th>
+    <th>Leverdatum</th>
+    <th>Offset (T−U)</th>
   </tr></thead>`;
 
-  function buildRow(r, i) {
+  function buildRows(r, i) {
     let offDisp = '—', offCls = '';
     if (r.offset !== null) {
-      offDisp = (r.offset > 0 ? '+' : '') + r.offset;
+      offDisp = (r.offset > 0 ? '+' : '') + r.offset + 'd';
       offCls  = r.offset < 0 ? 'late-neg' : r.offset === 0 ? 'late-zero' : 'late-pos';
     }
-    const relCls    = r.isReleased ? 'late-released' : '';
-    const pastCls   = r.isPast     ? 'late-past'     : 'late-future';
-    const relBadge  = r.isReleased
-      ? `<span class="released-badge">! OB ophalen</span>`
-      : '';
+    const relCls  = r.isReleased  ? 'late-released'  : '';
+    const conCls  = r.isConfirmed ? 'late-confirmed'  : '';
+    const pastCls = r.isPast      ? 'late-past' : 'late-future';
+    const hasDetail = r.colW || r.colZ || r.colExA || r.colExB || r.colAG || r.colAH;
 
-    return `<tr class="late-row ${pastCls} ${offCls} ${relCls}">
+    // Detail fields
+    const detFields = [];
+    if (r.colW)   detFields.push([realName(iW),     r.colW]);
+    if (r.colZ)   detFields.push([realName(iZ),     r.colZ]);
+    if (r.colExA) detFields.push([realName(iExtraA),r.colExA]);
+    if (r.colExB) detFields.push([realName(iExtraB),r.colExB]);
+    if (r.colAG)  detFields.push([realName(iAG),    r.colAG]);
+    if (r.colAH)  detFields.push([realName(iAH),    r.colAH]);
+
+    const relBadge = r.isReleased
+      ? `<span class="released-badge" title="Orderbevestiging ophalen / opvragen">OB ophalen</span>` : '';
+
+    const mainRow = `<tr class="late-row ${pastCls} ${relCls} ${conCls} ${offCls}"
+        onclick="toggleLateDetail(${i})" style="cursor:${hasDetail ? 'pointer' : 'default'}">
+      <td class="late-tog-cell"><button class="late-tog-btn" id="late-tog-${i}" tabindex="-1">${hasDetail ? '▼' : ''}</button></td>
       <td class="rc">${i + 1}</td>
       <td>${esc(r.colA)}</td>
-      <td class="status-cell">${esc(r.colE)} ${relBadge}</td>
       <td>${esc(r.colH)}</td>
       <td>${esc(r.colI)}</td>
-      <td>${esc(r.colJ)}</td>
-      <td>${esc(r.colW)}</td>
-      <td>${esc(r.colZ)}</td>
+      <td>${esc(r.colJ)} ${relBadge}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.uDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
     </tr>`;
+
+    const detRow = !hasDetail ? '' : `<tr id="late-det-${i}" class="late-detail-row" style="display:none">
+      <td colspan="8">
+        <div class="late-detail-inner">
+          ${detFields.map(([lbl, val]) => `<div class="late-det-field"><span class="late-det-lbl">${esc(lbl)}</span><span class="late-det-val">${esc(val)}</span></div>`).join('')}
+        </div>
+      </td>
+    </tr>`;
+
+    return mainRow + detRow;
   }
 
-  const separatorRow = `<tr class="late-separator">
-    <td colspan="10">
-      <span class="sep-past">▲ Verleden</span>
+  const separator = `<tr class="late-separator">
+    <td colspan="8">
+      <span class="sep-past">▲ Verstreken</span>
       <span class="sep-line"></span>
       <span class="sep-future">▼ Komende 30 dagen</span>
     </td>
   </tr>`;
 
   let rowNum = 0;
-  const pastHtml   = pastRows.map(r   => buildRow(r,   ++rowNum)).join('');
-  const futureHtml = futureRows.map(r => buildRow(r,   ++rowNum)).join('');
+  const pastHtml   = pastRows.map(r   => buildRows(r, rowNum++)).join('');
+  const futureHtml = futureRows.map(r => buildRows(r, rowNum++)).join('');
 
   let tbody = '';
-  if (pastRows.length)   tbody += pastHtml;
-  if (pastRows.length && futureRows.length) tbody += separatorRow;
-  if (futureRows.length) tbody += futureHtml;
-  if (!tbody) tbody = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:1.5rem">Geen items in het venster (verleden + komende 30 dagen).</td></tr>';
+  if (pastRows.length)              tbody += pastHtml;
+  if (pastRows.length && futureRows.length) tbody += separator;
+  if (futureRows.length)            tbody += futureHtml;
+  if (!tbody) tbody = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">Geen items in het venster (verleden + komende 30 dagen).</td></tr>';
 
+  _lateOpenRows.clear();
   const tbl = document.getElementById('result-table');
   if (tbl) tbl.innerHTML = thead + '<tbody>' + tbody + '</tbody>';
 
