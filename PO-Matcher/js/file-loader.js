@@ -66,7 +66,13 @@ function handleFile(evt, role) {
       const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
       let data;
       if (role === 'expediting' && hdrRow > 0) {
-        const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
+        const _seenHdrs = {};
+        const hdrs = rawAll[hdrRow].map((h, i) => {
+          let name = (h && String(h).trim()) || `__COL_${i}`;
+          if (_seenHdrs[name]) { _seenHdrs[name]++; name = `${name}_${_seenHdrs[name]}`; }
+          else _seenHdrs[name] = 1;
+          return name;
+        });
         data = rawAll.slice(hdrRow + 1)
           .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
           .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
@@ -151,7 +157,13 @@ async function loadFromSP(role) {
     const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
     let data;
     if (role === 'expediting' && hdrRow > 0) {
-      const hdrs  = rawAll[hdrRow].map((h, i) => (h && String(h).trim()) || `__COL_${i}`);
+      const _seenHdrs2 = {};
+      const hdrs = rawAll[hdrRow].map((h, i) => {
+        let name = (h && String(h).trim()) || `__COL_${i}`;
+        if (_seenHdrs2[name]) { _seenHdrs2[name]++; name = `${name}_${_seenHdrs2[name]}`; }
+        else _seenHdrs2[name] = 1;
+        return name;
+      });
       data = rawAll.slice(hdrRow + 1)
         .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
         .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });

@@ -249,7 +249,7 @@ function toggleLateDetail(idx) {
 
 function renderLateItems() {
   const expData = fileData?.expediting?.data;
-  const empty = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">
+  const empty = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">
     Laad eerst de Expediting lijst.</td></tr>`;
   if (!expData || !expData.length) {
     const lt = document.getElementById('late-items-table');
@@ -309,8 +309,7 @@ function renderLateItems() {
       colM:  gs(vals, iM),   // Unified Reference Code
       colJ:  gs(vals, iJ),   // Supplier Name
       colH:  gs(vals, iH),   colI:  gs(vals, iI),
-      colK:  gs(vals, iK),   colL:  gs(vals, iL),
-      colF:  gs(vals, iF),   colG:  gs(vals, iG),
+
       colW:  gs(vals, iW),
       colX:  gs(vals, iX),   colY:  gs(vals, iY),
       colZ:  gs(vals, iZ),
@@ -335,7 +334,8 @@ function renderLateItems() {
     <th>${esc(hn(iA))}</th>
     <th>${esc(hn(iM))}</th>
     <th>${esc(hn(iJ))}</th>
-    <th>Leverdatum</th>
+    <th>Wanted</th>
+    <th>Confirmed</th>
     <th>Offset (T−U)</th>
   </tr></thead>`;
 
@@ -358,10 +358,7 @@ function renderLateItems() {
       [hn(iH), r.colH],
       [hn(iI), r.colI],
     ];
-    if (r.colF)  detFields.push([hn(iF),  r.colF]);
-    if (r.colG)  detFields.push([hn(iG),  r.colG]);
-    if (r.colK)  detFields.push([hn(iK),  r.colK]);
-    if (r.colL)  detFields.push([hn(iL),  r.colL]);
+
     if (r.colW)  detFields.push([hn(iW),  r.colW]);
     if (r.colX)  detFields.push([hn(iX),  r.colX]);
     if (r.colY)  detFields.push([hn(iY),  r.colY]);
@@ -378,12 +375,13 @@ function renderLateItems() {
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
       <td>${esc(r.colJ)} ${relBadge}</td>
+      <td class="date-cell">${_fmtDate(r.tDate)}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.uDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
     </tr>`;
 
     const detRow = `<tr id="late-det-${i}" class="late-detail-row" style="display:none">
-      <td colspan="7"><div class="late-detail-inner">
+      <td colspan="8"><div class="late-detail-inner">
         ${detFields.map(([lbl, val]) =>
           `<div class="late-det-field">
             <span class="late-det-lbl">${esc(String(lbl))}</span>
@@ -396,7 +394,7 @@ function renderLateItems() {
   }
 
   const separator = `<tr class="late-separator">
-    <td colspan="7">
+    <td colspan="8">
       <span class="sep-past">▲ Verstreken</span>
       <span class="sep-line"></span>
       <span class="sep-future">▼ Komende 30 dagen</span>
@@ -411,7 +409,7 @@ function renderLateItems() {
   if (pastRows.length)                      tbody += pastHtml;
   if (pastRows.length && futureRows.length) tbody += separator;
   if (futureRows.length)                    tbody += futureHtml;
-  if (!tbody) tbody = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">
+  if (!tbody) tbody = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">
     Geen items in het venster (verleden + komende 30 dagen).</td></tr>`;
 
   _lateOpenRows.clear();
