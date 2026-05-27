@@ -847,3 +847,8 @@ td strong { color: var(--white); }
 .sep-past   { color: #f87171; white-space: nowrap; }
 .sep-future { color: var(--teal); white-space: nowrap; }
 .sep-line   { flex: 1; height: 1px; background: rgba(0,180,216,.2); }
+
+/* Late Items wrap — own container, styled like table-wrap but display controlled by JS */
+#late-items-wrap { border: 1px solid var(--steel); border-radius: 3px; overflow: hidden; }
+#late-items-wrap .tbl-scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+#late-items-table { width: 100%; border-collapse: collapse; }
