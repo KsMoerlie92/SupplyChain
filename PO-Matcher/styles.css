@@ -738,7 +738,7 @@ td strong { color: var(--white); }
 .val-dz-label { font-family: var(--mono); font-size: .72rem; color: var(--muted); }
 .val-filename { font-family: var(--mono); font-size: .7rem; color: var(--green); margin-top: .4rem; display: none; }
 
-.val-toolbar { display: flex; gap: .5rem; align-items: center; margin-bottom: .75rem; flex-wrap: wrap; }
+.val-toolbar { display: flex; gap: .5rem; align-items: center; margin-bottom: .75rem; flex-wrap: wrap; row-gap: .4rem; }
 .btn-val { font-family: var(--mono); font-size: .7rem; font-weight: 700; padding: .35rem .9rem; border-radius: 2px; cursor: pointer; border: none; }
 .btn-val-run    { background: var(--teal);  color: #000; }
 .btn-val-run:hover { background: #00d4fa; }
@@ -778,3 +778,14 @@ td strong { color: var(--white); }
 .val-legend { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .6rem; font-size: .67rem; font-family: var(--mono); }
 .val-legend span { display: flex; align-items: center; gap: .3rem; }
 .val-legend .lsq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* ── Merken/Labels ─────────────────────────────────────────────────────── */
+.btn-val-labels { background: var(--amber); color: #000; }
+.btn-val-labels:hover { background: #fbbf24; }
+.val-consignee-input {
+  font-family: var(--mono); font-size: .65rem;
+  padding: .3rem .55rem; width: 220px;
+  background: var(--navy); border: 1px solid var(--steel);
+  color: var(--white); border-radius: 2px; outline: none;
+}
+.val-consignee-input:focus { border-color: var(--teal); }
