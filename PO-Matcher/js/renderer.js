@@ -110,7 +110,14 @@ function setFilter(filter, el) {
   if (lateWrap)lateWrap.style.display = isLate ? 'flex' : 'none';
 
   if (isLate) { renderLateItems(); return; }
-  if (!isVal)  applyFilters();
+
+  // Switching away from Late Items: restore result-tbody if it was overwritten
+  const tbl = document.getElementById('result-table');
+  if (tbl && !document.getElementById('result-tbody')) {
+    tbl.innerHTML = '<tbody id="result-tbody"></tbody>';
+  }
+
+  if (!isVal) applyFilters();
 }
 
 function applyFilters() {
