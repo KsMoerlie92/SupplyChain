@@ -95,29 +95,37 @@ function setFilter(filter, el) {
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
 
-  const isVal   = filter === 'validator';
-  const isLate  = filter === 'lateitems';
-  const rtw     = document.getElementById('result-table-wrap');
-  const valWrap = document.getElementById('validator-wrap');
-  const mrWrap  = document.getElementById('mr-toggle-wrap');
-  const srch    = document.getElementById('search-box');
-  const lateWrap= document.getElementById('late-sort-wrap');
+  const isVal  = filter === 'validator';
+  const isLate = filter === 'lateitems';
 
-  if (rtw)     rtw.style.display     = isVal ? 'none' : '';
-  if (valWrap) valWrap.style.display  = isVal ? 'block' : 'none';
-  if (srch)    srch.style.display    = (isVal || isLate) ? 'none' : '';
-  if (mrWrap)  mrWrap.classList.toggle('visible', filter === 'match' && !isVal);
-  if (lateWrap)lateWrap.style.display = isLate ? 'flex' : 'none';
-
-  if (isLate) { renderLateItems(); return; }
-
-  // Switching away from Late Items: restore result-tbody if it was overwritten
-  const tbl = document.getElementById('result-table');
-  if (tbl && !document.getElementById('result-tbody')) {
-    tbl.innerHTML = '<tbody id="result-tbody"></tbody>';
+  // result-table-wrap uses CSS .visible class — don't fight it with inline style
+  const rtw = document.getElementById('result-table-wrap');
+  if (rtw) {
+    if (isLate || isVal) {
+      rtw.classList.remove('visible');   // hide via CSS class
+    } else if (allRows.length) {
+      rtw.classList.add('visible');      // restore if data exists
+    }
   }
 
-  if (!isVal) applyFilters();
+  // late-items-wrap is controlled purely by inline style (no .visible dependency)
+  const liw = document.getElementById('late-items-wrap');
+  if (liw) liw.style.display = isLate ? 'block' : 'none';
+
+  // validator-wrap
+  const valWrap = document.getElementById('validator-wrap');
+  if (valWrap) valWrap.style.display = isVal ? 'block' : 'none';
+
+  // Controls
+  const srch     = document.getElementById('search-box');
+  const mrWrap   = document.getElementById('mr-toggle-wrap');
+  const lateWrap = document.getElementById('late-sort-wrap');
+  if (srch)     srch.style.display     = (isVal || isLate) ? 'none' : '';
+  if (mrWrap)   mrWrap.classList.toggle('visible', filter === 'match');
+  if (lateWrap) lateWrap.style.display = isLate ? 'flex' : 'none';
+
+  if (isLate) { renderLateItems(); return; }
+  if (!isVal)  applyFilters();
 }
 
 function applyFilters() {
@@ -372,8 +380,9 @@ function renderLateItems() {
   if (!tbody) tbody = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">Geen items in het venster (verleden + komende 30 dagen).</td></tr>';
 
   _lateOpenRows.clear();
-  const tbl = document.getElementById('result-table');
-  if (tbl) tbl.innerHTML = thead + '<tbody>' + tbody + '</tbody>';
+  // Write to dedicated late-items table — never touches result-table
+  const ltTable = document.getElementById('late-items-table');
+  if (ltTable) ltTable.innerHTML = thead + '<tbody>' + tbody + '</tbody>';
 
   const relCount = rows.filter(r => r.isReleased).length;
   setStatus(
