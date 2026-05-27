@@ -534,6 +534,7 @@ function handleValFile(event) {
 
     buildValHeader();
     document.getElementById('btn-val-run')?.removeAttribute('disabled');
+    document.getElementById('btn-val-labels')?.removeAttribute('disabled');
     document.getElementById('val-summary').innerHTML =
       `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
   };
