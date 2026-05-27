@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hazardous Substance Analyzer | IHC Expediting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>⚠️ Hazardous Substance <span class="accent">Analyzer</span> <span class="version">v2.1</span></h1>
+    <div class="sub">IHC Expediting — Gevaarlijke Stoffen Analyse op basis van IHM / IMDG / EU SRR</div>
+  </div>
+  <div class="sub" id="fileLabel">Geen bestand geladen</div>
+</div>
+
+<div class="container">
+
+  <!-- Library error banner -->
+  <div class="lib-error" id="libError">⛔ SheetJS library kon niet worden geladen. Controleer je internetverbinding.</div>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📁</div>
+    <p><strong>Sleep je Expediting lijst hierheen</strong></p>
+    <p>of klik om een bestand te selecteren</p>
+    <div class="formats">.xlsx / .xlsm / .xls — Kolom "Description" wordt automatisch gevonden</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat-card">
+      <div class="num" id="statTotal">0</div>
+      <div class="label">Totaal regels gescand</div>
+    </div>
+    <div class="stat-card red">
+      <div class="num" id="statFlagged">0</div>
+      <div class="label">Gemarkeerde regels</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="num" id="statCategories">0</div>
+      <div class="label">Categorieën met hits</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="num" id="statPOs">0</div>
+      <div class="label">Unieke Purchase Orders</div>
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="actions" id="actionsBar" style="display:none">
+    <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+    <button class="btn btn-secondary" onclick="expandAll()">🔽 Alles uitklappen</button>
+    <button class="btn btn-secondary" onclick="collapseAll()">🔼 Alles inklappen</button>
+    <button class="btn btn-secondary" onclick="window.print()">🖨️ Print</button>
+    <input type="text" class="search-box" placeholder="🔍 Zoek op PO-nummer of beschrijving..." oninput="filterCards(this.value)">
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar" id="tabBar" style="display:none">
+    <button class="tab-btn active" onclick="switchView('categories')">📋 Categorieën</button>
+    <button class="tab-btn" onclick="switchView('timeline')">📅 Tijdlijn (verwachte levering)</button>
+  </div>
+
+  <!-- View: Categories -->
+  <div class="view-panel active" id="viewCategories">
+    <div class="categories" id="resultsContainer"></div>
+  </div>
+
+  <!-- View: Timeline -->
+  <div class="view-panel" id="viewTimeline">
+    <div class="tl-filters" id="tlFilters"></div>
+    <div id="timelineContainer"></div>
+  </div>
+
+  <!-- Config panel -->
+  <div class="config-panel" id="configPanel">
+    <h3 onclick="toggleConfig()">⚙️ Classificatie-regels (klik om te bewerken) <span style="font-size:.7em;color:var(--text-dim)">[JSON]</span></h3>
+    <div class="config-body">
+      <div class="config-info">Pas de keywords per categorie aan. Na wijziging klik "Toepassen". Bij geladen data wordt automatisch heranalyseerd.</div>
+      <textarea id="rulesEditor"></textarea>
+      <div style="margin-top:10px;display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="applyRules()">✅ Toepassen</button>
+        <button class="btn btn-secondary" onclick="resetRules()">🔄 Reset naar standaard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info panel -->
+  <div class="info-panel">
+    <h3>ℹ️ Hoe werkt deze tool?</h3>
+    <p>Deze tool analyseert je Expediting lijst automatisch op artikelen die mogelijk gevaarlijke stoffen bevatten, volgens:</p>
+    <ul>
+      <li><strong>IMO Hong Kong Convention</strong> – Inventory of Hazardous Materials (IHM)</li>
+      <li><strong>EU Ship Recycling Regulation (EU SRR)</strong> – 15 gevarengroepen</li>
+      <li><strong>IMDG Code</strong> – International Maritime Dangerous Goods</li>
+      <li><strong>CLP/REACH verordeningen</strong> – Europese classificatie gevaarlijke stoffen</li>
+    </ul>
+    <p style="margin-top:8px">De tool zoekt op keywords in de "Description"-kolom van je Excel en classificeert per risico-categorie.</p>
+    <p style="margin-top:8px"><strong>Aanbevolen acties:</strong> Vraag leveranciers om SDS/MSDS voor 🔴-items, IHM Material Declarations voor 🟡-items, en asbestvrij-verklaringen voor isolatie-componenten.</p>
+  </div>
+
+</div>
+
+<!-- SheetJS CDN + fallback -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="loadFallbackXLSX()"></script>
+<script src="app.js"></script>
+</body>
+</html>
