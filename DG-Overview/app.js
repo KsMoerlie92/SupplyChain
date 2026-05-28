@@ -1,8 +1,8 @@
 // ============================================================
-// Hazardous Substance Analyzer — app.js — v2.1
+// Hazardous Substance Analyzer — app.js — v2.2
 // ============================================================
 
-// -- CDN Fallback --
+// CDN Fallback
 function loadFallbackXLSX(){
   console.warn('[HSA] Primary CDN failed, trying fallback...');
   var s = document.createElement('script');
@@ -22,15 +22,46 @@ window.addEventListener('load', function(){
   }, 2000);
 });
 
-// -- HTML sanitization --
+// HTML sanitization
 function escapeHtml(str){
   if(!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ============================================================
-// DEFAULT CLASSIFICATION RULES
-// ============================================================
+// Date helpers
+var NL_MONTHS = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+var EN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function parseDate(str){
+  if(!str) return null;
+  var s = String(str).trim();
+  if(/^\d{5}$/.test(s)){
+    var d = new Date((parseInt(s) - 25569) * 86400000);
+    if(!isNaN(d.getTime())) return d;
+  }
+  var d2 = new Date(s);
+  if(!isNaN(d2.getTime())) return d2;
+  var m = s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
+  if(m){
+    var yr = parseInt(m[3]); if(yr < 100) yr += 2000;
+    var d3 = new Date(yr, parseInt(m[2])-1, parseInt(m[1]));
+    if(!isNaN(d3.getTime())) return d3;
+  }
+  return null;
+}
+
+function formatDate(d){
+  if(!d) return '\u2014';
+  return String(d.getDate()).padStart(2,'0') + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + d.getFullYear();
+}
+
+// v2.2 — Short date format: "23 May"
+function formatShortDate(str){
+  var d = parseDate(str);
+  if(!d) return str ? String(str).substring(0,20) : '';
+  return d.getDate() + ' ' + EN_MONTHS_SHORT[d.getMonth()];
+}
+
 const DEFAULT_RULES = {
   "🔴 1. Brandstof & Brandbare vloeistoffen": {
     "risk": "high",
@@ -201,11 +232,12 @@ let currentRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
 let lastResults = null;
 let lastData = null;
 let activeCategoryFilters = {};
+let timelineSortMode = 'eta-asc'; // v2.2
 
 document.getElementById('rulesEditor').value = JSON.stringify(currentRules, null, 2);
 
 // ============================================================
-// DROP ZONE + FILE UPLOAD
+// FILE UPLOAD
 // ============================================================
 var dropZone = document.getElementById('dropZone');
 var fileInput = document.getElementById('fileInput');
@@ -222,7 +254,6 @@ function processFile(file){
   if(typeof XLSX === 'undefined'){ showLibraryError(); return; }
   console.log('[HSA] Processing:', file.name, '(' + file.size + ' bytes)');
   document.getElementById('fileLabel').textContent = file.name;
-
   dropZone.classList.add('loading');
   dropZone.querySelector('.icon').textContent = '\u23f3';
   dropZone.querySelector('p strong').textContent = 'Bestand wordt geanalyseerd...';
@@ -232,15 +263,13 @@ function processFile(file){
     try {
       var data = new Uint8Array(e.target.result);
       var wb = XLSX.read(data, {type:'array'});
-      console.log('[HSA] Sheets:', wb.SheetNames.join(', '));
       window._lastWb = wb;
-
+      console.log('[HSA] Sheets:', wb.SheetNames.join(', '));
       var sheetName = wb.SheetNames.find(function(n){ return n.toLowerCase().indexOf('deliver') !== -1; }) || wb.SheetNames[0];
       console.log('[HSA] Using sheet:', sheetName);
-
       var ws = wb.Sheets[sheetName];
 
-      // Smart header-row detection: scan first 15 rows for "Description"
+      // Smart header-row detection
       var rawRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       var headerRowIdx = -1;
       for(var r = 0; r < Math.min(rawRows.length, 15); r++){
@@ -257,12 +286,11 @@ function processFile(file){
       }
       if(headerRowIdx === -1) headerRowIdx = 2;
       window._headerRowIdx = headerRowIdx;
-      console.log('[HSA] Header row at index:', headerRowIdx, '(Excel row ' + (headerRowIdx+1) + ')');
+      console.log('[HSA] Header row:', headerRowIdx, '(Excel row ' + (headerRowIdx+1) + ')');
 
       var json = XLSX.utils.sheet_to_json(ws, {range: headerRowIdx, defval:''});
       if(!json.length){ alert('Geen data gevonden in sheet "' + sheetName + '"'); resetDropZone(); return; }
       console.log('[HSA] Rows:', json.length, '| Columns:', Object.keys(json[0]).join(', '));
-
       lastData = json;
       analyzeData(json);
       resetDropZone();
@@ -298,12 +326,16 @@ function analyzeData(rows){
   var orderCol = keys.find(function(k){ return k === 'Order No'; })
               || keys.find(function(k){ return k.toLowerCase() === 'order no'; });
 
-  // Date column: try header names, then fallback to Column U (index 20)
+  // Date column (Column U or header match)
   var dateCol = keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('confirm') !== -1 && lk.indexOf('date') !== -1; })
              || keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('delivery') !== -1 || lk.indexOf('verwacht') !== -1 || lk === 'eta' || lk.indexOf('planned') !== -1; });
   if(!dateCol && keys.length > 20) dateCol = keys[20];
 
-  console.log('[HSA] Mapped: desc=' + descCol + ' | po=' + poCol + ' | order=' + orderCol + ' | date=' + dateCol);
+  // v2.2 — Last Expedited column
+  var lastExpCol = keys.find(function(k){ return k.toLowerCase().indexOf('expedit') !== -1; })
+                || keys.find(function(k){ return k.toLowerCase().indexOf('last exp') !== -1; });
+
+  console.log('[HSA] Mapped: desc=' + descCol + ' | po=' + poCol + ' | order=' + orderCol + ' | date=' + dateCol + ' | lastExp=' + lastExpCol);
 
   if(!descCol){
     alert('Kolom "Description" niet gevonden.\nGevonden kolommen:\n' + keys.join(', '));
@@ -329,10 +361,15 @@ function analyzeData(rows){
       for(var i = 0; i < cat.keywords.length; i++){
         if(desc.toLowerCase().indexOf(cat.keywords[i].toLowerCase()) !== -1){
           var etaVal = dateCol ? String(row[dateCol] || '').trim() : '';
+          var lastExpVal = lastExpCol ? String(row[lastExpCol] || '').trim() : '';
           results[catName].poLines.push(poKey);
           results[catName].basePOs.add(basePO);
           results[catName].descriptions.add(desc.substring(0,120));
-          results[catName].items.push({ po: poKey, basePO: basePO, desc: desc.substring(0,120), eta: etaVal, category: catName, risk: cat.risk });
+          results[catName].items.push({
+            po: poKey, basePO: basePO, desc: desc.substring(0,120),
+            eta: etaVal, lastExp: lastExpVal,
+            category: catName, risk: cat.risk
+          });
           totalFlagged++;
           allFlaggedPOs.add(basePO);
           break;
@@ -354,14 +391,14 @@ function analyzeData(rows){
   document.getElementById('actionsBar').style.display = 'flex';
   document.getElementById('tabBar').style.display = 'flex';
 
-  console.log('[HSA] Done: scanned=' + totalScanned + ' flagged=' + totalFlagged + ' cats=' + catsWithHits + ' POs=' + allFlaggedPOs.size);
+  console.log('[HSA] Done: scanned=' + totalScanned + ' flagged=' + totalFlagged);
 
   renderResults(results);
   renderTimeline(results);
 }
 
 // ============================================================
-// RENDER CATEGORY VIEW
+// RENDER CATEGORY VIEW (v2.2 — short dates for Last Expedited)
 // ============================================================
 function renderResults(results){
   var container = document.getElementById('resultsContainer');
@@ -377,7 +414,6 @@ function renderResults(results){
     card.className = 'cat-card ' + riskClass;
     card.dataset.search = (catName + ' ' + Array.from(data.descriptions).join(' ') + ' ' + Array.from(data.basePOs).join(' ')).toLowerCase();
 
-    var uniqueDescs = Array.from(data.descriptions);
     var uniquePOs = Array.from(data.basePOs).sort();
     var poLines = Array.from(new Set(data.poLines)).sort();
 
@@ -414,16 +450,59 @@ function renderResults(results){
       p.textContent = '\u2705 Geen items gevonden in deze categorie';
       contentDiv.appendChild(p);
     } else {
-      contentDiv.innerHTML =
-        '<div class="cat-section"><h4>\uD83D\uDCCB Aanbevolen actie</h4>'
+      // Action section
+      var sec1 = document.createElement('div');
+      sec1.className = 'cat-section';
+      sec1.innerHTML = '<h4>\uD83D\uDCCB Aanbevolen actie</h4>'
         + '<p style="font-size:.85em;color:var(--orange)">' + escapeHtml(rule.action) + '</p>'
-        + '<p style="font-size:.8em;color:var(--text-dim);margin-top:4px">Regelgeving: ' + escapeHtml(rule.regulations) + '</p></div>'
-        + '<div class="cat-section"><h4>\uD83C\uDFF7\uFE0F Purchase Orders (' + uniquePOs.length + ' uniek)</h4>'
-        + '<div class="po-grid">' + uniquePOs.map(function(po){ return '<span class="po-tag">' + escapeHtml(po) + '</span>'; }).join('') + '</div></div>'
-        + '<div class="cat-section"><h4>\uD83D\uDCC4 PO-regels (' + poLines.length + ')</h4>'
-        + '<div class="po-grid">' + poLines.map(function(po){ return '<span class="po-tag">' + escapeHtml(po) + '</span>'; }).join('') + '</div></div>'
-        + '<div class="cat-section"><h4>\uD83D\uDCDD Beschrijvingen (' + uniqueDescs.length + ' uniek)</h4>'
-        + '<ul class="desc-list">' + uniqueDescs.map(function(d){ return '<li>' + escapeHtml(d) + '</li>'; }).join('') + '</ul></div>';
+        + '<p style="font-size:.8em;color:var(--text-dim);margin-top:4px">Regelgeving: ' + escapeHtml(rule.regulations) + '</p>';
+      contentDiv.appendChild(sec1);
+
+      // PO sections
+      var sec2 = document.createElement('div');
+      sec2.className = 'cat-section';
+      sec2.innerHTML = '<h4>\uD83C\uDFF7\uFE0F Purchase Orders (' + uniquePOs.length + ' uniek)</h4>'
+        + '<div class="po-grid">' + uniquePOs.map(function(po){ return '<span class="po-tag">' + escapeHtml(po) + '</span>'; }).join('') + '</div>';
+      contentDiv.appendChild(sec2);
+
+      var sec3 = document.createElement('div');
+      sec3.className = 'cat-section';
+      sec3.innerHTML = '<h4>\uD83D\uDCC4 PO-regels (' + poLines.length + ')</h4>'
+        + '<div class="po-grid">' + poLines.map(function(po){ return '<span class="po-tag">' + escapeHtml(po) + '</span>'; }).join('') + '</div>';
+      contentDiv.appendChild(sec3);
+
+      // v2.2 — Description list with short Last Expedited dates
+      var sec4 = document.createElement('div');
+      sec4.className = 'cat-section';
+      var descHeader = document.createElement('h4');
+      descHeader.textContent = '\uD83D\uDCDD Artikelbeschrijvingen (' + data.items.length + ')';
+      sec4.appendChild(descHeader);
+      var ul = document.createElement('ul');
+      ul.className = 'desc-list';
+
+      // Deduplicate by desc but keep lastExp
+      var seen = {};
+      data.items.forEach(function(item){
+        var key = item.desc;
+        if(!seen[key]){ seen[key] = item; }
+      });
+      Object.values(seen).forEach(function(item){
+        var li = document.createElement('li');
+        var descSpan = document.createElement('span');
+        descSpan.className = 'desc-text';
+        descSpan.textContent = item.desc;
+        li.appendChild(descSpan);
+        if(item.lastExp){
+          var dateSpan = document.createElement('span');
+          dateSpan.className = 'desc-date';
+          dateSpan.textContent = formatShortDate(item.lastExp);
+          dateSpan.title = 'Last Expedited: ' + item.lastExp;
+          li.appendChild(dateSpan);
+        }
+        ul.appendChild(li);
+      });
+      sec4.appendChild(ul);
+      contentDiv.appendChild(sec4);
     }
 
     bodyDiv.appendChild(contentDiv);
@@ -433,40 +512,16 @@ function renderResults(results){
 }
 
 // ============================================================
-// TIMELINE VIEW + CATEGORY FILTERS
+// TIMELINE VIEW + FILTERS + SORT (v2.2)
 // ============================================================
-var NL_MONTHS = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
-
-function parseDate(str){
-  if(!str) return null;
-  var s = String(str).trim();
-  if(/^\d{5}$/.test(s)){
-    var d = new Date((parseInt(s) - 25569) * 86400000);
-    if(!isNaN(d.getTime())) return d;
-  }
-  var d2 = new Date(s);
-  if(!isNaN(d2.getTime())) return d2;
-  var m = s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
-  if(m){
-    var yr = parseInt(m[3]); if(yr < 100) yr += 2000;
-    var d3 = new Date(yr, parseInt(m[2])-1, parseInt(m[1]));
-    if(!isNaN(d3.getTime())) return d3;
-  }
-  return null;
-}
-
-function formatDate(d){
-  if(!d) return '\u2014';
-  return String(d.getDate()).padStart(2,'0') + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + d.getFullYear();
-}
-
 function renderTimeline(results){
   var filterBox = document.getElementById('tlFilters');
+  var sortBar = document.getElementById('tlSortBar');
   var container = document.getElementById('timelineContainer');
   filterBox.innerHTML = '';
   container.innerHTML = '';
 
-  // Build list of categories that have hits
+  // Categories with hits
   var activeCats = [];
   for(var cn in results){
     if(results[cn].items.length > 0){
@@ -474,7 +529,7 @@ function renderTimeline(results){
     }
   }
 
-  // Init filter state: all active
+  // Init filters: all active
   activeCategoryFilters = {};
   activeCats.forEach(function(c){ activeCategoryFilters[c.name] = true; });
 
@@ -494,36 +549,58 @@ function renderTimeline(results){
         activeCategoryFilters[cat.name] = !activeCategoryFilters[cat.name];
         this.classList.toggle('active');
         this.classList.toggle('inactive', !activeCategoryFilters[cat.name]);
-        applyTimelineFilters();
+        rebuildTimelineItems();
       };
       filterBox.appendChild(chip);
     });
   }
 
-  // Collect + sort items
+  // Show sort bar
+  sortBar.style.display = 'flex';
+
+  // Build timeline items
+  rebuildTimelineItems();
+}
+
+function rebuildTimelineItems(){
+  var container = document.getElementById('timelineContainer');
+  container.innerHTML = '';
+
+  if(!lastResults) return;
+
+  // Collect items from active categories
   var allItems = [];
-  for(var catName in results){
-    results[catName].items.forEach(function(item){
+  for(var catName in lastResults){
+    if(!activeCategoryFilters[catName]) continue;
+    lastResults[catName].items.forEach(function(item){
       allItems.push({
-        eta: item.eta,
-        etaParsed: parseDate(item.eta),
-        po: item.po,
-        desc: item.desc,
+        eta: item.eta, etaParsed: parseDate(item.eta),
+        po: item.po, desc: item.desc,
         category: item.category || catName,
-        risk: item.risk || 'low'
+        risk: item.risk || 'low',
+        lastExp: item.lastExp
       });
     });
   }
 
   if(allItems.length === 0){
-    container.innerHTML = '<div class="tl-empty">Geen gemarkeerde items gevonden.</div>';
+    container.innerHTML = '<div class="tl-empty">Geen items zichtbaar. Pas de filters aan.</div>';
     return;
   }
 
+  // Sort based on current mode
   allItems.sort(function(a,b){
-    if(a.etaParsed && b.etaParsed) return a.etaParsed - b.etaParsed;
-    if(a.etaParsed && !b.etaParsed) return -1;
-    if(!a.etaParsed && b.etaParsed) return 1;
+    var da = a.etaParsed, db = b.etaParsed;
+    if(timelineSortMode === 'eta-desc'){
+      if(da && db) return db - da;
+      if(da && !db) return -1;
+      if(!da && db) return 1;
+      return 0;
+    }
+    // Default: eta-asc (also used for confirmed-asc)
+    if(da && db) return da - db;
+    if(da && !db) return -1;
+    if(!da && db) return 1;
     return 0;
   });
 
@@ -536,7 +613,7 @@ function renderTimeline(results){
     groups[key].push(item);
   });
 
-  // Render month groups
+  // Render
   groupOrder.forEach(function(key){
     var items = groups[key];
     var groupDiv = document.createElement('div');
@@ -544,13 +621,13 @@ function renderTimeline(results){
 
     var header = document.createElement('div');
     header.className = 'tl-month-header';
-    header.innerHTML = '\uD83D\uDCC5 ' + escapeHtml(key.charAt(0).toUpperCase() + key.slice(1)) + ' <span class="tl-count">' + items.length + ' item' + (items.length !== 1 ? 's' : '') + '</span>';
+    header.innerHTML = '\uD83D\uDCC5 ' + escapeHtml(key.charAt(0).toUpperCase() + key.slice(1))
+      + ' <span class="tl-count">' + items.length + ' item' + (items.length !== 1 ? 's' : '') + '</span>';
     groupDiv.appendChild(header);
 
     items.forEach(function(item){
       var row = document.createElement('div');
       row.className = 'tl-item risk-' + item.risk;
-      row.dataset.category = item.category;
 
       var dateSpan = document.createElement('span');
       dateSpan.className = 'tl-date';
@@ -579,21 +656,13 @@ function renderTimeline(results){
     container.appendChild(groupDiv);
   });
 
-  console.log('[HSA] Timeline:', allItems.length, 'items in', groupOrder.length, 'groups');
+  console.log('[HSA] Timeline:', allItems.length, 'items,', groupOrder.length, 'groups, sort:', timelineSortMode);
 }
 
-function applyTimelineFilters(){
-  document.querySelectorAll('.tl-item').forEach(function(row){
-    var cat = row.dataset.category;
-    row.classList.toggle('filtered-out', !activeCategoryFilters[cat]);
-  });
-  // Update month group counts
-  document.querySelectorAll('.tl-month').forEach(function(group){
-    var visible = group.querySelectorAll('.tl-item:not(.filtered-out)').length;
-    var countEl = group.querySelector('.tl-count');
-    if(countEl) countEl.textContent = visible + ' item' + (visible !== 1 ? 's' : '');
-    group.style.display = visible === 0 ? 'none' : '';
-  });
+// v2.2 — Sort change handler
+function onTimelineSortChange(el){
+  timelineSortMode = el.value;
+  rebuildTimelineItems();
 }
 
 // ============================================================
@@ -612,18 +681,13 @@ function switchView(view){
 // ============================================================
 function expandAll(){ document.querySelectorAll('.cat-card').forEach(function(c){ c.classList.add('open'); }); }
 function collapseAll(){ document.querySelectorAll('.cat-card').forEach(function(c){ c.classList.remove('open'); }); }
-
 function filterCards(q){
   var query = q.toLowerCase();
   document.querySelectorAll('.cat-card').forEach(function(card){
     card.style.display = card.dataset.search.indexOf(query) !== -1 ? '' : 'none';
   });
 }
-
-function toggleConfig(){
-  document.getElementById('configPanel').classList.toggle('open');
-}
-
+function toggleConfig(){ document.getElementById('configPanel').classList.toggle('open'); }
 function applyRules(){
   try {
     currentRules = JSON.parse(document.getElementById('rulesEditor').value);
@@ -631,7 +695,6 @@ function applyRules(){
     else { alert('\u2705 Regels bijgewerkt!'); }
   } catch(e){ alert('\u274C Ongeldige JSON: ' + e.message); }
 }
-
 function resetRules(){
   currentRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
   document.getElementById('rulesEditor').value = JSON.stringify(currentRules, null, 2);
@@ -641,20 +704,19 @@ function resetRules(){
 
 function exportCSV(){
   if(!lastResults){ alert('Geen resultaten.'); return; }
-  var csv = 'Categorie;Risico;PO Regel;Base PO;Beschrijving;Verwachte Levering;Aanbevolen Actie;Regelgeving\n';
+  var csv = 'Categorie;Risico;PO Regel;Base PO;Beschrijving;Verwachte Levering;Last Expedited;Aanbevolen Actie;Regelgeving\n';
+  var esc = function(s){ return '"' + String(s||'').replace(/"/g,'""') + '"'; };
   for(var catName in lastResults){
     var data = lastResults[catName];
     var rule = currentRules[catName];
-    var esc = function(s){ return '"' + String(s).replace(/"/g,'""') + '"'; };
     data.items.forEach(function(item){
-      csv += esc(catName)+';'+esc(rule.risk)+';'+esc(item.po)+';'+esc(item.basePO)+';'+esc(item.desc)+';'+esc(item.eta||'')+';'+esc(rule.action)+';'+esc(rule.regulations)+'\n';
+      csv += esc(catName)+';'+esc(rule.risk)+';'+esc(item.po)+';'+esc(item.basePO)+';'+esc(item.desc)+';'+esc(item.eta)+';'+esc(item.lastExp)+';'+esc(rule.action)+';'+esc(rule.regulations)+'\n';
     });
   }
   var blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = url;
-  a.download = 'Hazardous_Substance_Analysis_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.href = url; a.download = 'Hazardous_Substance_Analysis_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click(); URL.revokeObjectURL(url);
   console.log('[HSA] CSV exported');
 }

@@ -10,7 +10,7 @@
 
 <div class="header">
   <div>
-    <h1>⚠️ Hazardous Substance <span class="accent">Analyzer</span> <span class="version">v2.1</span></h1>
+    <h1>⚠️ Hazardous Substance <span class="accent">Analyzer</span> <span class="version">v2.2</span></h1>
     <div class="sub">IHC Expediting — Gevaarlijke Stoffen Analyse op basis van IHM / IMDG / EU SRR</div>
   </div>
   <div class="sub" id="fileLabel">Geen bestand geladen</div>
@@ -18,10 +18,8 @@
 
 <div class="container">
 
-  <!-- Library error banner -->
   <div class="lib-error" id="libError">⛔ SheetJS library kon niet worden geladen. Controleer je internetverbinding.</div>
 
-  <!-- Upload zone -->
   <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
     <div class="icon">📁</div>
     <p><strong>Sleep je Expediting lijst hierheen</strong></p>
@@ -30,7 +28,6 @@
     <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
   </div>
 
-  <!-- Stats bar -->
   <div class="stats-bar" id="statsBar" style="display:none">
     <div class="stat-card">
       <div class="num" id="statTotal">0</div>
@@ -50,7 +47,6 @@
     </div>
   </div>
 
-  <!-- Action bar -->
   <div class="actions" id="actionsBar" style="display:none">
     <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
     <button class="btn btn-secondary" onclick="expandAll()">🔽 Alles uitklappen</button>
@@ -59,24 +55,27 @@
     <input type="text" class="search-box" placeholder="🔍 Zoek op PO-nummer of beschrijving..." oninput="filterCards(this.value)">
   </div>
 
-  <!-- Tab bar -->
   <div class="tab-bar" id="tabBar" style="display:none">
     <button class="tab-btn active" onclick="switchView('categories')">📋 Categorieën</button>
-    <button class="tab-btn" onclick="switchView('timeline')">📅 Tijdlijn (verwachte levering)</button>
+    <button class="tab-btn" onclick="switchView('timeline')">📅 Tijdlijn</button>
   </div>
 
-  <!-- View: Categories -->
   <div class="view-panel active" id="viewCategories">
     <div class="categories" id="resultsContainer"></div>
   </div>
 
-  <!-- View: Timeline -->
   <div class="view-panel" id="viewTimeline">
+    <div class="tl-sort-bar" id="tlSortBar" style="display:none">
+      <label>↕ Sorteer:</label>
+      <select class="tl-sort-select" onchange="onTimelineSortChange(this)">
+        <option value="eta-asc">Confirmed date (vroegst eerst)</option>
+        <option value="eta-desc">Confirmed date (laatst eerst)</option>
+      </select>
+    </div>
     <div class="tl-filters" id="tlFilters"></div>
     <div id="timelineContainer"></div>
   </div>
 
-  <!-- Config panel -->
   <div class="config-panel" id="configPanel">
     <h3 onclick="toggleConfig()">⚙️ Classificatie-regels (klik om te bewerken) <span style="font-size:.7em;color:var(--text-dim)">[JSON]</span></h3>
     <div class="config-body">
@@ -89,7 +88,6 @@
     </div>
   </div>
 
-  <!-- Info panel -->
   <div class="info-panel">
     <h3>ℹ️ Hoe werkt deze tool?</h3>
     <p>Deze tool analyseert je Expediting lijst automatisch op artikelen die mogelijk gevaarlijke stoffen bevatten, volgens:</p>
@@ -105,7 +103,6 @@
 
 </div>
 
-<!-- SheetJS CDN + fallback -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="loadFallbackXLSX()"></script>
 <script src="app.js"></script>
 </body>
