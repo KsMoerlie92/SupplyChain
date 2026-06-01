@@ -191,12 +191,13 @@ function applyFilters() {
 //  AG(32) FAT                    → detail if filled
 //  AH(33) FAT Datum              → detail if filled
 
-let _lateSortDir = 'asc';
+let _lateSortDir = 'asc';  // 'asc' | 'desc' | 'date'
 
 function setLateSort(dir) {
   _lateSortDir = dir;
   document.getElementById('late-sort-asc') .classList.toggle('active', dir === 'asc');
   document.getElementById('late-sort-desc').classList.toggle('active', dir === 'desc');
+  document.getElementById('late-sort-date')?.classList.toggle('active', dir === 'date');
   renderLateItems();
 }
 
@@ -233,6 +234,14 @@ function _toDate(v) {
 function _fmtDate(d) {
   if (!d) return '—';
   return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+}
+
+// Short format: "23 May" — day + abbreviated month name, no year/time/timezone
+const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _fmtShort(v) {
+  const d = (v instanceof Date) ? v : _toDate(v);
+  if (!d) return v ? String(v).split(' ')[0].split('T')[0] : '—';
+  return `${d.getDate()} ${_MONTHS[d.getMonth()]}`;
 }
 
 let _lateOpenRows = new Set();
@@ -320,6 +329,12 @@ function renderLateItems() {
   }).filter(Boolean);
 
   const sortFn = (a, b) => {
+    if (_lateSortDir === 'date') {
+      // Sort by Confirmed date (col U) ascending — chronological
+      const at = a.uDate?.getTime() ?? Infinity;
+      const bt = b.uDate?.getTime() ?? Infinity;
+      return at - bt;
+    }
     const aO = a.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
     const bO = b.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
     return _lateSortDir === 'asc' ? aO - bO : bO - aO;
@@ -359,7 +374,7 @@ function renderLateItems() {
       [hn(iI), r.colI],
     ];
 
-    if (r.colW)  detFields.push([hn(iW),  r.colW]);
+    if (r.colW)  detFields.push([hn(iW),  _fmtShort(r.colW)]);
     if (r.colX)  detFields.push([hn(iX),  r.colX]);
     if (r.colY)  detFields.push([hn(iY),  r.colY]);
     if (r.colZ)  detFields.push([hn(iZ),  r.colZ]);
