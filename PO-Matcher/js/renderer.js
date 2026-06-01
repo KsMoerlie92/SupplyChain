@@ -233,7 +233,7 @@ function _toDate(v) {
 
 function _fmtDate(d) {
   if (!d) return '—';
-  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
 // Short format: "23 May" — day + abbreviated month name, no year/time/timezone
@@ -374,7 +374,7 @@ function renderLateItems() {
       [hn(iI), r.colI],
     ];
 
-    if (r.colW)  detFields.push([hn(iW),  _fmtShort(r.colW)]);
+    if (r.colW)  detFields.push([hn(iW),  _fmtDate(_toDate(r.colW))]);
     if (r.colX)  detFields.push([hn(iX),  r.colX]);
     if (r.colY)  detFields.push([hn(iY),  r.colY]);
     if (r.colZ)  detFields.push([hn(iZ),  r.colZ]);
