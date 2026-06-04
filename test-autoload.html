@@ -11,21 +11,23 @@
     .card h2{font-size:.9rem;color:#00b4d8;margin-bottom:.5rem}
     .key-item{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #1e3a6e;font-size:.8rem}
     .key-name{font-weight:700;color:#f59e0b}
+    .key-meta{color:#94a3b8}
     button{background:#00b4d8;color:#0a1628;border:none;border-radius:6px;padding:.5rem 1rem;font-weight:700;cursor:pointer;margin:.3rem}
     button:hover{background:#0096b7}
     button.red{background:#ef4444;color:#fff}
     button.red:hover{background:#dc2626}
     table{width:100%;border-collapse:collapse;margin-top:.5rem;font-size:.72rem}
-    th,td{border:1px solid #1e3a6e;padding:.3rem .5rem;text-align:left}
+    th,td{border:1px solid #1e3a6e;padding:.3rem .5rem;text-align:left;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     th{background:#1e3a6e;color:#00b4d8}
-    #output{margin-top:1rem;white-space:pre-wrap;font-family:monospace;font-size:.72rem;color:#94a3b8;max-height:300px;overflow:auto}
+    #output{margin-top:1rem;white-space:pre-wrap;font-family:'Cascadia Code',monospace;font-size:.72rem;color:#94a3b8;max-height:400px;overflow:auto;background:#0a1020;padding:.8rem;border-radius:6px}
+    .ok{color:#22c55e} .err{color:#ef4444} .warn{color:#f59e0b}
   </style>
 </head>
 <body>
-  <h1>🔍 IndexedDB Debug Tool</h1>
+  <h1>🔍 IndexedDB Debug Tool — Royal IHC</h1>
 
   <div class="card">
-    <h2>Opgeslagen bestanden</h2>
+    <h2>📦 Opgeslagen bestanden in IndexedDB</h2>
     <div id="keys-list">Laden...</div>
     <br>
     <button onclick="scanDB()">🔄 Vernieuwen</button>
@@ -33,21 +35,39 @@
   </div>
 
   <div class="card">
-    <h2>Test Parse</h2>
+    <h2>🧪 Test: File injectie simulatie</h2>
+    <p style="font-size:.75rem;color:#94a3b8;margin-bottom:.5rem">
+      Test of DataTransfer + File constructie werkt in deze browser:
+    </p>
+    <button onclick="testInject()">▶ Test DataTransfer inject</button>
+    <input type="file" id="test-input" style="margin-left:1rem;font-size:.7rem;color:#94a3b8">
+    <div id="inject-result" style="margin-top:.5rem;font-size:.75rem"></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Test: Parse vanuit IndexedDB</h2>
     <button onclick="testParse('moederlijst')">📋 Parse Moederlijst</button>
     <button onclick="testParse('expediting')">📊 Parse Expediting</button>
     <div id="parse-output"></div>
   </div>
 
   <div class="card">
-    <h2>Console log</h2>
+    <h2>🖥️ Console log</h2>
     <div id="output"></div>
   </div>
 
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
     const DB_NAME='ihc-logistics-files',DB_VER=1,STORE='files';
-    const log=msg=>{document.getElementById('output').textContent+=msg+'\n';console.log(msg)};
+    function log(msg,cls){
+      const el=document.getElementById('output');
+      const line=document.createElement('div');
+      line.className=cls||'';
+      line.textContent='['+new Date().toLocaleTimeString()+'] '+msg;
+      el.appendChild(line);
+      el.scrollTop=el.scrollHeight;
+      console.log(msg);
+    }
 
     function openDB(){
       return new Promise((ok,fail)=>{
@@ -67,39 +87,62 @@
         const req=store.getAllKeys();
         req.onsuccess=async()=>{
           const keys=req.result;
-          if(keys.length===0){el.innerHTML='<em>Geen bestanden opgeslagen</em>';return;}
+          if(!keys.length){el.innerHTML='<em style="color:#94a3b8">Geen bestanden — upload eerst via de hoofdpagina</em>';log('Geen keys in IndexedDB','warn');return;}
           let html='';
           for(const k of keys){
             const rec=await new Promise(ok=>{const r=store.get(k);r.onsuccess=()=>ok(r.result)});
-            const size=rec&&rec.data? (rec.data.byteLength||rec.data.length||JSON.stringify(rec.data).length) : '?';
+            const dataType=rec&&rec.data?(rec.data.constructor?rec.data.constructor.name:typeof rec.data):'null';
+            const size=rec&&rec.data?(rec.data.byteLength||rec.data.length||'?'):'0';
             const name=rec&&rec.name?rec.name:'(onbekend)';
-            const ts=rec&&rec.ts?new Date(rec.ts).toLocaleString():'?';
-            html+=`<div class="key-item"><span class="key-name">${k}</span><span>${name} — ${(size/1024).toFixed(0)} KB — ${ts}</span></div>`;
-            log(`Key: ${k} | File: ${name} | Size: ${size} bytes | Data type: ${rec&&rec.data?rec.data.constructor.name:'null'}`);
+            const ts=rec&&rec.ts?new Date(rec.ts).toLocaleString('nl'):'?';
+            html+=`<div class="key-item"><span class="key-name">${k}</span><span class="key-meta">${name} — ${(size/1024).toFixed(0)} KB — ${dataType} — ${ts}</span></div>`;
+            log(`Key "${k}": ${name} | ${size} bytes | type: ${dataType}`,'ok');
           }
           el.innerHTML=html;
         };
-      }catch(err){el.textContent='Fout: '+err.message;log('ERROR: '+err.message)}
+      }catch(err){el.textContent='Fout: '+err.message;log('DB ERROR: '+err.message,'err')}
     }
 
     async function clearAll(){
-      if(!confirm('Alles wissen?'))return;
+      if(!confirm('Alle bestanden uit IndexedDB wissen?'))return;
       const db=await openDB();
       const tx=db.transaction(STORE,'readwrite');
       tx.objectStore(STORE).clear();
-      tx.oncomplete=()=>{log('Alle keys gewist');scanDB()};
+      tx.oncomplete=()=>{log('Alle keys gewist','warn');scanDB()};
     }
 
-    function toUint8Array(raw){
-      if(raw instanceof Uint8Array)return raw;
-      if(raw instanceof ArrayBuffer)return new Uint8Array(raw);
-      if(raw&&raw.buffer&&raw.buffer instanceof ArrayBuffer)return new Uint8Array(raw.buffer);
-      if(raw&&typeof raw==='object'){
-        if(raw.data)return toUint8Array(raw.data);
-        const keys=Object.keys(raw).filter(k=>!isNaN(k));
-        if(keys.length)return new Uint8Array(keys.sort((a,b)=>a-b).map(k=>raw[k]));
+    function testInject(){
+      const res=document.getElementById('inject-result');
+      try{
+        const buf=new ArrayBuffer(10);
+        const file=new File([buf],'test.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+        const dt=new DataTransfer();
+        dt.items.add(file);
+        const input=document.getElementById('test-input');
+        input.files=dt.files;
+        if(input.files.length===1 && input.files[0].name==='test.xlsx'){
+          res.innerHTML='<span class="ok">✅ DataTransfer inject werkt! File name: '+input.files[0].name+', size: '+input.files[0].size+'</span>';
+          log('DataTransfer inject: OK','ok');
+        } else {
+          res.innerHTML='<span class="err">❌ Files niet correct ingesteld</span>';
+          log('DataTransfer inject: FAILED','err');
+        }
+      }catch(err){
+        res.innerHTML='<span class="err">❌ '+err.message+'</span>';
+        log('DataTransfer inject ERROR: '+err.message,'err');
       }
-      throw new Error('Cannot convert to Uint8Array');
+    }
+
+    function toArrayBuffer(raw){
+      if(raw instanceof ArrayBuffer)return raw;
+      if(raw instanceof Uint8Array)return raw.buffer;
+      if(raw&&raw.buffer&&raw.buffer instanceof ArrayBuffer)return raw.buffer;
+      if(raw&&typeof raw==='object'){
+        if(raw.data)return toArrayBuffer(raw.data);
+        const keys=Object.keys(raw).filter(k=>!isNaN(k));
+        if(keys.length)return new Uint8Array(keys.sort((a,b)=>a-b).map(k=>raw[k])).buffer;
+      }
+      throw new Error('Cannot convert to ArrayBuffer');
     }
 
     async function testParse(key){
@@ -111,34 +154,33 @@
           const r=tx.objectStore(STORE).get(key);
           r.onsuccess=()=>ok(r.result);r.onerror=e=>fail(e.target.error);
         });
-        if(!rec||!rec.data){out.innerHTML='<em>Niet gevonden in IndexedDB</em>';return;}
+        if(!rec||!rec.data){out.innerHTML='<em class="warn">Key "'+key+'" niet gevonden</em>';return;}
 
-        log(`Parsing ${key}: data type = ${typeof rec.data}, constructor = ${rec.data.constructor.name}`);
-        const uint8=toUint8Array(rec.data);
-        log(`Uint8Array lengte: ${uint8.length}`);
+        log('Parsing '+key+': data constructor = '+(rec.data.constructor?rec.data.constructor.name:'?'));
+        const buf=toArrayBuffer(rec.data);
+        log('ArrayBuffer grootte: '+buf.byteLength+' bytes');
 
-        const wb=XLSX.read(uint8,{type:'array',cellDates:true});
-        log(`Sheets: ${wb.SheetNames.join(', ')}`);
+        const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        log('Sheets: '+wb.SheetNames.join(', '),'ok');
 
         const sn=wb.SheetNames[1]||wb.SheetNames[0];
         const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-        log(`Sheet "${sn}": ${raw.length} rijen`);
+        log('Sheet "'+sn+'": '+raw.length+' rijen','ok');
 
-        // Show first 5 rows as table
-        let html='<table><tr>';
-        const headers=raw[0]||[];
-        headers.forEach(h=>{html+='<th>'+String(h).substring(0,20)+'</th>'});
+        let html='<p class="ok" style="font-size:.75rem;margin:.5rem 0">✅ Parse OK — '+raw.length+' rijen in "'+sn+'"</p>';
+        html+='<table><tr>';
+        (raw[0]||[]).slice(0,10).forEach(h=>{html+='<th>'+String(h).substring(0,20)+'</th>'});
         html+='</tr>';
         for(let i=1;i<Math.min(6,raw.length);i++){
           html+='<tr>';
-          (raw[i]||[]).forEach(c=>{html+='<td>'+String(c||'').substring(0,25)+'</td>'});
+          (raw[i]||[]).slice(0,10).forEach(c=>{html+='<td>'+String(c||'').substring(0,25)+'</td>'});
           html+='</tr>';
         }
         html+='</table>';
-        out.innerHTML='<p style="color:#22c55e;font-size:.75rem">✅ Parse OK — '+raw.length+' rijen in sheet "'+sn+'"</p>'+html;
+        out.innerHTML=html;
       }catch(err){
-        out.innerHTML='<p style="color:#ef4444">❌ '+err.message+'</p>';
-        log('PARSE ERROR: '+err.message);
+        out.innerHTML='<p class="err">❌ '+err.message+'</p>';
+        log('PARSE ERROR: '+err.message,'err');
       }
     }
 
