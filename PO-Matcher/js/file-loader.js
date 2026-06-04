@@ -1,206 +1,238 @@
-// ── Find the best header row (most non-empty cells in first 5 rows) ──────────
-function _findHeaderRow(ws) {
-  if (!ws['!ref']) return 0;
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  let bestRow = 0, bestCount = 0;
-  for (let R = range.s.r; R <= Math.min(range.s.r + 5, range.e.r); R++) {
-    let count = 0;
-    for (let C = range.s.c; C <= Math.min(range.s.c + 40, range.e.c); C++) {
-      const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
-      if (cell && cell.v !== null && cell.v !== undefined && String(cell.v).trim()) count++;
-    }
-    if (count > bestCount) { bestCount = count; bestRow = R; }
+/* ── Royal IHC PO-Matcher — File Loader with IndexedDB auto-load ── */
+(function(){
+  "use strict";
+
+  /* ══════════════════════════════════════════════════════════
+     Global state — other scripts read these
+  ══════════════════════════════════════════════════════════ */
+  window.moederData    = window.moederData    || [];
+  window.expediteData  = window.expediteData  || [];
+  window.expediteHeaders = window.expediteHeaders || [];
+  window.moederHeaders = window.moederHeaders || [];
+
+  /* ══════════════════════════════════════════════════════════
+     IndexedDB helpers (use shared IHC_DB if available)
+  ══════════════════════════════════════════════════════════ */
+  const DB_NAME='ihc-logistics-files', DB_VER=1, STORE='files';
+  function _openDB(){
+    if(window.IHC_DB && window.IHC_DB.openDB) return window.IHC_DB.openDB();
+    return new Promise((ok,fail)=>{
+      const r=indexedDB.open(DB_NAME,DB_VER);
+      r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);
+      r.onsuccess=e=>ok(e.target.result);
+      r.onerror=e=>fail(e.target.error);
+    });
   }
-  return bestRow;
-}
+  async function _dbGet(key){
+    const db=await _openDB();
+    return new Promise((ok,fail)=>{
+      const tx=db.transaction(STORE,'readonly');
+      const r=tx.objectStore(STORE).get(key);
+      r.onsuccess=()=>ok(r.result||null);
+      r.onerror=e=>fail(e.target.error);
+    });
+  }
 
-// ── File loading: handleFile(), checkReady() ───────────────────────────────
-// ── File handling ──────────────────────────────────────────────────────────
-function handleFile(evt, role) {
-  const file = evt.target.files[0];
-  if (!file) return;
+  /* ══════════════════════════════════════════════════════════
+     Parse Moederlijst (Sheet2 = data sheet)
+  ══════════════════════════════════════════════════════════ */
+  function parseMoederlijst(arrayBuffer, fileName){
+    const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
 
-  const dzId = role === 'moeder' ? 'dz-moeder' : 'dz-expediting';
-  const fnId = role === 'moeder' ? 'fn-moeder' : 'fn-expediting';
-  const dz   = document.getElementById(dzId);
-  const fn   = document.getElementById(fnId);
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-
-      // Moederlijst: zoek het werkblad dat 'IHC PO' in rij 1 bevat (robuust voor elk bestand)
-      // Expediting : gebruik altijd het eerste werkblad (index 0)
-      let sheetName;
-      if (role === 'moeder') {
-        sheetName = null;
-        for (const name of wb.SheetNames) {
-          const ws_check = wb.Sheets[name];
-          const range_check = ws_check['!ref'];
-          if (!range_check) continue;
-          const rng = XLSX.utils.decode_range(range_check);
-          // Scan first 5 rows for 'IHC PO'
-          outer: for (let R = rng.s.r; R <= Math.min(rng.s.r + 4, rng.e.r); R++) {
-            for (let C = rng.s.c; C <= Math.min(rng.s.c + 10, rng.e.c); C++) {
-              const cell = ws_check[XLSX.utils.encode_cell({r: R, c: C})];
-              if (cell && String(cell.v||'').trim().toLowerCase() === 'ihc po') {
-                sheetName = name;
-                break outer;
-              }
-            }
-          }
-          if (sheetName) break;
+    // Find the data sheet — Sheet2 or first sheet with "Deliveryref" / "IHC PO"
+    let sheetName = wb.SheetNames[1] || wb.SheetNames[0]; // Sheet2 by default
+    for(const sn of wb.SheetNames){
+      const s = wb.Sheets[sn];
+      const json = XLSX.utils.sheet_to_json(s, {header:1, range:0, defval:''});
+      if(json.length>0){
+        const firstRow = json[0].map(c=>String(c).toLowerCase());
+        if(firstRow.some(c=>c.includes('deliveryref')||c.includes('ihc po'))){
+          sheetName = sn; break;
         }
-        if (!sheetName) {
-          setStatus(`Fout: geen werkblad gevonden met kolom "IHC PO" in "${file.name}". Beschikbare bladen: ${wb.SheetNames.join(', ')}.`, true);
-          return;
-        }
-      } else {
-        sheetName = wb.SheetNames[0];
       }
-
-      const ws   = wb.Sheets[sheetName];
-      // For expediting: headers may be in row 3 — find row with most filled cells
-      const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
-      const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
-      let data;
-      if (role === 'expediting' && hdrRow > 0) {
-        const _seenHdrs = {};
-        const hdrs = rawAll[hdrRow].map((h, i) => {
-          let name = (h && String(h).trim()) || `__COL_${i}`;
-          if (_seenHdrs[name]) { _seenHdrs[name]++; name = `${name}_${_seenHdrs[name]}`; }
-          else _seenHdrs[name] = 1;
-          return name;
-        });
-        data = rawAll.slice(hdrRow + 1)
-          .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
-          .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
-        fileData[role] = { data, name: file.name, sheet: sheetName, headerRow: hdrRow, headers: hdrs };
-      } else {
-        data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-        fileData[role] = { data, name: file.name, sheet: sheetName };
-      }
-      dz.classList.add('loaded');
-      fn.textContent = `${file.name} — blad: "${sheetName}"`;
-      checkReady();
-    } catch(err) {
-      setStatus('Fout bij lezen: ' + err.message, true);
     }
-  };
-  reader.readAsArrayBuffer(file);
-}
 
+    const sheet = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true});
+    if(raw.length < 2) return {headers:[], data:[]};
 
-// ── SharePoint URL loader ─────────────────────────────────────────────────
-function toggleSP(role) {
-  const cb   = document.getElementById(`sp-toggle-${role}`);
-  const wrap = document.getElementById(`sp-wrap-${role}`);
-  const dz   = document.getElementById(`dz-${role}`);
-  wrap.classList.toggle('visible', cb.checked);
-  dz.style.opacity       = cb.checked ? '0.4' : '';
-  dz.style.pointerEvents = cb.checked ? 'none' : '';
-}
+    // First row = headers
+    const headers = raw[0].map(h=>String(h).trim());
+    const data = [];
+    for(let i=1;i<raw.length;i++){
+      const row = raw[i];
+      // skip fully empty rows
+      if(!row.some(c=> c!==''&&c!==null&&c!==undefined)) continue;
+      const obj = {};
+      headers.forEach((h,j)=>{ obj[h] = row[j]!==undefined ? row[j] : ''; });
+      data.push(obj);
+    }
 
-async function loadFromSP(role) {
-  const urlEl = document.getElementById(`sp-url-${role}`);
-  const btn   = urlEl.nextElementSibling;
-  let url = (urlEl.value || '').trim();
-  if (!url) { setStatus('Vul een SharePoint URL in.', true); return; }
+    console.log(`[file-loader] Moederlijst "${fileName}" → ${data.length} rijen uit sheet "${sheetName}"`);
+    return {headers, data};
+  }
 
-  // Ensure download=1 is present so SharePoint returns the raw file
-  if (!url.includes('download=1') && !url.includes('?download='))
-    url += (url.includes('?') ? '&' : '?') + 'download=1';
+  /* ══════════════════════════════════════════════════════════
+     Parse Expediting lijst (auto-detect header row)
+  ══════════════════════════════════════════════════════════ */
+  function parseExpeditingLijst(arrayBuffer, fileName){
+    const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true, raw:true});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true});
 
-  btn.disabled = true; btn.textContent = '⏳ Laden…';
-  setStatus(`SharePoint bestand ophalen (${role})…`);
+    // Find header row: row with most non-empty cells in first 10 rows
+    let headerIdx = 0, maxFilled = 0;
+    for(let i=0; i<Math.min(10, raw.length); i++){
+      const filled = raw[i].filter(c=> c!==''&&c!==null&&c!==undefined).length;
+      if(filled > maxFilled){ maxFilled = filled; headerIdx = i; }
+    }
 
-  try {
-    // credentials:'include' sends the browser's SharePoint login cookie
-    const resp = await fetch(url, {
-      credentials: 'include',
-      headers: { Accept: 'application/octet-stream, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+    // Deduplicate headers (some columns have same name)
+    const rawHeaders = raw[headerIdx].map(h=>String(h||'').trim());
+    const seen = {};
+    const headers = rawHeaders.map(h=>{
+      if(!h) return h;
+      if(!seen[h]){ seen[h]=1; return h; }
+      seen[h]++;
+      return h+'_'+seen[h];
     });
 
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-
-    const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('text/html'))
-      throw new Error('SharePoint stuurde een loginpagina — open SharePoint eerst in dit browservenster en probeer opnieuw.');
-
-    const buf  = await resp.arrayBuffer();
-    const wb   = XLSX.read(buf, { type: 'array', cellDates: true });
-    const fn   = document.getElementById(`fn-${role}`);
-    const dz   = document.getElementById(`dz-${role}`);
-    const name = url.split('/').pop().split('?')[0] || `${role}.xlsx`;
-
-    let sheetName;
-    if (role === 'moeder') {
-      for (const sn of wb.SheetNames) {
-        const ws = wb.Sheets[sn];
-        if (!ws['!ref']) continue;
-        const rng = XLSX.utils.decode_range(ws['!ref']);
-        outer: for (let R = rng.s.r; R <= Math.min(rng.s.r+4, rng.e.r); R++)
-          for (let C = rng.s.c; C <= Math.min(rng.s.c+10, rng.e.c); C++) {
-            const cell = ws[XLSX.utils.encode_cell({r:R,c:C})];
-            if (cell && String(cell.v||'').trim().toLowerCase() === 'ihc po') { sheetName = sn; break outer; }
-          }
-        if (sheetName) break;
-      }
-      if (!sheetName) sheetName = wb.SheetNames[0];
-    } else {
-      sheetName = wb.SheetNames[0];
+    const data = [];
+    for(let i=headerIdx+1; i<raw.length; i++){
+      const row = raw[i];
+      if(!row.some(c=> c!==''&&c!==null&&c!==undefined)) continue;
+      const obj = {};
+      headers.forEach((h,j)=>{ obj[h] = row[j]!==undefined ? row[j] : ''; });
+      data.push(obj);
     }
 
-    const ws   = wb.Sheets[sheetName];
-    const hdrRow = role === 'expediting' ? _findHeaderRow(ws) : 0;
-    const rawAll = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: role === 'expediting' });
-    let data;
-    if (role === 'expediting' && hdrRow > 0) {
-      const _seenHdrs2 = {};
-      const hdrs = rawAll[hdrRow].map((h, i) => {
-        let name = (h && String(h).trim()) || `__COL_${i}`;
-        if (_seenHdrs2[name]) { _seenHdrs2[name]++; name = `${name}_${_seenHdrs2[name]}`; }
-        else _seenHdrs2[name] = 1;
-        return name;
-      });
-      data = rawAll.slice(hdrRow + 1)
-        .filter(r => r.some(c => c !== null && c !== undefined && String(c).trim()))
-        .map(r => { const obj = {}; hdrs.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
-      fileData[role] = { data, name, sheet: sheetName, headerRow: hdrRow, headers: hdrs };
-    } else {
-      data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-      fileData[role] = { data, name, sheet: sheetName };
-    }
-    dz.classList.add('loaded');
-    fn.textContent = `${name} — blad: "${sheetName}"`;
-    setStatus(`${name} geladen via SharePoint (${data.length} rijen)`);
-    checkReady();
-  } catch(err) {
-    setStatus('SharePoint fout: ' + err.message, true);
+    console.log(`[file-loader] Expediting "${fileName}" → ${data.length} rijen, header rij ${headerIdx+1}`);
+    return {headers, data};
   }
-  btn.disabled = false; btn.textContent = '⬇ Laden';
-}
 
-function checkReady() {
-  const ready = fileData.expediting && fileData.moeder;
-  document.getElementById('btn-run').disabled = !ready;
-  setStatus(ready
-    ? 'Beide bestanden geladen — klik Verwerken'
-    : 'Laad beide bestanden om te beginnen');
-}
-
-// Drag-and-drop
-document.querySelectorAll('.drop-zone').forEach(dz => {
-  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('dragover');
-    const input = dz.querySelector('input[type=file]');
-    if (e.dataTransfer.files.length) {
-      input.files = e.dataTransfer.files;
-      input.dispatchEvent(new Event('change'));
+  /* ══════════════════════════════════════════════════════════
+     Apply loaded data to the page
+  ══════════════════════════════════════════════════════════ */
+  function applyMoederData(result){
+    window.moederHeaders = result.headers;
+    window.moederData = result.data;
+    showFieldStatus('moeder', result.data.length + ' rijen geladen');
+    // Try to trigger matching if both files are loaded
+    if(typeof window.runMatch === 'function' && window.moederData.length && window.expediteData.length){
+      window.runMatch();
     }
-  });
-});
+  }
 
+  function applyExpediteData(result){
+    window.expediteHeaders = result.headers;
+    window.expediteData = result.data;
+    showFieldStatus('expedite', result.data.length + ' rijen geladen');
+    if(typeof window.runMatch === 'function' && window.moederData.length && window.expediteData.length){
+      window.runMatch();
+    }
+  }
+
+  function showFieldStatus(which, msg){
+    // Look for status elements in the page
+    const el = document.getElementById('drop-status-'+which)
+            || document.querySelector('[data-file-status="'+which+'"]');
+    if(el){
+      el.textContent = '\u2705 ' + msg;
+      el.style.color = '#22c55e';
+    }
+    console.log(`[file-loader] ${which}: ${msg}`);
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     Manual file upload handler (existing drop zones still work)
+  ══════════════════════════════════════════════════════════ */
+  window.handleFile = function(file, type){
+    const reader = new FileReader();
+    reader.onload = async function(e){
+      const buf = e.target.result;
+
+      // Store in IndexedDB for cross-page sharing
+      const dbKey = type === 'moeder' ? 'moederlijst' : 'expediting';
+      try{
+        if(window.IHC_DB && window.IHC_DB.put){
+          await window.IHC_DB.put(dbKey, buf, file.name);
+        } else {
+          // Fallback: store directly
+          const db = await _openDB();
+          await new Promise((ok,fail)=>{
+            const tx=db.transaction(STORE,'readwrite');
+            tx.objectStore(STORE).put({data:buf,name:file.name,ts:Date.now()},dbKey);
+            tx.oncomplete=()=>ok();
+            tx.onerror=e=>fail(e.target.error);
+          });
+        }
+      }catch(err){ console.warn('IndexedDB store failed:',err); }
+
+      // Parse and apply
+      if(type === 'moeder'){
+        const result = parseMoederlijst(new Uint8Array(buf), file.name);
+        applyMoederData(result);
+      } else {
+        const result = parseExpeditingLijst(new Uint8Array(buf), file.name);
+        applyExpediteData(result);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  /* ══════════════════════════════════════════════════════════
+     Auto-load from IndexedDB on page load
+  ══════════════════════════════════════════════════════════ */
+  async function autoLoad(){
+    let loaded = 0;
+
+    try{
+      const moederRec = await _dbGet('moederlijst');
+      if(moederRec && moederRec.data){
+        const buf = moederRec.data instanceof ArrayBuffer ? moederRec.data : moederRec.data;
+        const result = parseMoederlijst(new Uint8Array(buf), moederRec.name || 'Moederlijst');
+        applyMoederData(result);
+        showFieldStatus('moeder', result.data.length + ' rijen (uit cache: ' + (moederRec.name||'Moederlijst') + ')');
+        loaded++;
+      }
+    }catch(err){ console.warn('[file-loader] Moederlijst auto-load failed:', err); }
+
+    try{
+      const expRec = await _dbGet('expediting');
+      if(expRec && expRec.data){
+        const buf = expRec.data instanceof ArrayBuffer ? expRec.data : expRec.data;
+        const result = parseExpeditingLijst(new Uint8Array(buf), expRec.name || 'Expediting');
+        applyExpediteData(result);
+        showFieldStatus('expedite', result.data.length + ' rijen (uit cache: ' + (expRec.name||'Expediting') + ')');
+        loaded++;
+      }
+    }catch(err){ console.warn('[file-loader] Expediting auto-load failed:', err); }
+
+    if(loaded > 0){
+      console.log(`[file-loader] ${loaded} bestand(en) automatisch geladen uit IndexedDB`);
+    }
+  }
+
+  /* ── Listen for new uploads from nav bar ────────────── */
+  window.addEventListener('ihc-file-loaded', async(e)=>{
+    const {key, name} = e.detail;
+    try{
+      const rec = await _dbGet(key);
+      if(!rec || !rec.data) return;
+      const buf = new Uint8Array(rec.data instanceof ArrayBuffer ? rec.data : rec.data);
+      if(key === 'moederlijst'){
+        applyMoederData(parseMoederlijst(buf, name));
+      } else if(key === 'expediting'){
+        applyExpediteData(parseExpeditingLijst(buf, name));
+      }
+    }catch(err){ console.warn('[file-loader] ihc-file-loaded handler error:', err); }
+  });
+
+  /* ── Init ──────────────────────────────────────────── */
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', autoLoad);
+  } else {
+    autoLoad();
+  }
+
+})();
