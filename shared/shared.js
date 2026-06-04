@@ -1,151 +1,94 @@
-// ── IHC Expedite 2.0 — Shared State + Navigation ─────────────────────────
-// shared.js: IndexedDB file persistence + nav bar injection
+/* ── Royal IHC — Shared Navigation + IndexedDB (sub-pages) ── */
+(function(){
+  const DB_NAME='ihc-logistics-files', DB_VER=1, STORE='files';
 
-// ── IndexedDB helpers ──────────────────────────────────────────────────────
-const IHC_DB = 'ihc-expedite2-shared';
-const IHC_STORE = 'files';
-
-function _openDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(IHC_DB, 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore(IHC_STORE, { keyPath: 'role' });
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = e => rej(e.target.error);
-  });
-}
-async function sharedSaveFile(role, buf, name) {
-  try {
-    const db = await _openDB();
-    await new Promise((res, rej) => {
-      const tx = db.transaction(IHC_STORE, 'readwrite');
-      tx.objectStore(IHC_STORE).put({ role, buf, name, ts: Date.now() });
-      tx.oncomplete = res; tx.onerror = rej;
+  /* ── IndexedDB ──────────────────────────────── */
+  function openDB(){
+    return new Promise((ok,fail)=>{
+      const r=indexedDB.open(DB_NAME,DB_VER);
+      r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);
+      r.onsuccess=e=>ok(e.target.result);
+      r.onerror=e=>fail(e.target.error);
     });
-    updateNavStatus();
-  } catch(e) { console.warn('sharedSaveFile', e); }
-}
-async function sharedLoadFile(role) {
-  try {
-    const db = await _openDB();
-    return await new Promise((res, rej) => {
-      const tx = db.transaction(IHC_STORE, 'readonly');
-      const req = tx.objectStore(IHC_STORE).get(role);
-      req.onsuccess = e => res(e.target.result || null);
-      req.onerror   = rej;
+  }
+  async function dbPut(key,buf,name){
+    const db=await openDB();
+    return new Promise((ok,fail)=>{
+      const tx=db.transaction(STORE,'readwrite');
+      tx.objectStore(STORE).put({data:buf,name:name,ts:Date.now()},key);
+      tx.oncomplete=()=>ok();
+      tx.onerror=e=>fail(e.target.error);
     });
-  } catch(e) { return null; }
-}
-async function sharedListFiles() {
-  try {
-    const db = await _openDB();
-    return await new Promise((res, rej) => {
-      const tx = db.transaction(IHC_STORE, 'readonly');
-      const req = tx.objectStore(IHC_STORE).getAll();
-      req.onsuccess = e => res(e.target.result || []);
-      req.onerror = rej;
+  }
+  async function dbGet(key){
+    const db=await openDB();
+    return new Promise((ok,fail)=>{
+      const tx=db.transaction(STORE,'readonly');
+      const r=tx.objectStore(STORE).get(key);
+      r.onsuccess=()=>ok(r.result||null);
+      r.onerror=e=>fail(e.target.error);
     });
-  } catch(e) { return []; }
-}
-
-// ── Nav bar ────────────────────────────────────────────────────────────────
-const NAV_PAGES = [
-  { href: '../PO-Matcher/',          icon: '🔍', label: 'PO Matcher',         badge: 'Expediting' },
-  { href: '../Legplan/',             icon: '📦', label: 'Legplan & CIPL',      badge: 'Shipment'   },
-  { href: '../Itemlijst-Validator/', icon: '📋', label: 'Itemlijst Validator', badge: 'Validatie'  },
-  { href: '../DG-Overview/',         icon: '⚠️', label: 'DG Overview',         badge: 'Hazardous'  },
-];
-
-const NAV_FILES = [
-  { role: 'moeder',     label: 'Moederlijst',     accept: '.xlsx,.xlsm,.xls' },
-  { role: 'expediting', label: 'Expediting lijst', accept: '.xlsx,.xlsm,.xls' },
-];
-
-function injectNav() {
-  // Detect active page from current URL
-  const path = window.location.pathname.toLowerCase();
-  function isActive(href) {
-    const seg = href.replace('../','').replace('/','').toLowerCase();
-    return path.includes(seg);
   }
 
-  const linksHtml = NAV_PAGES.map(p => {
-    const cls = isActive(p.href) ? 'active' : '';
-    return `<a href="${p.href}" class="ihc-nav-link ${cls}">
-      <span class="ihc-nav-icon">${p.icon}</span>
-      <span class="ihc-nav-label">${p.label}</span>
-      <span class="ihc-nav-badge">${p.badge}</span>
-    </a>`;
-  }).join('');
+  /* expose globally */
+  window.IHC_DB={openDB:openDB,get:dbGet,put:dbPut};
 
-  const filesHtml = NAV_FILES.map(f =>
-    `<div class="ihc-nav-file" id="nf-${f.role}" title="Klik om ${f.label} te uploaden" onclick="navUploadClick('${f.role}')">
-      <span class="nf-dot" id="nf-dot-${f.role}">○</span>
-      <span class="nf-lbl">${f.label.split(' ')[0]}</span>
-      <span class="nf-name" id="nf-name-${f.role}">—</span>
-      <input type="file" id="nf-inp-${f.role}" accept="${f.accept}" style="display:none" onchange="navHandleFile('${f.role}',this)">
-    </div>`
-  ).join('');
+  /* ── detect current page ────────────────────── */
+  const path=location.pathname.toLowerCase();
+  function isActive(slug){ return path.includes(slug.toLowerCase()); }
 
-  const navHtml = `
-  <nav class="ihc-nav" id="ihc-nav">
-    <a class="ihc-nav-brand" href="../">
-      <span class="ihc-nav-logo">IHC</span>
-      <span class="ihc-nav-title">Expedite 2.0</span>
-    </a>
-    <div class="ihc-nav-links">${linksHtml}</div>
-    <div class="ihc-nav-files">${filesHtml}</div>
-  </nav>
-  <div class="ihc-nav-spacer"></div>`;
+  const NAV_ITEMS=[
+    {icon:'\uD83D\uDD0D',label:'PO Matcher',        href:'../PO-Matcher/',            tip:'Koppel Expediting aan Moederlijst via XLOOKUP',slug:'po-matcher'},
+    {icon:'\uD83D\uDCE6',label:'Legplan & CIPL',     href:'../Legplan/',               tip:'3D container packing, CIPL & merk/labels',slug:'legplan'},
+    {icon:'\uD83D\uDCCB',label:'Itemlijst Validator', href:'../Itemlijst-Validator/',   tip:'Valideer & corrigeer Itemlijsten van suppliers',slug:'itemlijst-validator'},
+    {icon:'\u26A0\uFE0F',label:'DG Overview',         href:'../DG-Overview/',           tip:'Dangerous Goods analyse \u2014 IHM, IMDG, EU SRR',slug:'dg-overview'},
+  ];
 
-  document.body.insertAdjacentHTML('afterbegin', navHtml);
-  updateNavStatus();
-
-  // Try to restore any previously loaded files into the current page
-  _restoreFilesToPage();
-}
-
-function navUploadClick(role) {
-  document.getElementById(`nf-inp-${role}`)?.click();
-}
-
-async function navHandleFile(role, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const buf = await file.arrayBuffer();
-  // Save to IndexedDB
-  await sharedSaveFile(role, buf, file.name);
-  // Notify current page
-  if (typeof onNavFileLoaded === 'function') onNavFileLoaded(role, buf, file.name);
-  input.value = '';
-}
-
-async function updateNavStatus() {
-  const files = await sharedListFiles();
-  NAV_FILES.forEach(f => {
-    const rec  = files.find(x => x.role === f.role);
-    const dot  = document.getElementById(`nf-dot-${f.role}`);
-    const name = document.getElementById(`nf-name-${f.role}`);
-    const wrap = document.getElementById(`nf-${f.role}`);
-    if (dot)  { dot.textContent = rec ? '●' : '○'; dot.style.color = rec ? '#22C55E' : ''; }
-    if (name) { name.textContent = rec ? rec.name.split(/[\\/]/).pop().substring(0,20) : '—'; name.title = rec ? rec.name : ''; }
-    if (wrap) { if (rec) wrap.classList.add('loaded'); else wrap.classList.remove('loaded'); }
+  /* ── build nav HTML ─────────────────────────── */
+  let html='<nav class="ihc-nav">';
+  html+='<a class="nav-brand" href="../">Royal <span class="brand-ihc">IHC</span></a>';
+  html+='<div class="nav-items">';
+  NAV_ITEMS.forEach(n=>{
+    const act=isActive(n.slug)?' active':'';
+    html+=`<a class="nav-item${act}" href="${n.href}" data-tip="${n.tip}"><span class="nav-icon">${n.icon}</span>${n.label}</a>`;
   });
-}
+  html+='</div>';
+  html+='<div class="nav-files">';
+  html+='<label class="nav-file-dot" id="nav-dot-moeder" title="Moederlijst"><span class="dot"></span>ML<input type="file" accept=".xlsx,.xlsm,.xls,.csv"></label>';
+  html+='<label class="nav-file-dot" id="nav-dot-exp" title="Expediting lijst"><span class="dot"></span>EXP<input type="file" accept=".xlsx,.xlsm,.xls,.csv"></label>';
+  html+='</div></nav>';
 
-async function _restoreFilesToPage() {
-  // Allow pages to define onNavFileLoaded to receive restored files
-  if (typeof onNavFileLoaded !== 'function') return;
-  for (const f of NAV_FILES) {
-    const rec = await sharedLoadFile(f.role);
-    if (rec && rec.buf) {
-      onNavFileLoaded(f.role, rec.buf, rec.name);
-    }
+  document.body.insertAdjacentHTML('afterbegin',html);
+
+  /* ── check loaded status ────────────────────── */
+  async function checkStatus(){
+    try{
+      const m=await dbGet('moederlijst');
+      if(m&&m.data) document.getElementById('nav-dot-moeder').classList.add('loaded');
+    }catch(e){}
+    try{
+      const x=await dbGet('expediting');
+      if(x&&x.data) document.getElementById('nav-dot-exp').classList.add('loaded');
+    }catch(e){}
   }
-}
+  checkStatus();
 
-// Auto-inject on DOM ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectNav);
-} else {
-  injectNav();
-}
+  /* ── nav file upload handlers ───────────────── */
+  function wireNavUpload(dotId,dbKey){
+    const el=document.getElementById(dotId);
+    if(!el)return;
+    const inp=el.querySelector('input[type="file"]');
+    inp.addEventListener('change',async()=>{
+      if(!inp.files.length)return;
+      const f=inp.files[0];
+      try{
+        const buf=await f.arrayBuffer();
+        await dbPut(dbKey,buf,f.name);
+        el.classList.add('loaded');
+        window.dispatchEvent(new CustomEvent('ihc-file-loaded',{detail:{key:dbKey,name:f.name}}));
+      }catch(err){console.error('Nav upload error:',err)}
+    });
+  }
+  wireNavUpload('nav-dot-moeder','moederlijst');
+  wireNavUpload('nav-dot-exp','expediting');
+})();
