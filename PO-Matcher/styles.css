@@ -852,3 +852,14 @@ td strong { color: var(--white); }
 #late-items-wrap { border: 1px solid var(--steel); border-radius: 3px; overflow: hidden; }
 #late-items-wrap .tbl-scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
 #late-items-table { width: 100%; border-collapse: collapse; }
+
+/* ── HS-code live nomenclatuur check ───────────────────────────────────────── */
+td.hs-ok     { background: rgba(34,197,94,.06) !important; }
+td.hs-ok .hs-icon  { color: var(--green); font-weight: 700; }
+td.hs-invalid { background: rgba(239,68,68,.12) !important; }
+td.hs-invalid .hs-icon { color: #ef4444; font-weight: 700; }
+td.hs-measures { background: rgba(245,158,11,.08) !important; }
+td.hs-measures .hs-icon { color: var(--amber); font-weight: 700; }
+td.hs-unknown { background: rgba(255,255,255,.03) !important; }
+.hs-link { font-family: var(--mono); font-size: .6rem; color: var(--teal); text-decoration: none; margin-left: .2rem; opacity: .7; }
+.hs-link:hover { opacity: 1; }
