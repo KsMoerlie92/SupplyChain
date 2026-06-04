@@ -1,0 +1,99 @@
+/* ── IHC Expedite 2.0 — Shared Top Navigation ─────────────────────────── */
+:root {
+  --ihc-nav-h: 48px;
+}
+.ihc-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  height: var(--ihc-nav-h);
+  background: #0F2040;
+  border-bottom: 2px solid #D91F2C;
+  display: flex; align-items: center; gap: 0;
+  padding: 0 1rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,.5);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+.ihc-nav-spacer { height: calc(var(--ihc-nav-h) + 6px); }
+
+/* Brand */
+.ihc-nav-brand {
+  display: flex; align-items: center; gap: .45rem;
+  padding-right: .9rem;
+  border-right: 1px solid #1e3a6e;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.ihc-nav-logo {
+  background: #D91F2C; color: #fff;
+  font-size: .68rem; font-weight: 900;
+  padding: .15rem .38rem; border-radius: 2px;
+  letter-spacing: .08em;
+}
+.ihc-nav-title {
+  font-size: .68rem; font-weight: 700;
+  color: #F0F4FA; letter-spacing: .1em;
+  text-transform: uppercase; white-space: nowrap;
+}
+
+/* Page links */
+.ihc-nav-links {
+  display: flex; align-items: stretch; gap: 1px;
+  flex: 1; padding: 0 .4rem;
+  overflow-x: auto; scrollbar-width: none;
+  height: var(--ihc-nav-h);
+}
+.ihc-nav-links::-webkit-scrollbar { display: none; }
+
+.ihc-nav-link {
+  display: flex; align-items: center; gap: .3rem;
+  padding: 0 .7rem;
+  text-decoration: none;
+  color: #6b7a99;
+  font-size: .65rem; font-weight: 700;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+  border-bottom: 2px solid transparent;
+  letter-spacing: .04em;
+}
+.ihc-nav-link:hover { background: rgba(255,255,255,.05); color: #F0F4FA; }
+.ihc-nav-link.active {
+  color: #00B4D8;
+  border-bottom-color: #00B4D8;
+  background: rgba(0,180,216,.08);
+}
+.ihc-nav-icon { font-size: .85rem; }
+.ihc-nav-badge {
+  font-size: .52rem; font-weight: 700;
+  background: rgba(255,255,255,.07); color: #6b7a99;
+  padding: .08rem .28rem; border-radius: 2px;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.ihc-nav-link.active .ihc-nav-badge { background: rgba(0,180,216,.18); color: #00B4D8; }
+
+/* File indicators (right side) */
+.ihc-nav-files {
+  display: flex; align-items: center; gap: .4rem;
+  padding-left: .7rem;
+  border-left: 1px solid #1e3a6e;
+  flex-shrink: 0;
+}
+.ihc-nav-file {
+  display: flex; align-items: center; gap: .25rem;
+  padding: .18rem .5rem;
+  border: 1px solid #1e3a6e; border-radius: 2px;
+  cursor: pointer;
+  font-size: .58rem; color: #6b7a99;
+  transition: border-color .12s, color .12s;
+  max-width: 150px; overflow: hidden; white-space: nowrap;
+}
+.ihc-nav-file:hover { border-color: #00B4D8; color: #F0F4FA; }
+.ihc-nav-file.loaded { border-color: rgba(34,197,94,.4); color: #86efac; }
+.nf-dot { font-size: .65rem; flex-shrink: 0; }
+.nf-lbl { font-size: .55rem; color: #6b7a99; }
+.nf-name { overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 900px) {
+  .ihc-nav-badge, .ihc-nav-title, .ihc-nav-files { display: none; }
+}
+@media (max-width: 600px) {
+  .ihc-nav-link span.ihc-nav-label { display: none; }
+}
