@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>IHC — IndexedDB Debug Tool</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',sans-serif;background:#0a1628;color:#f0f4fa;padding:2rem}
+    h1{font-size:1.4rem;margin-bottom:1rem;color:#00b4d8}
+    .card{background:#0d1d38;border:1px solid #1e3a6e;border-radius:8px;padding:1rem;margin-bottom:1rem}
+    .card h2{font-size:.9rem;color:#00b4d8;margin-bottom:.5rem}
+    .key-item{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #1e3a6e;font-size:.8rem}
+    .key-name{font-weight:700;color:#f59e0b}
+    button{background:#00b4d8;color:#0a1628;border:none;border-radius:6px;padding:.5rem 1rem;font-weight:700;cursor:pointer;margin:.3rem}
+    button:hover{background:#0096b7}
+    button.red{background:#ef4444;color:#fff}
+    button.red:hover{background:#dc2626}
+    table{width:100%;border-collapse:collapse;margin-top:.5rem;font-size:.72rem}
+    th,td{border:1px solid #1e3a6e;padding:.3rem .5rem;text-align:left}
+    th{background:#1e3a6e;color:#00b4d8}
+    #output{margin-top:1rem;white-space:pre-wrap;font-family:monospace;font-size:.72rem;color:#94a3b8;max-height:300px;overflow:auto}
+  </style>
+</head>
+<body>
+  <h1>🔍 IndexedDB Debug Tool</h1>
+
+  <div class="card">
+    <h2>Opgeslagen bestanden</h2>
+    <div id="keys-list">Laden...</div>
+    <br>
+    <button onclick="scanDB()">🔄 Vernieuwen</button>
+    <button class="red" onclick="clearAll()">🗑️ Alles wissen</button>
+  </div>
+
+  <div class="card">
+    <h2>Test Parse</h2>
+    <button onclick="testParse('moederlijst')">📋 Parse Moederlijst</button>
+    <button onclick="testParse('expediting')">📊 Parse Expediting</button>
+    <div id="parse-output"></div>
+  </div>
+
+  <div class="card">
+    <h2>Console log</h2>
+    <div id="output"></div>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script>
+    const DB_NAME='ihc-logistics-files',DB_VER=1,STORE='files';
+    const log=msg=>{document.getElementById('output').textContent+=msg+'\n';console.log(msg)};
+
+    function openDB(){
+      return new Promise((ok,fail)=>{
+        const r=indexedDB.open(DB_NAME,DB_VER);
+        r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);
+        r.onsuccess=e=>ok(e.target.result);
+        r.onerror=e=>fail(e.target.error);
+      });
+    }
+
+    async function scanDB(){
+      const el=document.getElementById('keys-list');
+      try{
+        const db=await openDB();
+        const tx=db.transaction(STORE,'readonly');
+        const store=tx.objectStore(STORE);
+        const req=store.getAllKeys();
+        req.onsuccess=async()=>{
+          const keys=req.result;
+          if(keys.length===0){el.innerHTML='<em>Geen bestanden opgeslagen</em>';return;}
+          let html='';
+          for(const k of keys){
+            const rec=await new Promise(ok=>{const r=store.get(k);r.onsuccess=()=>ok(r.result)});
+            const size=rec&&rec.data? (rec.data.byteLength||rec.data.length||JSON.stringify(rec.data).length) : '?';
+            const name=rec&&rec.name?rec.name:'(onbekend)';
+            const ts=rec&&rec.ts?new Date(rec.ts).toLocaleString():'?';
+            html+=`<div class="key-item"><span class="key-name">${k}</span><span>${name} — ${(size/1024).toFixed(0)} KB — ${ts}</span></div>`;
+            log(`Key: ${k} | File: ${name} | Size: ${size} bytes | Data type: ${rec&&rec.data?rec.data.constructor.name:'null'}`);
+          }
+          el.innerHTML=html;
+        };
+      }catch(err){el.textContent='Fout: '+err.message;log('ERROR: '+err.message)}
+    }
+
+    async function clearAll(){
+      if(!confirm('Alles wissen?'))return;
+      const db=await openDB();
+      const tx=db.transaction(STORE,'readwrite');
+      tx.objectStore(STORE).clear();
+      tx.oncomplete=()=>{log('Alle keys gewist');scanDB()};
+    }
+
+    function toUint8Array(raw){
+      if(raw instanceof Uint8Array)return raw;
+      if(raw instanceof ArrayBuffer)return new Uint8Array(raw);
+      if(raw&&raw.buffer&&raw.buffer instanceof ArrayBuffer)return new Uint8Array(raw.buffer);
+      if(raw&&typeof raw==='object'){
+        if(raw.data)return toUint8Array(raw.data);
+        const keys=Object.keys(raw).filter(k=>!isNaN(k));
+        if(keys.length)return new Uint8Array(keys.sort((a,b)=>a-b).map(k=>raw[k]));
+      }
+      throw new Error('Cannot convert to Uint8Array');
+    }
+
+    async function testParse(key){
+      const out=document.getElementById('parse-output');
+      try{
+        const db=await openDB();
+        const rec=await new Promise((ok,fail)=>{
+          const tx=db.transaction(STORE,'readonly');
+          const r=tx.objectStore(STORE).get(key);
+          r.onsuccess=()=>ok(r.result);r.onerror=e=>fail(e.target.error);
+        });
+        if(!rec||!rec.data){out.innerHTML='<em>Niet gevonden in IndexedDB</em>';return;}
+
+        log(`Parsing ${key}: data type = ${typeof rec.data}, constructor = ${rec.data.constructor.name}`);
+        const uint8=toUint8Array(rec.data);
+        log(`Uint8Array lengte: ${uint8.length}`);
+
+        const wb=XLSX.read(uint8,{type:'array',cellDates:true});
+        log(`Sheets: ${wb.SheetNames.join(', ')}`);
+
+        const sn=wb.SheetNames[1]||wb.SheetNames[0];
+        const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+        log(`Sheet "${sn}": ${raw.length} rijen`);
+
+        // Show first 5 rows as table
+        let html='<table><tr>';
+        const headers=raw[0]||[];
+        headers.forEach(h=>{html+='<th>'+String(h).substring(0,20)+'</th>'});
+        html+='</tr>';
+        for(let i=1;i<Math.min(6,raw.length);i++){
+          html+='<tr>';
+          (raw[i]||[]).forEach(c=>{html+='<td>'+String(c||'').substring(0,25)+'</td>'});
+          html+='</tr>';
+        }
+        html+='</table>';
+        out.innerHTML='<p style="color:#22c55e;font-size:.75rem">✅ Parse OK — '+raw.length+' rijen in sheet "'+sn+'"</p>'+html;
+      }catch(err){
+        out.innerHTML='<p style="color:#ef4444">❌ '+err.message+'</p>';
+        log('PARSE ERROR: '+err.message);
+      }
+    }
+
+    scanDB();
+  </script>
+</body>
+</html>
