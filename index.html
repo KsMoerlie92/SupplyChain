@@ -36,6 +36,11 @@
     @keyframes pulse-ring{0%{opacity:.5;transform:scale(1)}100%{opacity:0;transform:scale(1.04)}}
 
     .once-badge{display:inline-flex;align-items:center;gap:.4rem;background:rgba(0,180,216,.12);border:1px solid rgba(0,180,216,.25);border-radius:6px;padding:.35rem .8rem;margin-top:.8rem;font-size:.72rem;color:var(--teal);font-weight:600}
+
+    /* ── Reset button ──────────────────────── */
+    .reset-btn{background:transparent;border:1px solid rgba(239,68,68,.35);color:#f87171;border-radius:6px;padding:.4rem 1rem;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s}
+    .reset-btn:hover{background:rgba(239,68,68,.12);border-color:#ef4444;color:#ef4444}
+
     .sp-section{text-align:center;margin-top:1.5rem}
     .sp-btn{display:inline-flex;align-items:center;gap:.5rem;background:linear-gradient(135deg,#0078d4,#005a9e);color:#fff;border:none;border-radius:8px;padding:.65rem 1.6rem;font-size:.82rem;font-weight:600;cursor:pointer;transition:box-shadow .2s,transform .15s}
     .sp-btn:hover{box-shadow:0 0 16px rgba(0,120,212,.5);transform:translateY(-1px)}
@@ -45,7 +50,6 @@
     .sp-divider::before,.sp-divider::after{content:'';flex:1;height:1px;background:rgba(240,244,250,.12)}
     .sp-status{font-size:.72rem;margin-top:.6rem;min-height:1.2em}
 
-    /* config panel */
     .config-toggle{background:none;border:none;color:rgba(240,244,250,.3);font-size:.68rem;cursor:pointer;margin-top:1rem;text-decoration:underline}
     .config-toggle:hover{color:var(--teal)}
     .config-panel{display:none;background:#0d1d38;border:1px solid #1e3a6e;border-radius:8px;padding:1rem;margin-top:.8rem;max-width:700px;width:100%;text-align:left}
@@ -92,6 +96,13 @@
       <div class="once-badge">&#128161; E&#233;nmalig uploaden &#8212; geldig voor alle tools in deze sessie</div>
     </div>
 
+    <!-- ── Reset / Project wisselen ───────────── -->
+    <div style="text-align:center;margin-top:1rem">
+      <button class="reset-btn" id="btn-reset-cache">
+        &#128465; Project wisselen &#8212; cache wissen
+      </button>
+    </div>
+
     <!-- SharePoint login -->
     <div class="sp-section">
       <div class="sp-divider">of</div>
@@ -127,6 +138,7 @@
   <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
   <script src="shared/shared-root.js"></script>
   <script src="shared/sharepoint.js"></script>
+  <script src="shared/cache-reset.js"></script>
   <script>
   (function(){
     const DB_NAME='ihc-logistics-files',DB_VER=1,STORE='files';
@@ -147,7 +159,6 @@
     async function handleFile(file,zone,statusEl,dbKey){
       statusEl.className='dz-status pending';statusEl.textContent='\u23F3 Laden\u2026';
       try{const buf=await file.arrayBuffer();await dbPut(dbKey,buf,file.name);zone.classList.add('loaded');statusEl.className='dz-status ok';statusEl.textContent='\u2705 '+file.name+' geladen';
-        const d=document.getElementById(dbKey==='moederlijst'?'nav-dot-moeder':'nav-dot-exp');if(d)d.classList.add('loaded');
         window.dispatchEvent(new CustomEvent('ihc-file-loaded',{detail:{key:dbKey,name:file.name}}));
       }catch(err){statusEl.className='dz-status pending';statusEl.textContent='\u274C Fout: '+err.message}
     }
@@ -159,7 +170,6 @@
     const cfgPanel=document.getElementById('config-panel');
     cfgBtn.addEventListener('click',()=>cfgPanel.classList.toggle('open'));
 
-    // Load saved config
     const cfg=window.IHC_SP?window.IHC_SP.getConfig():{};
     document.getElementById('cfg-client-id').value=cfg.clientId||'';
     document.getElementById('cfg-moeder-url').value=cfg.moederUrl||'https://ihcmerwede.sharepoint.com/sites/TeamsitesExternal/ihclogistics/Shared Documents/01 - AFS FOLDER VOOR CUSTOMS EN PROJECTEN/06 - YN1320 - OMS/Moederlijst (1320-OMS).xlsx';
@@ -195,7 +205,6 @@
         await window.IHC_SP.login();
         statusEl.textContent='\u2705 Ingelogd! Bestanden ophalen\u2026';statusEl.style.color='#22c55e';
 
-        // Load Moederlijst
         if(config.moederUrl){
           statusEl.textContent='\u23F3 Moederlijst ophalen van SharePoint\u2026';
           await window.IHC_SP.loadToIDB(config.moederUrl, 'moederlijst');
@@ -205,7 +214,6 @@
           stM.textContent='\u2705 Moederlijst geladen via SharePoint';
         }
 
-        // Load Expediting lijst
         if(config.expUrl){
           statusEl.textContent='\u23F3 Expediting lijst ophalen van SharePoint\u2026';
           await window.IHC_SP.loadToIDB(config.expUrl, 'expediting');
@@ -223,6 +231,45 @@
         console.error('SharePoint login error:',err);
       }
     });
+
+    /* ══════════════════════════════════════════════════════
+       Reset / Project wisselen knop
+    ══════════════════════════════════════════════════════ */
+    document.getElementById('btn-reset-cache').addEventListener('click', async () => {
+      const ok = confirm(
+        'Wil je de opgeslagen bestanden wissen?\n\n' +
+        'Je kunt daarna een ander project koppelen.\n' +
+        '(Moederlijst + Expediting lijst worden verwijderd)'
+      );
+      if (!ok) return;
+
+      try {
+        await window.IHC_clearCache(['moederlijst', 'expediting']);
+
+        /* Reset drop zones UI */
+        ['dz-moeder', 'dz-expedite'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('loaded');
+        });
+        const stM = document.getElementById('status-moeder');
+        const stE = document.getElementById('status-expedite');
+        if (stM) { stM.className = 'dz-status pending'; stM.textContent = '\u23F3 Nog niet geladen'; }
+        if (stE) { stE.className = 'dz-status pending'; stE.textContent = '\u23F3 Nog niet geladen'; }
+
+        /* Reset file inputs */
+        const fM = document.getElementById('file-moeder');
+        const fE = document.getElementById('file-expedite');
+        if (fM) fM.value = '';
+        if (fE) fE.value = '';
+
+        /* Status melding */
+        const sp = document.getElementById('sp-status');
+        if (sp) { sp.textContent = '\u2705 Cache gewist \u2014 upload een nieuw project'; sp.style.color = '#f59e0b'; }
+      } catch (err) {
+        alert('Fout bij wissen: ' + err.message);
+      }
+    });
+
   })();
   </script>
 </body>
