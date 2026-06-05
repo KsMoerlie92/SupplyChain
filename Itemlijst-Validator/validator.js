@@ -493,8 +493,11 @@ function buildValHeader() {
 }
 
 // ── Load Itemlijst file ────────────────────────────────────────────────────
-function handleValFile(event) {
-  const file = event.target.files[0] || event.dataTransfer?.files[0];
+function handleValFile(fileOrEvent) {
+  // Accept a File object directly (new), or fall back to legacy event
+  const file = (fileOrEvent instanceof File)
+    ? fileOrEvent
+    : (fileOrEvent?.target?.files?.[0] ?? fileOrEvent?.dataTransfer?.files?.[0]);
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -551,7 +554,8 @@ function valDragLeave()  { document.getElementById('val-dz')?.classList.remove('
 function valDrop(e) {
   e.preventDefault();
   document.getElementById('val-dz')?.classList.remove('dz-hover');
-  handleValFile({ dataTransfer: e.dataTransfer });
+  const f = e.dataTransfer?.files?.[0];
+  if (f) handleValFile(f);
 }
 
 // ── Merken / Labels Generator ────────────────────────────────────────────
