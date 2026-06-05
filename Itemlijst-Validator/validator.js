@@ -794,50 +794,164 @@ ${labelPages}
   setTimeout(() => win.print(), 500);
 }
 
-// ── Live HS-code nomenclatuur check via douane.nl ────────────────────────────
-// Gebruikt dezelfde proxy-keten als de Legplan module:
-//  1. DOUANE_PROXY_URL (Google Apps Script) als gedefinieerd
-//  2. /api/douane (Azure Function) als fallback
-//  3. Direct naar tarief.douane.nl als laatste optie
+// ── Live HS-code nomenclatuur check — Legplan-stijl ─────────────────────────
+// Proxy-keten: DOUANE_PROXY_URL (Google Apps Script) → /api/douane → direct
+// Na de check: klik op de cel-badge om een uitklapbaar maatregelenpaneel te tonen.
 
-async function _fetchHSMeasures(hsCode) {
+const _hsCache = new Map(); // hsCode → { data, link } na fetch
+
+async function _fetchHSMeasuresFull(hsCode) {
   const today = new Date().toISOString().slice(0, 10);
-  const params = `commoditycode=${encodeURIComponent(hsCode)}&simulationdate=${today}&count=1&tradedirection=E&currency=EUR`;
+  const params = `commoditycode=${encodeURIComponent(hsCode)}&simulationdate=${today}`
+    + `&count=50&offset=0&sortorder=A&tradedirection=E&currency=EUR`;
 
   const proxyUrl = typeof DOUANE_PROXY_URL !== 'undefined' && DOUANE_PROXY_URL
     ? `${DOUANE_PROXY_URL}?${params}` : null;
 
   const candidates = [
-    ...(proxyUrl ? [proxyUrl] : []),
-    `/api/douane?${params}`,
-    `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures?${params}&offset=0&sortorder=A`,
+    ...(proxyUrl ? [{ url: `${proxyUrl}`, label: 'gas-proxy' }] : []),
+    { url: `/api/douane?${params}`, label: 'azure' },
+    { url: `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures?${params}`, label: 'direct' },
   ];
 
-  for (const url of candidates) {
+  for (const { url } of candidates) {
     try {
       const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) continue;
       const data = await resp.json();
-      return data; // { count, items: [...] }
+      if (data && typeof data === 'object') return data;
     } catch { /* try next */ }
   }
-  return null; // all failed
+  return null;
 }
 
-// Build the douane.nl deep-link URL for a given HS code
 function _douaneLink(hsCode) {
   const today = new Date().toISOString().slice(0, 10);
   return `https://tarief.douane.nl/ite-tariff-public/#/taric/measure/mcc/search?sd=${today}&d=E&cc=${hsCode}&cu=EUR&l=nl`;
 }
 
+// ── Expand / collapse measures panel (Legplan-stijl) ─────────────────────────
+function toggleValHSMeasures(hsCode, badgeEl) {
+  const td  = badgeEl.closest('td');
+  const tr  = td?.closest('tr');
+  if (!tr) return;
+
+  // Toggle if panel already exists
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('hs-measures-row')) {
+    const panel = next.querySelector('.hs-measures-panel');
+    if (panel.classList.contains('open')) {
+      panel.classList.remove('open');
+      setTimeout(() => { if (next.parentNode) next.remove(); }, 350);
+    } else {
+      panel.classList.add('open');
+    }
+    return;
+  }
+
+  // Insert new expansion row
+  const expandRow = document.createElement('tr');
+  expandRow.className = 'hs-measures-row';
+  const expTd = document.createElement('td');
+  expTd.colSpan = 99;
+  const link = _douaneLink(hsCode);
+
+  // Cached? → render immediately
+  if (_hsCache.has(hsCode)) {
+    const { data } = _hsCache.get(hsCode);
+    expTd.innerHTML = `<div class="hs-measures-panel">
+      ${data ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
+              : `<div class="hs-measures-inner hs-loading" style="padding:.75rem">
+                  ⚠️ Kon geen data ophalen.
+                  <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ Bekijk op douane.nl</a>
+                </div>`}
+    </div>`;
+  } else {
+    expTd.innerHTML = `<div class="hs-measures-panel">
+      <div class="hs-measures-inner hs-loading">
+        <span style="color:var(--muted)">⏳ Maatregelen ophalen voor <strong>${esc(hsCode)}</strong>…</span>
+      </div>
+    </div>`;
+    // Fetch and update
+    (async () => {
+      const data = await _fetchHSMeasuresFull(hsCode);
+      _hsCache.set(hsCode, { data, link });
+      const inner = expTd.querySelector('.hs-measures-inner');
+      if (inner) inner.outerHTML = data
+        ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
+        : `<div class="hs-measures-inner hs-loading">
+            ⚠️ Verbinding mislukt.
+            <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ douane.nl</a>
+           </div>`;
+    })();
+  }
+
+  expandRow.appendChild(expTd);
+  tr.insertAdjacentElement('afterend', expandRow);
+  requestAnimationFrame(() => expTd.querySelector('.hs-measures-panel')?.classList.add('open'));
+}
+
+// ── Render the measures panel (same as Legplan) ───────────────────────────────
+function renderHSMeasures(data, country, hsCode, date, pageUrl) {
+  const items = data.items || [];
+  const restrictions = items.filter(m =>
+    m.measureType?.id !== '109' && m.measureType?.series !== 'O'
+  );
+  const suppUnit = items.find(m => m.measureType?.id === '109');
+  const narNote  = suppUnit
+    ? `<span style="font-size:.65rem;color:var(--muted)"> · 🌍 Aanvullende eenheid: <strong>${esc(suppUnit.dutyExpressions?.nl || 'Aantal stuks')}</strong></span>`
+    : '';
+
+  const rawDesc   = data.commodityCodeHead?.commodityCodeDescriptions?.nl || '';
+  const shortDesc = rawDesc.replace(/<br\/?>/g, ' ').replace(/<[^>]+>/g, '').split(';').pop().trim().slice(0, 140);
+  const link      = `<a href="${esc(pageUrl)}" target="_blank" style="color:var(--teal);font-size:.62rem;margin-left:auto;white-space:nowrap">Bekijk op douane.nl ↗</a>`;
+
+  if (restrictions.length === 0) {
+    return `<div class="hs-measures-inner hs-clean">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
+        <span>✅ <strong>Geen beperkingen</strong> voor uitvoer van HS ${esc(hsCode)}${narNote}</span>
+        ${link}
+      </div>
+      ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.25rem">${esc(shortDesc)}</div>` : ''}
+    </div>`;
+  }
+
+  const rows = restrictions.map(m => {
+    const typeNl  = m.measureType?.descriptions?.nl || m.measureType?.descriptions?.en || '';
+    const geo     = m.geographicalArea?.descriptions?.nl || m.geographicalArea?.id || '';
+    const regId   = m.regulation?.id || '';
+    const start   = m.startDate || '';
+    const isProh  = /verbod|prohibition/i.test(typeNl);
+    const badgeCls = isProh ? 'prohibition' : 'control';
+    const badgeLbl = isProh ? '⛔ VERBOD' : '⚠️ CONTROLE';
+    return `<div class="hs-measure-item">
+      <span class="hs-m-badge ${badgeCls}">${badgeLbl}</span>
+      <span class="hs-m-geo">${esc(geo)}</span>
+      <span style="color:var(--muted)">${esc(typeNl)}</span>
+      <span class="hs-m-reg">${esc(regId)} · ${esc(start)}</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="hs-measures-inner hs-restricted">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.4rem">
+      <span style="color:#ef4444;font-weight:700">⛔ ${restrictions.length} maatregel(en) voor HS ${esc(hsCode)}</span>
+      ${narNote}
+      ${link}
+    </div>
+    ${rows}
+    ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.4rem">${esc(shortDesc)}</div>` : ''}
+  </div>`;
+}
+
+// ── Bulk check alle HS-codes na validatie ─────────────────────────────────────
 async function checkHSCodesLive() {
-  // Collect unique HS codes from validated rows (skip rows with format errors)
   const codeMap = new Map(); // hsClean → [rowIndex, ...]
   _valRows.forEach((row, ri) => {
-    if (row.errors?.['O'] && !/^\d{8,10}$/.test(String(row.cells[COL.O]||'').replace(/\s+/g,''))) return;
     const raw   = String(row.cells[COL.O] || '').trim();
     const clean = raw.replace(/\s+/g, '');
     if (clean && /^\d{8,10}$/.test(clean)) {
+      // Skip rows where format already errored
+      if (row.errors?.['O'] && !row.errors['O'].includes('gevonden')) return;
       if (!codeMap.has(clean)) codeMap.set(clean, []);
       codeMap.get(clean).push(ri);
     }
@@ -845,61 +959,40 @@ async function checkHSCodesLive() {
 
   if (!codeMap.size) return;
 
-  // Show spinner in all HS cells
-  codeMap.forEach((rowIdxs) => {
-    rowIdxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳', ''));
-  });
+  // Show spinner
+  codeMap.forEach((rowIdxs) => rowIdxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
 
-  // Check each unique code
   for (const [hsCode, rowIdxs] of codeMap) {
-    const data = await _fetchHSMeasures(hsCode);
     const link = _douaneLink(hsCode);
+    const data = await _fetchHSMeasuresFull(hsCode);
+    _hsCache.set(hsCode, { data, link });
 
-    let icon, tooltip, stateClass;
+    let stateClass, badgeHtml;
     if (data === null) {
-      // Proxy unreachable — show link only
-      icon        = `<a href="${link}" target="_blank" title="Controleer op douane.nl" style="color:var(--amber);font-size:.7rem">↗ douane.nl</a>`;
-      tooltip     = 'Verbinding met douane.nl mislukt — klik de link';
-      stateClass  = 'hs-unknown';
+      stateClass = 'hs-unknown';
+      badgeHtml  = `<span class="hs-badge hs-unknown-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Proxy niet bereikbaar — klik voor douane.nl link">↗</span>`;
     } else if (data.count === 0) {
-      icon        = '✗';
-      tooltip     = `HS-code ${hsCode} niet gevonden in EU-nomenclatuur`;
-      stateClass  = 'hs-invalid';
-      // Mark as error on the row
-      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = tooltip; });
+      stateClass = 'hs-invalid';
+      badgeHtml  = `<span class="hs-badge hs-invalid-badge" title="Niet gevonden in EU-nomenclatuur">✗</span>`;
+      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = `HS-code ${hsCode} niet gevonden in EU-nomenclatuur`; });
     } else {
-      const mCount = data.count;
-      const hasRestrictions = data.items?.some(m => m.measureType?.id !== '103');
-      icon        = hasRestrictions
-        ? `<span title="${mCount} maatregel(en) — klik voor details">⚠️ ${mCount}</span>`
-        : `<span title="${mCount} maatregel(en) — geen bezwaar">✓ ${mCount}</span>`;
-      tooltip     = `${mCount} maatregel(en) gevonden op douane.nl`;
-      stateClass  = hasRestrictions ? 'hs-measures' : 'hs-ok';
+      const restr = (data.items || []).filter(m => m.measureType?.id !== '109' && m.measureType?.series !== 'O');
+      if (restr.length === 0) {
+        stateClass = 'hs-ok';
+        badgeHtml  = `<span class="hs-badge hs-ok-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — geen beperkingen">✓</span>`;
+      } else {
+        stateClass = 'hs-measures';
+        badgeHtml  = `<span class="hs-badge hs-warn-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — ${restr.length} maatregel(en)">⚠️ ${restr.length}</span>`;
+      }
     }
-
-    rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, icon, link, tooltip));
+    rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
   }
 }
 
-function _setHSCellState(rowIdx, stateClass, icon, link, tooltip) {
-  // Find the HS cell by data-row + data-col attributes
-  const ci  = COL.O;
-  const td  = document.querySelector(`[data-row="${rowIdx}"][data-col="${ci}"]`)?.closest('td');
+function _setHSCellState(rowIdx, stateClass, badgeHtml) {
+  const td = document.querySelector(`[data-row="${rowIdx}"][data-col="${COL.O}"]`)?.closest('td');
   if (!td) return;
-
-  const iconEl = td.querySelector('.hs-icon');
-  if (!iconEl) return;
-
   td.className = `val-cell ${stateClass}`;
-  if (tooltip) td.title = tooltip;
-
-  if (stateClass === 'loading') {
-    iconEl.innerHTML = icon;
-    return;
-  }
-
-  const linkHtml = link
-    ? `<a href="${link}" target="_blank" class="hs-link" title="Bekijk op douane.nl" onclick="event.stopPropagation()">↗</a>`
-    : '';
-  iconEl.innerHTML = icon + ' ' + linkHtml;
+  const iconEl = td.querySelector('.hs-icon');
+  if (iconEl) iconEl.innerHTML = badgeHtml || '';
 }
