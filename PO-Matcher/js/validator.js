@@ -157,16 +157,15 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (!cooVal)               errors['N'] = 'Country of origin is verplicht';
   else if (!cooSet.has(cooVal.toUpperCase())) errors['N'] = `'${cooVal}' is geen geldige landcode`;
 
-  // ── O: HS-code — required + format check; live nomenclature checked async ──
+  // ── O: HS-code — required, exact match in GN_CODES (from init.js) ─────────
   const hsVal = vs('O');
   if (!hsVal) {
     errors['O'] = 'HS-code is verplicht';
   } else {
     const hsClean = hsVal.replace(/\s+/g,'').trim();
-    if (!/^\d{8,10}$/.test(hsClean)) {
-      errors['O'] = `HS-code moet 8–10 cijfers zijn (was: '${hsClean}')`;
+    if (typeof GN_CODES !== 'undefined') {
+      if (!GN_CODES.has(hsClean)) errors['O'] = `HS-code '${hsClean}' niet gevonden in GN-nomenclatuur`;
     }
-    // Live nomenclatuur-check via douane.nl wordt async uitgevoerd na validatie
   }
 
   // ── P: Value pc — required, numeric, USD→EUR conversion ──────────────────
@@ -303,9 +302,6 @@ async function runValidation() {
 
   document.getElementById('btn-val-export')?.removeAttribute('disabled');
   document.getElementById('btn-val-labels')?.removeAttribute('disabled');
-
-  // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
-  checkHSCodesLive();
 }
 
 // ── Render validation table ────────────────────────────────────────────────
@@ -347,15 +343,15 @@ function renderValidationTable(usdPrice, usdRate) {
       const tooltip = err || wrn || (cmp ? `Berekend: ${cmp}` : '');
       const tAttr   = tooltip ? `title="${esc(tooltip)}"` : '';
 
-      // HS-code cell: format indicator + live-check icon (updated async)
+      // HS-code cell: show explicit ✓ / ✗ indicator
       if (col === 'O') {
-        const fmtOk  = !err && disp;
-        const fmtIcon = !disp ? '' : fmtOk
-          ? `<span class="hs-icon" style="color:var(--muted);font-size:.65rem;margin-right:.25rem">⏳</span>`
-          : `<span class="hs-icon" style="color:#ef4444;font-weight:700;margin-right:.25rem">✗</span>`;
+        const hsOk = !err && disp;
+        const indicator = !disp ? '' : hsOk
+          ? `<span style="color:var(--green);font-weight:700;margin-right:.25rem">✓</span>`
+          : `<span style="color:#ef4444;font-weight:700;margin-right:.25rem">✗</span>`;
         return `<td class="val-cell ${cellCls}" ${tAttr}>
-          <div style="display:flex;align-items:center;gap:.2rem">
-            ${fmtIcon}
+          <div style="display:flex;align-items:center">
+            ${indicator}
             <input class="val-input" data-row="${ri}" data-col="${ci}"
               value="${esc(disp)}"
               oninput="valCellEdit(${ri},${ci},this.value)">
@@ -792,114 +788,4 @@ ${labelPages}
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 500);
-}
-
-// ── Live HS-code nomenclatuur check via douane.nl ────────────────────────────
-// Gebruikt dezelfde proxy-keten als de Legplan module:
-//  1. DOUANE_PROXY_URL (Google Apps Script) als gedefinieerd
-//  2. /api/douane (Azure Function) als fallback
-//  3. Direct naar tarief.douane.nl als laatste optie
-
-async function _fetchHSMeasures(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  const params = `commoditycode=${encodeURIComponent(hsCode)}&simulationdate=${today}&count=1&tradedirection=E&currency=EUR`;
-
-  const proxyUrl = typeof DOUANE_PROXY_URL !== 'undefined' && DOUANE_PROXY_URL
-    ? `${DOUANE_PROXY_URL}?${params}` : null;
-
-  const candidates = [
-    ...(proxyUrl ? [proxyUrl] : []),
-    `/api/douane?${params}`,
-    `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures?${params}&offset=0&sortorder=A`,
-  ];
-
-  for (const url of candidates) {
-    try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      return data; // { count, items: [...] }
-    } catch { /* try next */ }
-  }
-  return null; // all failed
-}
-
-// Build the douane.nl deep-link URL for a given HS code
-function _douaneLink(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  return `https://tarief.douane.nl/ite-tariff-public/#/taric/measure/mcc/search?sd=${today}&d=E&cc=${hsCode}&cu=EUR&l=nl`;
-}
-
-async function checkHSCodesLive() {
-  // Collect unique HS codes from validated rows (skip rows with format errors)
-  const codeMap = new Map(); // hsClean → [rowIndex, ...]
-  _valRows.forEach((row, ri) => {
-    if (row.errors?.['O'] && !/^\d{8,10}$/.test(String(row.cells[COL.O]||'').replace(/\s+/g,''))) return;
-    const raw   = String(row.cells[COL.O] || '').trim();
-    const clean = raw.replace(/\s+/g, '');
-    if (clean && /^\d{8,10}$/.test(clean)) {
-      if (!codeMap.has(clean)) codeMap.set(clean, []);
-      codeMap.get(clean).push(ri);
-    }
-  });
-
-  if (!codeMap.size) return;
-
-  // Show spinner in all HS cells
-  codeMap.forEach((rowIdxs) => {
-    rowIdxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳', ''));
-  });
-
-  // Check each unique code
-  for (const [hsCode, rowIdxs] of codeMap) {
-    const data = await _fetchHSMeasures(hsCode);
-    const link = _douaneLink(hsCode);
-
-    let icon, tooltip, stateClass;
-    if (data === null) {
-      // Proxy unreachable — show link only
-      icon        = `<a href="${link}" target="_blank" title="Controleer op douane.nl" style="color:var(--amber);font-size:.7rem">↗ douane.nl</a>`;
-      tooltip     = 'Verbinding met douane.nl mislukt — klik de link';
-      stateClass  = 'hs-unknown';
-    } else if (data.count === 0) {
-      icon        = '✗';
-      tooltip     = `HS-code ${hsCode} niet gevonden in EU-nomenclatuur`;
-      stateClass  = 'hs-invalid';
-      // Mark as error on the row
-      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = tooltip; });
-    } else {
-      const mCount = data.count;
-      const hasRestrictions = data.items?.some(m => m.measureType?.id !== '103');
-      icon        = hasRestrictions
-        ? `<span title="${mCount} maatregel(en) — klik voor details">⚠️ ${mCount}</span>`
-        : `<span title="${mCount} maatregel(en) — geen bezwaar">✓ ${mCount}</span>`;
-      tooltip     = `${mCount} maatregel(en) gevonden op douane.nl`;
-      stateClass  = hasRestrictions ? 'hs-measures' : 'hs-ok';
-    }
-
-    rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, icon, link, tooltip));
-  }
-}
-
-function _setHSCellState(rowIdx, stateClass, icon, link, tooltip) {
-  // Find the HS cell by data-row + data-col attributes
-  const ci  = COL.O;
-  const td  = document.querySelector(`[data-row="${rowIdx}"][data-col="${ci}"]`)?.closest('td');
-  if (!td) return;
-
-  const iconEl = td.querySelector('.hs-icon');
-  if (!iconEl) return;
-
-  td.className = `val-cell ${stateClass}`;
-  if (tooltip) td.title = tooltip;
-
-  if (stateClass === 'loading') {
-    iconEl.innerHTML = icon;
-    return;
-  }
-
-  const linkHtml = link
-    ? `<a href="${link}" target="_blank" class="hs-link" title="Bekijk op douane.nl" onclick="event.stopPropagation()">↗</a>`
-    : '';
-  iconEl.innerHTML = icon + ' ' + linkHtml;
 }
