@@ -10,7 +10,7 @@ const VL_INSP = new Set(["Foto's en Steekproef","Foto's","Fysiek Controleren","T
 const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
 
 // ── Column index map (0-based, row 2 = headers) ───────────────────────────
-const COL = {
+let COL = {
   A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8, J:9,
   K:10,L:11,M:12,N:13,O:14,P:15,Q:16,R:17,S:18,T:19,
   U:20,V:21,W:22,X:23,Y:24,Z:25,AA:26
@@ -18,11 +18,52 @@ const COL = {
 
 // State
 let _valRows     = [];   // parsed data rows [{cells:[], errors:{}, warnings:{}}]
-let _valHeaders  = [];   // header row (row index 1 in file)
-let _valOwners   = [];   // owner row (row index 0 in file)
+let _valHeaders  = [];   // header row (detected dynamically)
+let _valOwners   = [];   // owner row (row before headers, if present)
 let _valCOO      = new Set(); // country codes from Master tab
 let _usdRate     = null; // cached EUR/USD rate
 let _valWb       = null; // original workbook for write-back
+let _virtualCols = {};   // { Z: true, AA: true } when columns are IHC-added (not in file)
+let _valHdrIdx  = 1;     // row index (0-based) where headers were found
+
+// ── Remap COL indices from actual header names ──────────────────────────────
+// Columns found by name keep their real index.
+// Columns missing from the file get virtual indices beyond the last column.
+function _remapColumns() {
+  // Reset to defaults first
+  COL = {
+    A:0,  B:1,  C:2,  D:3,  E:4,  F:5,  G:6,  H:7,  I:8,  J:9,
+    K:10, L:11, M:12, N:13, O:14, P:15, Q:16, R:17, S:18, T:19,
+    U:20, V:21, W:22, X:23, Y:24, Z:25, AA:26
+  };
+  _virtualCols = {};
+
+  const hdrs = _valHeaders;
+  const find = (pattern) => hdrs.findIndex(h => h && new RegExp(pattern,'i').test(String(h)));
+
+  // Re-detect key columns by name so they work regardless of position
+  const dgIdx   = find('dangerous');
+  const inspIdx = find('inspection');
+
+  let nextVirtual = hdrs.length; // append virtual cols after file cols
+
+  if (dgIdx >= 0) {
+    COL.Z = dgIdx;
+  } else {
+    // Column not in file — add as virtual column
+    COL.Z = nextVirtual++;
+    _virtualCols.Z = true;
+    _valHeaders[COL.Z] = 'Dangerous Goods?';
+  }
+
+  if (inspIdx >= 0) {
+    COL.AA = inspIdx;
+  } else {
+    COL.AA = nextVirtual++;
+    _virtualCols.AA = true;
+    _valHeaders[COL.AA] = 'Inspection Level';
+  }
+}
 
 // ── parseHColumn: parse Mark/Label multi-value notation ────────────────────
 function parseHColumn(value) {
@@ -325,6 +366,7 @@ function renderValidationTable(usdPrice, usdRate) {
     'AA'              // IHC: Inspection Level
   ];
   const IHC_COLS = new Set(['A','B','I','J','W','AA']); // teal tint = IHC to fill
+  const VIRT_COLS = new Set(Object.keys(_virtualCols));  // amber tint = IHC-added column
 
   const html = _valRows.map((row, ri) => {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
@@ -341,6 +383,7 @@ function renderValidationTable(usdPrice, usdRate) {
       const disp = val !== null && val !== undefined ? String(val) : '';
 
       let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
+      if (VIRT_COLS.has(col)) cellCls += ' val-cell-virtual';
       if (err) cellCls += ' val-cell-err';
       else if (wrn) cellCls += ' val-cell-warn';
 
@@ -414,23 +457,52 @@ function exportValidatedItemlijst() {
   if (!_valWb) { alert('Laad eerst een Itemlijst.'); return; }
   const ws = _valWb.Sheets[_valWb.SheetNames[0]];
 
-  // Write back edited/computed values (rows start at index 2 in the worksheet = row 3)
+  // Data rows in worksheet start at: hdrIdx row (0-based) + 1 header row = hdrIdx+1 (0-based)
+  // In 1-based row index: _valHdrIdx + 2  (hdrIdx is 0-based, +1 for header, +1 for 1-based)
+  const dataRowStart = _valHdrIdx + 1; // 0-based row index of first data row
+
+  // Write virtual column headers into the worksheet if they are IHC-added
+  const virtualEntries = Object.entries(_virtualCols);
+  if (virtualEntries.length > 0) {
+    virtualEntries.forEach(([letter]) => {
+      const ci = COL[letter];
+      // Write owner row label (if there is one)
+      if (_valHdrIdx > 0) {
+        const ownerAddr = XLSX.utils.encode_cell({ r: _valHdrIdx - 1, c: ci });
+        ws[ownerAddr] = { v: 'IHC', t: 's' };
+      }
+      // Write column header
+      const hdrAddr = XLSX.utils.encode_cell({ r: _valHdrIdx, c: ci });
+      ws[hdrAddr] = { v: _valHeaders[ci] || letter, t: 's' };
+    });
+    // Expand worksheet range to include new columns
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    const maxVirtCol = Math.max(...Object.values(_virtualCols).map
+      ? Object.keys(_virtualCols).map(l => COL[l])
+      : [range.e.c]);
+    if (maxVirtCol > range.e.c) range.e.c = maxVirtCol;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+
+  // Write back edited/computed values
   _valRows.forEach((row, ri) => {
-    if (!row._edited && !row.computed) return;
-    const wsRow = ri + 3; // 1=owner, 2=header, 3+=data
-    // Edited cells
+    const wsRowIdx = dataRowStart + ri; // 0-based
+    // Edited cells (including virtual column values)
     Object.entries(COL).forEach(([colLetter, colIdx]) => {
       const val = row.cells[colIdx];
-      if (row._edited && val !== undefined) {
-        const addr = XLSX.utils.encode_cell({ r: wsRow - 1, c: colIdx });
-        if (!ws[addr]) ws[addr] = {};
-        ws[addr].v = val;
-        ws[addr].t = typeof val === 'number' ? 'n' : 's';
+      if (val !== undefined && val !== null && val !== '') {
+        const isVirtual = _virtualCols[colLetter];
+        if (row._edited || isVirtual) {
+          const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: colIdx });
+          if (!ws[addr]) ws[addr] = {};
+          ws[addr].v = val;
+          ws[addr].t = typeof val === 'boolean' ? 'b' : typeof val === 'number' ? 'n' : 's';
+        }
       }
     });
     // Computed volume W
     if (row.computed?.W !== undefined) {
-      const addr = XLSX.utils.encode_cell({ r: wsRow - 1, c: COL.W });
+      const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: COL.W });
       ws[addr] = { v: row.computed.W, t: 'n' };
     }
   });
@@ -470,7 +542,7 @@ function buildValHeader() {
 
   const ownerMap  = {};
   COLS_SHOW.forEach(col => {
-    ownerMap[col] = ownerRow[COL[col]] || '';
+    ownerMap[col] = VIRT_COLS.has(col) ? 'IHC ✚' : (ownerRow[COL[col]] || '');
   });
 
   const th1 = `<tr>
@@ -484,9 +556,9 @@ function buildValHeader() {
   </tr>`;
   const th2 = `<tr>
     ${COLS_SHOW.map(col => {
-      const hdr = headerRow[COL[col]] || col;
-      const cls = IHC_OWN.has(col) ? 'col-owner-ihc' : '';
-      return `<th class="${cls}" title="${esc(hdr)}">${esc(hdr)}</th>`;
+      const hdr = (headerRow[COL[col]] || col) + (VIRT_COLS.has(col) ? ' ✚' : '');
+      const cls = IHC_OWN.has(col) ? 'col-owner-ihc' : VIRT_COLS.has(col) ? 'col-owner-virtual' : '';
+      return `<th class="${cls}" title="${esc(VIRT_COLS.has(col) ? 'Door IHC in te vullen vóór export' : hdr)}">${esc(hdr)}</th>`;
     }).join('')}
   </tr>`;
   thEl.innerHTML = th1 + th2;
@@ -526,8 +598,13 @@ function handleValFile(fileOrEvent) {
       const count = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim()).length;
       if (count > hdrMax) { hdrMax = count; hdrIdx = i; }
     }
+    _valHdrIdx  = hdrIdx;
     _valOwners  = hdrIdx > 0 ? (raw[hdrIdx - 1] || []) : [];
     _valHeaders = raw[hdrIdx] || [];
+
+    // ── Remap COL to actual column positions by header name ───────────────
+    // Also add virtual columns for DG / Inspection if missing from the file
+    _remapColumns();
 
     _valRows = (raw.slice(hdrIdx + 1) || [])
       .filter(r => hasVal(r[0]) && hasVal(r[2]))
@@ -807,197 +884,250 @@ ${labelPages}
   setTimeout(() => win.print(), 500);
 }
 
-// ── Live HS-code nomenclatuur check — Legplan-stijl ─────────────────────────
-// Proxy-keten: DOUANE_PROXY_URL (Google Apps Script) → /api/douane → direct
-// Na de check: klik op de cel-badge om een uitklapbaar maatregelenpaneel te tonen.
+// ── HS-code validatie ─────────────────────────────────────────────────────────
+// 1. Local check: GN_CODES set (gn_codes_2026.js, 22K valid codes)
+// 2. Measures API: tariffnumber.com/api/v1/cnDuties (free, 10 req/min)
+//    → Try direct browser fetch first, then GAS proxy (TARIFF_PROXY_URL)
+// 3. Expand panel: shows Vietnam/ERGA OMNES export restrictions + footnotes
+// 4. Fallback: deep-link to tariffnumber.com page
 
-const _hsCache = new Map(); // hsCode → { data, link } na fetch
+// EU TARIC error message for invalid codes (matches official text)
+const TARIC_INVALID_MSG =
+  'The goods code is not or no longer valid in the European Union. ' +
+  'Please try entering the first 6 digits and browse the nomenclature ' +
+  'until you find a proper description corresponding to your product.';
 
-async function _fetchHSMeasuresFull(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  const params = `commoditycode=${encodeURIComponent(hsCode)}&simulationdate=${today}`
-    + `&count=50&offset=0&sortorder=A&tradedirection=E&currency=EUR`;
+// Measure types that are relevant for export (Royal IHC ships goods FROM EU)
+const EXPORT_TYPES = new Set([
+  'Export authorization (Dual use)',
+  'Export control on restricted goods and technologies',
+  'Export control',
+  'Restriction on export',
+]);
 
-  const proxyUrl = typeof DOUANE_PROXY_URL !== 'undefined' && DOUANE_PROXY_URL
-    ? `${DOUANE_PROXY_URL}?${params}` : null;
+// Countries always shown (besides Vietnam)
+const HIGHLIGHT_ORIGINS = new Set(['VN','1008','1011']); // Vietnam, All third countries, ERGA OMNES
+
+const _hsCache = new Map(); // taric10 → { valid, desc, measures }
+
+function _toTaric10(input) {
+  const clean = String(input || '').replace(/\s|\./g, '');
+  if (!/^\d{8,10}$/.test(clean)) return null;
+  return clean.padEnd(10, '0').slice(0, 10);
+}
+
+function _checkGNCodes(t10) {
+  if (typeof GN_CODES === 'undefined') return null;
+  const valid   = GN_CODES.has(t10);
+  const h8      = t10.slice(0, 8);
+  const h6      = t10.slice(0, 6);
+  const h4      = t10.slice(0, 4);
+  const desc    = (typeof GN_DESC_HEADINGS !== 'undefined')
+    ? (GN_DESC_HEADINGS[h8] || GN_DESC_HEADINGS[h6] || GN_DESC_HEADINGS[h4] || '') : '';
+  return { valid, desc };
+}
+
+function _tariffPageLink(t10) {
+  return `https://www.tariffnumber.com/2026/${t10.replace(/0+$/,'')}`;
+}
+
+// Fetch trade measures from tariffnumber.com API
+// Tries: direct → GAS proxy
+async function _fetchMeasures(t10) {
+  const base = `https://www.tariffnumber.com/api/v1/cnDuties?term=${t10}&lang=en&year=2026`;
+  const gasBase = typeof TARIFF_PROXY_URL !== 'undefined' && TARIFF_PROXY_URL
+    ? `${TARIFF_PROXY_URL}?code=${encodeURIComponent(t10)}&lang=en&year=2026` : null;
 
   const candidates = [
-    ...(proxyUrl ? [{ url: `${proxyUrl}`, label: 'gas-proxy' }] : []),
-    { url: `/api/douane?${params}`, label: 'azure' },
-    { url: `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures?${params}`, label: 'direct' },
+    base,
+    ...(gasBase ? [gasBase] : []),
   ];
 
-  for (const { url } of candidates) {
+  for (const url of candidates) {
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(7000)
+      });
       if (!resp.ok) continue;
       const data = await resp.json();
-      if (data && typeof data === 'object') return data;
+      if (data && Array.isArray(data.duties)) return data.duties;
     } catch { /* try next */ }
   }
-  return null;
+  return null; // all failed → show link only
 }
 
-function _douaneLink(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  return `https://tarief.douane.nl/ite-tariff-public/#/taric/measure/mcc/search?sd=${today}&d=E&cc=${hsCode}&cu=EUR&l=nl`;
-}
-
-// ── Expand / collapse measures panel (Legplan-stijl) ─────────────────────────
-function toggleValHSMeasures(hsCode, badgeEl) {
-  const td  = badgeEl.closest('td');
-  const tr  = td?.closest('tr');
+// ── Expand panel ──────────────────────────────────────────────────────────────
+function toggleValHSMeasures(t10, badgeEl) {
+  const td = badgeEl.closest('td');
+  const tr = td?.closest('tr');
   if (!tr) return;
 
-  // Toggle if panel already exists
   const next = tr.nextElementSibling;
-  if (next && next.classList.contains('hs-measures-row')) {
+  if (next?.classList.contains('hs-measures-row')) {
     const panel = next.querySelector('.hs-measures-panel');
-    if (panel.classList.contains('open')) {
+    if (panel?.classList.contains('open')) {
       panel.classList.remove('open');
       setTimeout(() => { if (next.parentNode) next.remove(); }, 350);
-    } else {
-      panel.classList.add('open');
-    }
+    } else { panel?.classList.add('open'); }
     return;
   }
 
-  // Insert new expansion row
+  const cached    = _hsCache.get(t10);
+  const pageLink  = _tariffPageLink(t10);
+
   const expandRow = document.createElement('tr');
   expandRow.className = 'hs-measures-row';
   const expTd = document.createElement('td');
   expTd.colSpan = 99;
-  const link = _douaneLink(hsCode);
 
-  // Cached? → render immediately
-  if (_hsCache.has(hsCode)) {
-    const { data } = _hsCache.get(hsCode);
-    expTd.innerHTML = `<div class="hs-measures-panel">
-      ${data ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
-              : `<div class="hs-measures-inner hs-loading" style="padding:.75rem">
-                  ⚠️ Kon geen data ophalen.
-                  <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ Bekijk op douane.nl</a>
-                </div>`}
-    </div>`;
-  } else {
-    expTd.innerHTML = `<div class="hs-measures-panel">
-      <div class="hs-measures-inner hs-loading">
-        <span style="color:var(--muted)">⏳ Maatregelen ophalen voor <strong>${esc(hsCode)}</strong>…</span>
+  const renderPanel = (cached) => {
+    if (!cached?.valid) {
+      return `<div class="hs-measures-inner hs-restricted">
+        <div style="color:#ef4444;font-weight:700;margin-bottom:.5rem">
+          ✗ Ongeldige GN-code: <code>${esc(t10)}</code>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.55">${esc(TARIC_INVALID_MSG)}</div>
+        <div style="margin-top:.6rem">
+          <a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">🔍 Zoek in nomenclatuur ↗</a>
+        </div>
+      </div>`;
+    }
+
+    const duties   = cached.measures || null;
+    const descHtml = cached.desc
+      ? `<div style="color:var(--muted);font-size:.68rem;margin:.2rem 0 .5rem">${esc(cached.desc)}</div>` : '';
+    const pageBtn  = `<a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">📋 tariffnumber.com ↗</a>`;
+
+    if (duties === null) {
+      // API not yet fetched or loading
+      return `<div class="hs-measures-inner hs-clean">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig in EU CN 2026
+        ${descHtml}
+        <div style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          ${pageBtn}
+          <span style="color:var(--muted);font-size:.65rem" id="hs-loading-${t10}">⏳ Maatregelen laden…</span>
+        </div>
+      </div>`;
+    }
+
+    if (duties.length === 0) {
+      return `<div class="hs-measures-inner hs-clean">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig, geen maatregelen gevonden
+        ${descHtml}
+        <div style="margin-top:.5rem">${pageBtn}</div>
+      </div>`;
+    }
+
+    // Filter measures: export measures (all countries) + any measure for Vietnam/ERGA OMNES
+    const exportMeasures = duties.filter(d => EXPORT_TYPES.has(d.measure_type));
+    const vnMeasures     = duties.filter(d => d.origin_code === 'VN');
+    const allThirdMeasures = duties.filter(d => ['1008','1011'].includes(d.origin_code));
+
+    const hasDualUse  = exportMeasures.some(d => /dual.use/i.test(d.measure_type));
+    const hasRestrict = exportMeasures.some(d => /restriction|control/i.test(d.measure_type));
+
+    const flagHtml = [
+      hasDualUse  ? `<span class="hs-flag hs-flag-warn">⚠️ DUAL USE — Reg. ${exportMeasures.find(d=>/dual.use/i.test(d.measure_type))?.legal_base||''}</span>` : '',
+      hasRestrict ? `<span class="hs-flag hs-flag-alert">⛔ EXPORT CONTROL</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    const renderDutyRow = (d) => {
+      const isExport   = EXPORT_TYPES.has(d.measure_type);
+      const isVN       = d.origin_code === 'VN';
+      const isErga     = ['1008','1011'].includes(d.origin_code);
+      const highlight  = isExport || isVN;
+      const cls        = isExport ? 'hs-duty-export' : isVN ? 'hs-duty-vn' : isErga ? 'hs-duty-erga' : 'hs-duty-other';
+      return `<div class="hs-duty-row ${cls}">
+        <span class="hs-duty-origin">${esc(d.origin||'—')}</span>
+        <span class="hs-duty-type">${esc(d.measure_type||'')}</span>
+        <span class="hs-duty-reg">${esc(d.legal_base||'')}</span>
+        ${d.duty ? `<span class="hs-duty-val">${esc(d.duty.trim())}</span>` : ''}
+      </div>`;
+    };
+
+    // Show: export measures + VN/ERGA measures. Collapse the rest.
+    const shown  = [...new Map([...exportMeasures, ...vnMeasures, ...allThirdMeasures].map(d=>[d.legal_base+d.origin_code,d])).values()];
+    const others = duties.filter(d => !shown.includes(d));
+
+    const shownHtml  = shown.map(renderDutyRow).join('');
+    const othersHtml = others.length
+      ? `<details style="margin-top:.4rem">
+          <summary style="cursor:pointer;font-size:.65rem;color:var(--muted);padding:.2rem 0">
+            + ${others.length} andere maatregel(en) (tariefpreferenties)
+          </summary>
+          ${others.map(renderDutyRow).join('')}
+        </details>` : '';
+
+    return `<div class="hs-measures-inner ${exportMeasures.length ? 'hs-restricted' : 'hs-clean'}">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin-bottom:.35rem">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span>
+        <span style="color:var(--muted);font-size:.65rem">— ${duties.length} maatregel(en)</span>
+        ${flagHtml}
+        <span style="margin-left:auto">${pageBtn}</span>
       </div>
+      ${descHtml}
+      ${shownHtml}
+      ${othersHtml}
     </div>`;
-    // Fetch and update
-    (async () => {
-      const data = await _fetchHSMeasuresFull(hsCode);
-      _hsCache.set(hsCode, { data, link });
-      const inner = expTd.querySelector('.hs-measures-inner');
-      if (inner) inner.outerHTML = data
-        ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
-        : `<div class="hs-measures-inner hs-loading">
-            ⚠️ Verbinding mislukt.
-            <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ douane.nl</a>
-           </div>`;
-    })();
-  }
+  };
 
+  expTd.innerHTML = `<div class="hs-measures-panel">${renderPanel(cached)}</div>`;
   expandRow.appendChild(expTd);
   tr.insertAdjacentElement('afterend', expandRow);
   requestAnimationFrame(() => expTd.querySelector('.hs-measures-panel')?.classList.add('open'));
-}
 
-// ── Render the measures panel (same as Legplan) ───────────────────────────────
-function renderHSMeasures(data, country, hsCode, date, pageUrl) {
-  const items = data.items || [];
-  const restrictions = items.filter(m =>
-    m.measureType?.id !== '109' && m.measureType?.series !== 'O'
-  );
-  const suppUnit = items.find(m => m.measureType?.id === '109');
-  const narNote  = suppUnit
-    ? `<span style="font-size:.65rem;color:var(--muted)"> · 🌍 Aanvullende eenheid: <strong>${esc(suppUnit.dutyExpressions?.nl || 'Aantal stuks')}</strong></span>`
-    : '';
-
-  const rawDesc   = data.commodityCodeHead?.commodityCodeDescriptions?.nl || '';
-  const shortDesc = rawDesc.replace(/<br\/?>/g, ' ').replace(/<[^>]+>/g, '').split(';').pop().trim().slice(0, 140);
-  const link      = `<a href="${esc(pageUrl)}" target="_blank" style="color:var(--teal);font-size:.62rem;margin-left:auto;white-space:nowrap">Bekijk op douane.nl ↗</a>`;
-
-  if (restrictions.length === 0) {
-    return `<div class="hs-measures-inner hs-clean">
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
-        <span>✅ <strong>Geen beperkingen</strong> voor uitvoer van HS ${esc(hsCode)}${narNote}</span>
-        ${link}
-      </div>
-      ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.25rem">${esc(shortDesc)}</div>` : ''}
-    </div>`;
+  // Async-fetch measures if not cached yet
+  if (cached?.valid && !cached.measures) {
+    (async () => {
+      const duties = await _fetchMeasures(t10);
+      const newCached = { ..._hsCache.get(t10), measures: duties || [] };
+      _hsCache.set(t10, newCached);
+      // Update panel content in-place
+      const panel = expTd.querySelector('.hs-measures-panel');
+      if (panel) panel.innerHTML = renderPanel(newCached);
+    })();
   }
-
-  const rows = restrictions.map(m => {
-    const typeNl  = m.measureType?.descriptions?.nl || m.measureType?.descriptions?.en || '';
-    const geo     = m.geographicalArea?.descriptions?.nl || m.geographicalArea?.id || '';
-    const regId   = m.regulation?.id || '';
-    const start   = m.startDate || '';
-    const isProh  = /verbod|prohibition/i.test(typeNl);
-    const badgeCls = isProh ? 'prohibition' : 'control';
-    const badgeLbl = isProh ? '⛔ VERBOD' : '⚠️ CONTROLE';
-    return `<div class="hs-measure-item">
-      <span class="hs-m-badge ${badgeCls}">${badgeLbl}</span>
-      <span class="hs-m-geo">${esc(geo)}</span>
-      <span style="color:var(--muted)">${esc(typeNl)}</span>
-      <span class="hs-m-reg">${esc(regId)} · ${esc(start)}</span>
-    </div>`;
-  }).join('');
-
-  return `<div class="hs-measures-inner hs-restricted">
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.4rem">
-      <span style="color:#ef4444;font-weight:700">⛔ ${restrictions.length} maatregel(en) voor HS ${esc(hsCode)}</span>
-      ${narNote}
-      ${link}
-    </div>
-    ${rows}
-    ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.4rem">${esc(shortDesc)}</div>` : ''}
-  </div>`;
 }
 
-// ── Bulk check alle HS-codes na validatie ─────────────────────────────────────
+// ── Bulk HS check after validation ───────────────────────────────────────────
 async function checkHSCodesLive() {
-  const codeMap = new Map(); // hsClean → [rowIndex, ...]
+  const codeMap = new Map();
   _valRows.forEach((row, ri) => {
-    const raw   = String(row.cells[COL.O] || '').trim();
-    const clean = raw.replace(/\s+/g, '');
-    if (clean && /^\d{8,10}$/.test(clean)) {
-      // Skip rows where format already errored
-      if (row.errors?.['O'] && !row.errors['O'].includes('gevonden')) return;
-      if (!codeMap.has(clean)) codeMap.set(clean, []);
-      codeMap.get(clean).push(ri);
-    }
+    const t10 = _toTaric10(row.cells[COL.O]);
+    if (!t10) return;
+    if (!codeMap.has(t10)) codeMap.set(t10, []);
+    codeMap.get(t10).push(ri);
   });
-
   if (!codeMap.size) return;
 
-  // Show spinner
-  codeMap.forEach((rowIdxs) => rowIdxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
+  codeMap.forEach((idxs) => idxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
 
-  for (const [hsCode, rowIdxs] of codeMap) {
-    const link = _douaneLink(hsCode);
-    const data = await _fetchHSMeasuresFull(hsCode);
-    _hsCache.set(hsCode, { data, link });
+  for (const [t10, rowIdxs] of codeMap) {
+    const local = _checkGNCodes(t10);
+    const cached = { valid: local?.valid ?? null, desc: local?.desc || '', measures: null };
+    _hsCache.set(t10, cached);
 
     let stateClass, badgeHtml;
-    if (data === null) {
+    if (cached.valid === null) {
+      // GN_CODES not loaded
       stateClass = 'hs-unknown';
-      badgeHtml  = `<span class="hs-badge hs-unknown-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Proxy niet bereikbaar — klik voor douane.nl link">↗</span>`;
-    } else if (data.count === 0) {
+      badgeHtml  = `<span class="hs-badge hs-unknown-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="GN_CODES niet geladen — klik voor tariffnumber.com">↗</span>`;
+    } else if (!cached.valid) {
       stateClass = 'hs-invalid';
-      badgeHtml  = `<span class="hs-badge hs-invalid-badge" title="Niet gevonden in EU-nomenclatuur">✗</span>`;
-      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = `HS-code ${hsCode} niet gevonden in EU-nomenclatuur`; });
+      badgeHtml  = `<span class="hs-badge hs-invalid-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="Niet geldig in EU CN 2026 — klik voor details">✗</span>`;
+      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = TARIC_INVALID_MSG.slice(0,80) + '…'; });
     } else {
-      const restr = (data.items || []).filter(m => m.measureType?.id !== '109' && m.measureType?.series !== 'O');
-      if (restr.length === 0) {
-        stateClass = 'hs-ok';
-        badgeHtml  = `<span class="hs-badge hs-ok-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — geen beperkingen">✓</span>`;
-      } else {
-        stateClass = 'hs-measures';
-        badgeHtml  = `<span class="hs-badge hs-warn-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — ${restr.length} maatregel(en)">⚠️ ${restr.length}</span>`;
-      }
+      stateClass = 'hs-ok';
+      badgeHtml  = `<span class="hs-badge hs-ok-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="${esc(cached.desc.slice(0,50) || 'Geldig — klik voor maatregelen')}">✓</span>`;
     }
+
     rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
   }
 }
