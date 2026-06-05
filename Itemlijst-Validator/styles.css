@@ -907,3 +907,28 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 .hs-warn-badge   { color: var(--amber);  border-color: rgba(245,158,11,.35); }
 .hs-invalid-badge{ color: #ef4444;       border-color: rgba(239,68,68,.3); cursor: default; }
 .hs-unknown-badge{ color: var(--teal);   border-color: rgba(0,180,216,.3); }
+
+/* ── Virtual columns (added by IHC, not in original file) ────────────────── */
+.val-table thead th.col-owner-virtual {
+  color: var(--amber);
+  background: rgba(245,158,11,.1);
+  border-bottom: 2px solid var(--amber);
+  font-style: italic;
+}
+.val-cell-virtual {
+  background: rgba(245,158,11,.06) !important;
+  border-left: 2px solid rgba(245,158,11,.3) !important;
+}
+.val-cell-virtual .val-input { color: var(--amber); }
+.val-cell-virtual input[type="checkbox"] { accent-color: var(--amber); }
+
+/* ── TARIC consultation links ─────────────────────────────────────────────── */
+.hs-taric-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-family: var(--mono); font-size: .68rem; font-weight: 700;
+  padding: .3rem .65rem; border-radius: 3px;
+  background: rgba(0,180,216,.12); color: var(--teal);
+  border: 1px solid rgba(0,180,216,.3); text-decoration: none;
+  transition: background .12s, box-shadow .15s;
+}
+.hs-taric-btn:hover { background: rgba(0,180,216,.22); box-shadow: 0 0 8px rgba(0,180,216,.3); }

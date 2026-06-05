@@ -884,197 +884,164 @@ ${labelPages}
   setTimeout(() => win.print(), 500);
 }
 
-// ── Live HS-code nomenclatuur check — Legplan-stijl ─────────────────────────
-// Proxy-keten: DOUANE_PROXY_URL (Google Apps Script) → /api/douane → direct
-// Na de check: klik op de cel-badge om een uitklapbaar maatregelenpaneel te tonen.
+// ── HS-code validatie — EU Nomenclature 2026 + TARIC consultation ────────────
+// 1. Local check against GN_CODES (from gn_codes_2026.js, loaded in index.html)
+//    GN_CODES = Set of 22,191 valid 10-digit commodity codes (suffix 80, declarable)
+//    GN_DESC_HEADINGS = Map of 4-digit heading → description for context
+// 2. On click: open TARIC consultation page for full measures view
+//
+// TARIC error message (matches EU official text for invalid codes):
+const TARIC_INVALID_MSG =
+  'The goods code is not or no longer valid in the European Union. ' +
+  'Please try entering the first 6 digits and browse the nomenclature ' +
+  'until you find a proper description corresponding to your product.';
 
-const _hsCache = new Map(); // hsCode → { data, link } na fetch
+const _hsCache = new Map(); // hsCode → { valid, desc, taricCode }
 
-async function _fetchHSMeasuresFull(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  const params = `commoditycode=${encodeURIComponent(hsCode)}&simulationdate=${today}`
-    + `&count=50&offset=0&sortorder=A&tradedirection=E&currency=EUR`;
-
-  const proxyUrl = typeof DOUANE_PROXY_URL !== 'undefined' && DOUANE_PROXY_URL
-    ? `${DOUANE_PROXY_URL}?${params}` : null;
-
-  const candidates = [
-    ...(proxyUrl ? [{ url: `${proxyUrl}`, label: 'gas-proxy' }] : []),
-    { url: `/api/douane?${params}`, label: 'azure' },
-    { url: `https://tarief.douane.nl/ite-tariff-public-proxy/ite-tariff-trusted-rs/v1/mcc/measures?${params}`, label: 'direct' },
-  ];
-
-  for (const { url } of candidates) {
-    try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      if (data && typeof data === 'object') return data;
-    } catch { /* try next */ }
-  }
-  return null;
+// Normalise input to 10-digit TARIC code
+function _toTaric10(input) {
+  const clean = String(input || '').replace(/\s/g, '');
+  if (!/^\d{8,10}$/.test(clean)) return null;
+  return clean.padEnd(10, '0').slice(0, 10);
 }
 
-function _douaneLink(hsCode) {
-  const today = new Date().toISOString().slice(0, 10);
-  return `https://tarief.douane.nl/ite-tariff-public/#/taric/measure/mcc/search?sd=${today}&d=E&cc=${hsCode}&cu=EUR&l=nl`;
+// Validate locally against GN_CODES (2026 nomenclature)
+function _checkGNCodes(taric10) {
+  if (typeof GN_CODES === 'undefined') return null; // file not loaded yet
+  const valid = GN_CODES.has(taric10);
+  const heading4 = taric10.slice(0, 4);
+  const desc = (typeof GN_DESC_HEADINGS !== 'undefined')
+    ? (GN_DESC_HEADINGS[taric10.slice(0,8)] || GN_DESC_HEADINGS[taric10.slice(0,6)] ||
+       GN_DESC_HEADINGS[taric10.slice(0,4)] || '')
+    : '';
+  return { valid, desc };
 }
 
-// ── Expand / collapse measures panel (Legplan-stijl) ─────────────────────────
-function toggleValHSMeasures(hsCode, badgeEl) {
+// TARIC consultation deep-link
+function _taricLink(taric10) {
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  return `https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp`
+    + `?Lang=en&Taric=${taric10}&SimDate=${today}&Expand=true`;
+}
+
+// TARIC measures link
+function _taricMeasuresLink(taric10) {
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const ddmm  = new Date().toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-');
+  return `https://ec.europa.eu/taxation_customs/dds2/taric/measures.jsp`
+    + `?Lang=en&SimDate=${today}&Taric=${taric10}&search_text=goods&op=&GoodsText=&DatePicker=${ddmm}`;
+}
+
+// ── Expand panel ──────────────────────────────────────────────────────────────
+function toggleValHSMeasures(taric10, badgeEl) {
   const td  = badgeEl.closest('td');
   const tr  = td?.closest('tr');
   if (!tr) return;
 
-  // Toggle if panel already exists
   const next = tr.nextElementSibling;
   if (next && next.classList.contains('hs-measures-row')) {
     const panel = next.querySelector('.hs-measures-panel');
     if (panel.classList.contains('open')) {
       panel.classList.remove('open');
       setTimeout(() => { if (next.parentNode) next.remove(); }, 350);
-    } else {
-      panel.classList.add('open');
-    }
+    } else { panel.classList.add('open'); }
     return;
   }
 
-  // Insert new expansion row
+  const cached = _hsCache.get(taric10);
+  const consLink    = _taricLink(taric10);
+  const measLink    = _taricMeasuresLink(taric10);
+  let innerHtml;
+
+  if (cached?.valid === false) {
+    innerHtml = `<div class="hs-measures-inner hs-restricted">
+      <div style="color:#ef4444;font-weight:700;margin-bottom:.4rem">
+        ✗ Ongeldige code: <code>${esc(taric10)}</code>
+      </div>
+      <div style="font-size:.78rem;color:var(--muted);line-height:1.55">${esc(TARIC_INVALID_MSG)}</div>
+      <div style="margin-top:.6rem;display:flex;gap:.75rem;flex-wrap:wrap">
+        <a href="${esc(consLink)}" target="_blank" class="hs-taric-btn">🔍 Zoek in nomenclatuur ↗</a>
+      </div>
+    </div>`;
+  } else if (cached?.valid === true) {
+    const desc = cached.desc ? `<div style="color:var(--muted);font-size:.68rem;margin:.3rem 0">${esc(cached.desc)}</div>` : '';
+    innerHtml = `<div class="hs-measures-inner hs-clean">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
+        <span style="font-weight:700">✓ Geldige code: <code>${esc(taric10)}</code></span>
+        <span style="font-size:.68rem;color:var(--muted)">EU Nomenclature 2026</span>
+      </div>
+      ${desc}
+      <div style="margin-top:.5rem;display:flex;gap:.75rem;flex-wrap:wrap">
+        <a href="${esc(consLink)}" target="_blank" class="hs-taric-btn">📋 TARIC Consultation ↗</a>
+        <a href="${esc(measLink)}" target="_blank" class="hs-taric-btn">📊 Maatregelen ↗</a>
+      </div>
+    </div>`;
+  } else {
+    innerHtml = `<div class="hs-measures-inner hs-loading">
+      <span style="color:var(--muted)">⏳ Controleren…</span>
+    </div>`;
+  }
+
   const expandRow = document.createElement('tr');
   expandRow.className = 'hs-measures-row';
   const expTd = document.createElement('td');
   expTd.colSpan = 99;
-  const link = _douaneLink(hsCode);
-
-  // Cached? → render immediately
-  if (_hsCache.has(hsCode)) {
-    const { data } = _hsCache.get(hsCode);
-    expTd.innerHTML = `<div class="hs-measures-panel">
-      ${data ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
-              : `<div class="hs-measures-inner hs-loading" style="padding:.75rem">
-                  ⚠️ Kon geen data ophalen.
-                  <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ Bekijk op douane.nl</a>
-                </div>`}
-    </div>`;
-  } else {
-    expTd.innerHTML = `<div class="hs-measures-panel">
-      <div class="hs-measures-inner hs-loading">
-        <span style="color:var(--muted)">⏳ Maatregelen ophalen voor <strong>${esc(hsCode)}</strong>…</span>
-      </div>
-    </div>`;
-    // Fetch and update
-    (async () => {
-      const data = await _fetchHSMeasuresFull(hsCode);
-      _hsCache.set(hsCode, { data, link });
-      const inner = expTd.querySelector('.hs-measures-inner');
-      if (inner) inner.outerHTML = data
-        ? renderHSMeasures(data, '', hsCode, new Date().toISOString().slice(0,10), link)
-        : `<div class="hs-measures-inner hs-loading">
-            ⚠️ Verbinding mislukt.
-            <a href="${esc(link)}" target="_blank" style="color:var(--teal)">↗ douane.nl</a>
-           </div>`;
-    })();
-  }
-
+  expTd.innerHTML = `<div class="hs-measures-panel">${innerHtml}</div>`;
   expandRow.appendChild(expTd);
   tr.insertAdjacentElement('afterend', expandRow);
   requestAnimationFrame(() => expTd.querySelector('.hs-measures-panel')?.classList.add('open'));
 }
 
-// ── Render the measures panel (same as Legplan) ───────────────────────────────
-function renderHSMeasures(data, country, hsCode, date, pageUrl) {
-  const items = data.items || [];
-  const restrictions = items.filter(m =>
-    m.measureType?.id !== '109' && m.measureType?.series !== 'O'
-  );
-  const suppUnit = items.find(m => m.measureType?.id === '109');
-  const narNote  = suppUnit
-    ? `<span style="font-size:.65rem;color:var(--muted)"> · 🌍 Aanvullende eenheid: <strong>${esc(suppUnit.dutyExpressions?.nl || 'Aantal stuks')}</strong></span>`
-    : '';
-
-  const rawDesc   = data.commodityCodeHead?.commodityCodeDescriptions?.nl || '';
-  const shortDesc = rawDesc.replace(/<br\/?>/g, ' ').replace(/<[^>]+>/g, '').split(';').pop().trim().slice(0, 140);
-  const link      = `<a href="${esc(pageUrl)}" target="_blank" style="color:var(--teal);font-size:.62rem;margin-left:auto;white-space:nowrap">Bekijk op douane.nl ↗</a>`;
-
-  if (restrictions.length === 0) {
-    return `<div class="hs-measures-inner hs-clean">
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
-        <span>✅ <strong>Geen beperkingen</strong> voor uitvoer van HS ${esc(hsCode)}${narNote}</span>
-        ${link}
-      </div>
-      ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.25rem">${esc(shortDesc)}</div>` : ''}
-    </div>`;
-  }
-
-  const rows = restrictions.map(m => {
-    const typeNl  = m.measureType?.descriptions?.nl || m.measureType?.descriptions?.en || '';
-    const geo     = m.geographicalArea?.descriptions?.nl || m.geographicalArea?.id || '';
-    const regId   = m.regulation?.id || '';
-    const start   = m.startDate || '';
-    const isProh  = /verbod|prohibition/i.test(typeNl);
-    const badgeCls = isProh ? 'prohibition' : 'control';
-    const badgeLbl = isProh ? '⛔ VERBOD' : '⚠️ CONTROLE';
-    return `<div class="hs-measure-item">
-      <span class="hs-m-badge ${badgeCls}">${badgeLbl}</span>
-      <span class="hs-m-geo">${esc(geo)}</span>
-      <span style="color:var(--muted)">${esc(typeNl)}</span>
-      <span class="hs-m-reg">${esc(regId)} · ${esc(start)}</span>
-    </div>`;
-  }).join('');
-
-  return `<div class="hs-measures-inner hs-restricted">
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.4rem">
-      <span style="color:#ef4444;font-weight:700">⛔ ${restrictions.length} maatregel(en) voor HS ${esc(hsCode)}</span>
-      ${narNote}
-      ${link}
-    </div>
-    ${rows}
-    ${shortDesc ? `<div style="color:var(--muted);font-size:.62rem;margin-top:.4rem">${esc(shortDesc)}</div>` : ''}
-  </div>`;
-}
-
-// ── Bulk check alle HS-codes na validatie ─────────────────────────────────────
+// ── Bulk check after validation ───────────────────────────────────────────────
 async function checkHSCodesLive() {
-  const codeMap = new Map(); // hsClean → [rowIndex, ...]
+  const codeMap = new Map();
   _valRows.forEach((row, ri) => {
     const raw   = String(row.cells[COL.O] || '').trim();
-    const clean = raw.replace(/\s+/g, '');
-    if (clean && /^\d{8,10}$/.test(clean)) {
-      // Skip rows where format already errored
-      if (row.errors?.['O'] && !row.errors['O'].includes('gevonden')) return;
-      if (!codeMap.has(clean)) codeMap.set(clean, []);
-      codeMap.get(clean).push(ri);
-    }
+    const t10   = _toTaric10(raw);
+    if (!t10) return;
+    if (!codeMap.has(t10)) codeMap.set(t10, []);
+    codeMap.get(t10).push(ri);
   });
-
   if (!codeMap.size) return;
 
-  // Show spinner
-  codeMap.forEach((rowIdxs) => rowIdxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
+  // Spinner
+  codeMap.forEach((idxs) => idxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
 
-  for (const [hsCode, rowIdxs] of codeMap) {
-    const link = _douaneLink(hsCode);
-    const data = await _fetchHSMeasuresFull(hsCode);
-    _hsCache.set(hsCode, { data, link });
+  for (const [t10, rowIdxs] of codeMap) {
+    let cached = _hsCache.get(t10);
 
-    let stateClass, badgeHtml;
-    if (data === null) {
-      stateClass = 'hs-unknown';
-      badgeHtml  = `<span class="hs-badge hs-unknown-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Proxy niet bereikbaar — klik voor douane.nl link">↗</span>`;
-    } else if (data.count === 0) {
-      stateClass = 'hs-invalid';
-      badgeHtml  = `<span class="hs-badge hs-invalid-badge" title="Niet gevonden in EU-nomenclatuur">✗</span>`;
-      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = `HS-code ${hsCode} niet gevonden in EU-nomenclatuur`; });
-    } else {
-      const restr = (data.items || []).filter(m => m.measureType?.id !== '109' && m.measureType?.series !== 'O');
-      if (restr.length === 0) {
-        stateClass = 'hs-ok';
-        badgeHtml  = `<span class="hs-badge hs-ok-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — geen beperkingen">✓</span>`;
-      } else {
-        stateClass = 'hs-measures';
-        badgeHtml  = `<span class="hs-badge hs-warn-badge" onclick="toggleValHSMeasures('${esc(hsCode)}',this)" title="Klik voor details — ${restr.length} maatregel(en)">⚠️ ${restr.length}</span>`;
+    if (!cached) {
+      // Local GN_CODES check
+      const local = _checkGNCodes(t10);
+      if (local) {
+        cached = { valid: local.valid, desc: local.desc };
+        _hsCache.set(t10, cached);
       }
     }
+
+    let stateClass, badgeHtml;
+
+    if (!cached) {
+      // GN_CODES not loaded — show link only
+      const link = _taricLink(t10);
+      stateClass = 'hs-unknown';
+      badgeHtml  = `<span class="hs-badge hs-unknown-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="Klik — TARIC nomenclatuur">↗ TARIC</span>`;
+    } else if (!cached.valid) {
+      stateClass = 'hs-invalid';
+      badgeHtml  = `<span class="hs-badge hs-invalid-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="Klik — code niet geldig in EU nomenclatuur 2026">✗</span>`;
+      rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = TARIC_INVALID_MSG.slice(0,80) + '…'; });
+    } else {
+      stateClass = 'hs-ok';
+      const short = cached.desc ? cached.desc.slice(0,30) : '';
+      badgeHtml  = `<span class="hs-badge hs-ok-badge"
+        onclick="toggleValHSMeasures('${esc(t10)}',this)"
+        title="Klik — ${esc(short || 'Geldige code')}">✓</span>`;
+    }
+
     rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
   }
 }
