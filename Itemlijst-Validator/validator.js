@@ -507,21 +507,30 @@ function handleValFile(fileOrEvent) {
     const ws = wb.Sheets[wsName];
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
 
-    _valOwners  = raw[0] || [];
-    _valHeaders = raw[1] || [];
     const hasVal = (v) => {
       if (v === null || v === undefined) return false;
-      if (typeof v === 'boolean') return v === true; // only TRUE counts, not FALSE
+      if (typeof v === 'boolean') return v === true;
       const s = String(v).trim();
       if (!s || s === '0') return false;
-      if (s.startsWith('=')) return false; // Excel formula = not a real value
+      if (s.startsWith('=')) return false;
       return true;
     };
-    _valRows    = (raw.slice(2) || [])
-      .filter(r => {
-        // Only validate rows that have BOTH Delivery ref (col A=0) AND IHC PO (col C=2)
-        return hasVal(r[0]) && hasVal(r[2]);
-      })
+
+    // ── Dynamic header row detection ─────────────────────────────────────
+    // Scan rows 0–6: the row with the most non-empty cells is the header row.
+    // The row immediately before it (if any) is the owner/group row.
+    let hdrIdx = 0;
+    let hdrMax = 0;
+    const scanLimit = Math.min(raw.length, 7);
+    for (let i = 0; i < scanLimit; i++) {
+      const count = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim()).length;
+      if (count > hdrMax) { hdrMax = count; hdrIdx = i; }
+    }
+    _valOwners  = hdrIdx > 0 ? (raw[hdrIdx - 1] || []) : [];
+    _valHeaders = raw[hdrIdx] || [];
+
+    _valRows = (raw.slice(hdrIdx + 1) || [])
+      .filter(r => hasVal(r[0]) && hasVal(r[2]))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
     // Load country codes from Master tab
@@ -549,10 +558,10 @@ function handleValFile(fileOrEvent) {
 }
 
 // Drag & drop wiring
-function valDragOver(e) { e.preventDefault(); document.getElementById('val-dz')?.classList.add('dz-hover'); }
-function valDragLeave()  { document.getElementById('val-dz')?.classList.remove('dz-hover'); }
+function valDragOver(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('val-dz')?.classList.add('dz-hover'); }
+function valDragLeave(e) { e.preventDefault(); document.getElementById('val-dz')?.classList.remove('dz-hover'); }
 function valDrop(e) {
-  e.preventDefault();
+  e.preventDefault(); e.stopPropagation();
   document.getElementById('val-dz')?.classList.remove('dz-hover');
   const f = e.dataTransfer?.files?.[0];
   if (f) handleValFile(f);

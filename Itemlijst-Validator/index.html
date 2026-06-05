@@ -17,17 +17,18 @@
       <span class="red-mark"></span>Itemlijst Validator
     </div>
 
-    <!-- Upload -->
-    <div class="val-dz" id="val-dz"
-      ondragover="valDragOver(event)"
-      ondragleave="valDragLeave()"
-      ondrop="valDrop(event)"
-      onclick="document.getElementById('val-file-input').click()">
+    <!-- Upload — label wraps the hidden input for reliable cross-browser file picking -->
+    <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm"
+           style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"
+           onchange="if(this.files[0]) handleValFile(this.files[0])">
+
+    <label for="val-file-input" class="val-dz" id="val-dz"
+           ondragover="valDragOver(event)"
+           ondragleave="valDragLeave()"
+           ondrop="valDrop(event)">
       <div class="val-dz-label">📋 Sleep een Itemlijst (.xlsx) hierheen of klik om te uploaden</div>
       <div class="val-filename" id="val-filename"></div>
-      <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm"
-             onchange="handleValFile(this.files[0])">
-    </div>
+    </label>
 
     <!-- Toolbar -->
     <div class="val-toolbar">
@@ -37,8 +38,7 @@
       <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
         <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
         <input type="text" id="val-consignee" class="val-consignee-input"
-               value="PACIFIC SHIPBUILDING JSC"
-               placeholder="Consignee naam">
+               value="PACIFIC SHIPBUILDING JSC" placeholder="Consignee naam">
       </div>
       <div id="val-sheet-warnings"></div>
     </div>
@@ -65,47 +65,24 @@
   </section>
 </div>
 
+<!-- Stubs that validator.js (originally part of PO-Matcher) expects as globals -->
 <script>
-// ── Stubs required by validator.js ────────────────────────────────────────
 const fileData     = { expediting: null, moeder: null };
 const allRows      = [];
 let   currentFilter = 'validator';
 
 function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function setStatus(msg, isErr) {
   const el = document.getElementById('val-summary');
-  if (el) el.innerHTML = isErr
-    ? `<span style="color:#ef4444">${esc(msg)}</span>`
-    : `<span style="color:var(--muted)">${msg}</span>`;
+  if (!el) return;
+  el.innerHTML = isErr
+    ? `<span style="color:#ef4444">${esc(String(msg))}</span>`
+    : `<span style="color:var(--muted)">${String(msg)}</span>`;
 }
-
-// Optional: restore expediting file from shared storage for H-column lookup
-async function _tryRestoreExpediting() {
-  try {
-    const IDB_NAME  = 'ihc-expedite2-shared';
-    const IDB_STORE = 'files';
-    const db = await new Promise((res, rej) => {
-      const req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath: 'role' });
-      req.onsuccess = e => res(e.target.result);
-      req.onerror   = rej;
-    });
-    const rec = await new Promise((res, rej) => {
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const req = tx.objectStore(IDB_STORE).get('expediting');
-      req.onsuccess = e => res(e.target.result || null);
-      req.onerror   = rej;
-    });
-    if (rec && rec.buf) {
-      const wb = XLSX.read(rec.buf, { type:'array', cellDates:true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      fileData.expediting = { data: XLSX.utils.sheet_to_json(ws, { defval:'' }), name: rec.name };
-    }
-  } catch(e) { /* no shared storage or no expediting file — that's OK */ }
-}
-_tryRestoreExpediting();
 </script>
 
 <script src="js/validator.js"></script>
