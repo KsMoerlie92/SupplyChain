@@ -932,3 +932,29 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
   transition: background .12s, box-shadow .15s;
 }
 .hs-taric-btn:hover { background: rgba(0,180,216,.22); box-shadow: 0 0 8px rgba(0,180,216,.3); }
+
+/* ── Trade measures display ───────────────────────────────────────────────── */
+.hs-duty-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto auto;
+  gap: .4rem; align-items: center;
+  padding: .3rem .4rem; border-radius: 3px;
+  font-size: .72rem; margin-bottom: 2px;
+}
+.hs-duty-export  { background: rgba(239,68,68,.12); border-left: 3px solid #ef4444; }
+.hs-duty-vn      { background: rgba(245,158,11,.08); border-left: 3px solid var(--amber); }
+.hs-duty-erga    { background: rgba(255,255,255,.04); border-left: 3px solid var(--steel); }
+.hs-duty-other   { background: transparent; border-left: 3px solid transparent; opacity: .7; }
+.hs-duty-origin  { font-weight: 600; color: var(--white); }
+.hs-duty-type    { color: var(--muted); font-size: .68rem; }
+.hs-duty-reg     { font-family: var(--mono); font-size: .62rem; color: var(--teal); white-space: nowrap; }
+.hs-duty-val     { font-family: var(--mono); font-size: .62rem; color: var(--muted); white-space: nowrap; }
+
+/* Flags */
+.hs-flag {
+  display: inline-flex; align-items: center; gap: .2rem;
+  font-family: var(--mono); font-size: .6rem; font-weight: 800;
+  padding: .1rem .4rem; border-radius: 3px; white-space: nowrap;
+}
+.hs-flag-warn  { background: rgba(245,158,11,.2); color: var(--amber); border: 1px solid rgba(245,158,11,.4); }
+.hs-flag-alert { background: rgba(239,68,68,.15); color: #f87171;  border: 1px solid rgba(239,68,68,.3); }

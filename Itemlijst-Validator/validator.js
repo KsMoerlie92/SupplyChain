@@ -884,162 +884,248 @@ ${labelPages}
   setTimeout(() => win.print(), 500);
 }
 
-// ── HS-code validatie — EU Nomenclature 2026 + TARIC consultation ────────────
-// 1. Local check against GN_CODES (from gn_codes_2026.js, loaded in index.html)
-//    GN_CODES = Set of 22,191 valid 10-digit commodity codes (suffix 80, declarable)
-//    GN_DESC_HEADINGS = Map of 4-digit heading → description for context
-// 2. On click: open TARIC consultation page for full measures view
-//
-// TARIC error message (matches EU official text for invalid codes):
+// ── HS-code validatie ─────────────────────────────────────────────────────────
+// 1. Local check: GN_CODES set (gn_codes_2026.js, 22K valid codes)
+// 2. Measures API: tariffnumber.com/api/v1/cnDuties (free, 10 req/min)
+//    → Try direct browser fetch first, then GAS proxy (TARIFF_PROXY_URL)
+// 3. Expand panel: shows Vietnam/ERGA OMNES export restrictions + footnotes
+// 4. Fallback: deep-link to tariffnumber.com page
+
+// EU TARIC error message for invalid codes (matches official text)
 const TARIC_INVALID_MSG =
   'The goods code is not or no longer valid in the European Union. ' +
   'Please try entering the first 6 digits and browse the nomenclature ' +
   'until you find a proper description corresponding to your product.';
 
-const _hsCache = new Map(); // hsCode → { valid, desc, taricCode }
+// Measure types that are relevant for export (Royal IHC ships goods FROM EU)
+const EXPORT_TYPES = new Set([
+  'Export authorization (Dual use)',
+  'Export control on restricted goods and technologies',
+  'Export control',
+  'Restriction on export',
+]);
 
-// Normalise input to 10-digit TARIC code
+// Countries always shown (besides Vietnam)
+const HIGHLIGHT_ORIGINS = new Set(['VN','1008','1011']); // Vietnam, All third countries, ERGA OMNES
+
+const _hsCache = new Map(); // taric10 → { valid, desc, measures }
+
 function _toTaric10(input) {
-  const clean = String(input || '').replace(/\s/g, '');
+  const clean = String(input || '').replace(/\s|\./g, '');
   if (!/^\d{8,10}$/.test(clean)) return null;
   return clean.padEnd(10, '0').slice(0, 10);
 }
 
-// Validate locally against GN_CODES (2026 nomenclature)
-function _checkGNCodes(taric10) {
-  if (typeof GN_CODES === 'undefined') return null; // file not loaded yet
-  const valid = GN_CODES.has(taric10);
-  const heading4 = taric10.slice(0, 4);
-  const desc = (typeof GN_DESC_HEADINGS !== 'undefined')
-    ? (GN_DESC_HEADINGS[taric10.slice(0,8)] || GN_DESC_HEADINGS[taric10.slice(0,6)] ||
-       GN_DESC_HEADINGS[taric10.slice(0,4)] || '')
-    : '';
+function _checkGNCodes(t10) {
+  if (typeof GN_CODES === 'undefined') return null;
+  const valid   = GN_CODES.has(t10);
+  const h8      = t10.slice(0, 8);
+  const h6      = t10.slice(0, 6);
+  const h4      = t10.slice(0, 4);
+  const desc    = (typeof GN_DESC_HEADINGS !== 'undefined')
+    ? (GN_DESC_HEADINGS[h8] || GN_DESC_HEADINGS[h6] || GN_DESC_HEADINGS[h4] || '') : '';
   return { valid, desc };
 }
 
-// TARIC consultation deep-link
-function _taricLink(taric10) {
-  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  return `https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp`
-    + `?Lang=en&Taric=${taric10}&SimDate=${today}&Expand=true`;
+function _tariffPageLink(t10) {
+  return `https://www.tariffnumber.com/2026/${t10.replace(/0+$/,'')}`;
 }
 
-// TARIC measures link
-function _taricMeasuresLink(taric10) {
-  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  const ddmm  = new Date().toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-');
-  return `https://ec.europa.eu/taxation_customs/dds2/taric/measures.jsp`
-    + `?Lang=en&SimDate=${today}&Taric=${taric10}&search_text=goods&op=&GoodsText=&DatePicker=${ddmm}`;
+// Fetch trade measures from tariffnumber.com API
+// Tries: direct → GAS proxy
+async function _fetchMeasures(t10) {
+  const base = `https://www.tariffnumber.com/api/v1/cnDuties?term=${t10}&lang=en&year=2026`;
+  const gasBase = typeof TARIFF_PROXY_URL !== 'undefined' && TARIFF_PROXY_URL
+    ? `${TARIFF_PROXY_URL}?code=${encodeURIComponent(t10)}&lang=en&year=2026` : null;
+
+  const candidates = [
+    base,
+    ...(gasBase ? [gasBase] : []),
+  ];
+
+  for (const url of candidates) {
+    try {
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(7000)
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data && Array.isArray(data.duties)) return data.duties;
+    } catch { /* try next */ }
+  }
+  return null; // all failed → show link only
 }
 
 // ── Expand panel ──────────────────────────────────────────────────────────────
-function toggleValHSMeasures(taric10, badgeEl) {
-  const td  = badgeEl.closest('td');
-  const tr  = td?.closest('tr');
+function toggleValHSMeasures(t10, badgeEl) {
+  const td = badgeEl.closest('td');
+  const tr = td?.closest('tr');
   if (!tr) return;
 
   const next = tr.nextElementSibling;
-  if (next && next.classList.contains('hs-measures-row')) {
+  if (next?.classList.contains('hs-measures-row')) {
     const panel = next.querySelector('.hs-measures-panel');
-    if (panel.classList.contains('open')) {
+    if (panel?.classList.contains('open')) {
       panel.classList.remove('open');
       setTimeout(() => { if (next.parentNode) next.remove(); }, 350);
-    } else { panel.classList.add('open'); }
+    } else { panel?.classList.add('open'); }
     return;
   }
 
-  const cached = _hsCache.get(taric10);
-  const consLink    = _taricLink(taric10);
-  const measLink    = _taricMeasuresLink(taric10);
-  let innerHtml;
-
-  if (cached?.valid === false) {
-    innerHtml = `<div class="hs-measures-inner hs-restricted">
-      <div style="color:#ef4444;font-weight:700;margin-bottom:.4rem">
-        ✗ Ongeldige code: <code>${esc(taric10)}</code>
-      </div>
-      <div style="font-size:.78rem;color:var(--muted);line-height:1.55">${esc(TARIC_INVALID_MSG)}</div>
-      <div style="margin-top:.6rem;display:flex;gap:.75rem;flex-wrap:wrap">
-        <a href="${esc(consLink)}" target="_blank" class="hs-taric-btn">🔍 Zoek in nomenclatuur ↗</a>
-      </div>
-    </div>`;
-  } else if (cached?.valid === true) {
-    const desc = cached.desc ? `<div style="color:var(--muted);font-size:.68rem;margin:.3rem 0">${esc(cached.desc)}</div>` : '';
-    innerHtml = `<div class="hs-measures-inner hs-clean">
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
-        <span style="font-weight:700">✓ Geldige code: <code>${esc(taric10)}</code></span>
-        <span style="font-size:.68rem;color:var(--muted)">EU Nomenclature 2026</span>
-      </div>
-      ${desc}
-      <div style="margin-top:.5rem;display:flex;gap:.75rem;flex-wrap:wrap">
-        <a href="${esc(consLink)}" target="_blank" class="hs-taric-btn">📋 TARIC Consultation ↗</a>
-        <a href="${esc(measLink)}" target="_blank" class="hs-taric-btn">📊 Maatregelen ↗</a>
-      </div>
-    </div>`;
-  } else {
-    innerHtml = `<div class="hs-measures-inner hs-loading">
-      <span style="color:var(--muted)">⏳ Controleren…</span>
-    </div>`;
-  }
+  const cached    = _hsCache.get(t10);
+  const pageLink  = _tariffPageLink(t10);
 
   const expandRow = document.createElement('tr');
   expandRow.className = 'hs-measures-row';
   const expTd = document.createElement('td');
   expTd.colSpan = 99;
-  expTd.innerHTML = `<div class="hs-measures-panel">${innerHtml}</div>`;
+
+  const renderPanel = (cached) => {
+    if (!cached?.valid) {
+      return `<div class="hs-measures-inner hs-restricted">
+        <div style="color:#ef4444;font-weight:700;margin-bottom:.5rem">
+          ✗ Ongeldige GN-code: <code>${esc(t10)}</code>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.55">${esc(TARIC_INVALID_MSG)}</div>
+        <div style="margin-top:.6rem">
+          <a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">🔍 Zoek in nomenclatuur ↗</a>
+        </div>
+      </div>`;
+    }
+
+    const duties   = cached.measures || null;
+    const descHtml = cached.desc
+      ? `<div style="color:var(--muted);font-size:.68rem;margin:.2rem 0 .5rem">${esc(cached.desc)}</div>` : '';
+    const pageBtn  = `<a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">📋 tariffnumber.com ↗</a>`;
+
+    if (duties === null) {
+      // API not yet fetched or loading
+      return `<div class="hs-measures-inner hs-clean">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig in EU CN 2026
+        ${descHtml}
+        <div style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          ${pageBtn}
+          <span style="color:var(--muted);font-size:.65rem" id="hs-loading-${t10}">⏳ Maatregelen laden…</span>
+        </div>
+      </div>`;
+    }
+
+    if (duties.length === 0) {
+      return `<div class="hs-measures-inner hs-clean">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig, geen maatregelen gevonden
+        ${descHtml}
+        <div style="margin-top:.5rem">${pageBtn}</div>
+      </div>`;
+    }
+
+    // Filter measures: export measures (all countries) + any measure for Vietnam/ERGA OMNES
+    const exportMeasures = duties.filter(d => EXPORT_TYPES.has(d.measure_type));
+    const vnMeasures     = duties.filter(d => d.origin_code === 'VN');
+    const allThirdMeasures = duties.filter(d => ['1008','1011'].includes(d.origin_code));
+
+    const hasDualUse  = exportMeasures.some(d => /dual.use/i.test(d.measure_type));
+    const hasRestrict = exportMeasures.some(d => /restriction|control/i.test(d.measure_type));
+
+    const flagHtml = [
+      hasDualUse  ? `<span class="hs-flag hs-flag-warn">⚠️ DUAL USE — Reg. ${exportMeasures.find(d=>/dual.use/i.test(d.measure_type))?.legal_base||''}</span>` : '',
+      hasRestrict ? `<span class="hs-flag hs-flag-alert">⛔ EXPORT CONTROL</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    const renderDutyRow = (d) => {
+      const isExport   = EXPORT_TYPES.has(d.measure_type);
+      const isVN       = d.origin_code === 'VN';
+      const isErga     = ['1008','1011'].includes(d.origin_code);
+      const highlight  = isExport || isVN;
+      const cls        = isExport ? 'hs-duty-export' : isVN ? 'hs-duty-vn' : isErga ? 'hs-duty-erga' : 'hs-duty-other';
+      return `<div class="hs-duty-row ${cls}">
+        <span class="hs-duty-origin">${esc(d.origin||'—')}</span>
+        <span class="hs-duty-type">${esc(d.measure_type||'')}</span>
+        <span class="hs-duty-reg">${esc(d.legal_base||'')}</span>
+        ${d.duty ? `<span class="hs-duty-val">${esc(d.duty.trim())}</span>` : ''}
+      </div>`;
+    };
+
+    // Show: export measures + VN/ERGA measures. Collapse the rest.
+    const shown  = [...new Map([...exportMeasures, ...vnMeasures, ...allThirdMeasures].map(d=>[d.legal_base+d.origin_code,d])).values()];
+    const others = duties.filter(d => !shown.includes(d));
+
+    const shownHtml  = shown.map(renderDutyRow).join('');
+    const othersHtml = others.length
+      ? `<details style="margin-top:.4rem">
+          <summary style="cursor:pointer;font-size:.65rem;color:var(--muted);padding:.2rem 0">
+            + ${others.length} andere maatregel(en) (tariefpreferenties)
+          </summary>
+          ${others.map(renderDutyRow).join('')}
+        </details>` : '';
+
+    return `<div class="hs-measures-inner ${exportMeasures.length ? 'hs-restricted' : 'hs-clean'}">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin-bottom:.35rem">
+        <span style="font-weight:700">✓ <code>${esc(t10)}</code></span>
+        <span style="color:var(--muted);font-size:.65rem">— ${duties.length} maatregel(en)</span>
+        ${flagHtml}
+        <span style="margin-left:auto">${pageBtn}</span>
+      </div>
+      ${descHtml}
+      ${shownHtml}
+      ${othersHtml}
+    </div>`;
+  };
+
+  expTd.innerHTML = `<div class="hs-measures-panel">${renderPanel(cached)}</div>`;
   expandRow.appendChild(expTd);
   tr.insertAdjacentElement('afterend', expandRow);
   requestAnimationFrame(() => expTd.querySelector('.hs-measures-panel')?.classList.add('open'));
+
+  // Async-fetch measures if not cached yet
+  if (cached?.valid && !cached.measures) {
+    (async () => {
+      const duties = await _fetchMeasures(t10);
+      const newCached = { ..._hsCache.get(t10), measures: duties || [] };
+      _hsCache.set(t10, newCached);
+      // Update panel content in-place
+      const panel = expTd.querySelector('.hs-measures-panel');
+      if (panel) panel.innerHTML = renderPanel(newCached);
+    })();
+  }
 }
 
-// ── Bulk check after validation ───────────────────────────────────────────────
+// ── Bulk HS check after validation ───────────────────────────────────────────
 async function checkHSCodesLive() {
   const codeMap = new Map();
   _valRows.forEach((row, ri) => {
-    const raw   = String(row.cells[COL.O] || '').trim();
-    const t10   = _toTaric10(raw);
+    const t10 = _toTaric10(row.cells[COL.O]);
     if (!t10) return;
     if (!codeMap.has(t10)) codeMap.set(t10, []);
     codeMap.get(t10).push(ri);
   });
   if (!codeMap.size) return;
 
-  // Spinner
   codeMap.forEach((idxs) => idxs.forEach(ri => _setHSCellState(ri, 'loading', '⏳')));
 
   for (const [t10, rowIdxs] of codeMap) {
-    let cached = _hsCache.get(t10);
-
-    if (!cached) {
-      // Local GN_CODES check
-      const local = _checkGNCodes(t10);
-      if (local) {
-        cached = { valid: local.valid, desc: local.desc };
-        _hsCache.set(t10, cached);
-      }
-    }
+    const local = _checkGNCodes(t10);
+    const cached = { valid: local?.valid ?? null, desc: local?.desc || '', measures: null };
+    _hsCache.set(t10, cached);
 
     let stateClass, badgeHtml;
-
-    if (!cached) {
-      // GN_CODES not loaded — show link only
-      const link = _taricLink(t10);
+    if (cached.valid === null) {
+      // GN_CODES not loaded
       stateClass = 'hs-unknown';
       badgeHtml  = `<span class="hs-badge hs-unknown-badge"
         onclick="toggleValHSMeasures('${esc(t10)}',this)"
-        title="Klik — TARIC nomenclatuur">↗ TARIC</span>`;
+        title="GN_CODES niet geladen — klik voor tariffnumber.com">↗</span>`;
     } else if (!cached.valid) {
       stateClass = 'hs-invalid';
       badgeHtml  = `<span class="hs-badge hs-invalid-badge"
         onclick="toggleValHSMeasures('${esc(t10)}',this)"
-        title="Klik — code niet geldig in EU nomenclatuur 2026">✗</span>`;
+        title="Niet geldig in EU CN 2026 — klik voor details">✗</span>`;
       rowIdxs.forEach(ri => { _valRows[ri].errors['O'] = TARIC_INVALID_MSG.slice(0,80) + '…'; });
     } else {
       stateClass = 'hs-ok';
-      const short = cached.desc ? cached.desc.slice(0,30) : '';
       badgeHtml  = `<span class="hs-badge hs-ok-badge"
         onclick="toggleValHSMeasures('${esc(t10)}',this)"
-        title="Klik — ${esc(short || 'Geldige code')}">✓</span>`;
+        title="${esc(cached.desc.slice(0,50) || 'Geldig — klik voor maatregelen')}">✓</span>`;
     }
 
     rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
