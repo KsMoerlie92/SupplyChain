@@ -309,9 +309,14 @@ function renderLateItems() {
       ? Math.round((tDate.getTime() - uDate.getTime()) / 86400000) : null;
 
     const statusVal   = gs(vals, iE);
-    const isPast      = uDate < today;
     const isReleased  = /released/i.test(statusVal);
     const isConfirmed = /confirmed/i.test(statusVal);
+
+    // Only show items that are still open (Released or Confirmed).
+    // Items with any other status (Received, Closed, Complete, etc.) are excluded.
+    if (!isReleased && !isConfirmed) return null;
+
+    const isPast = uDate < today;
 
     return {
       colA, statusVal, isReleased, isConfirmed, isPast,
