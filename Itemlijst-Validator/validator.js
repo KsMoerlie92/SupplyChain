@@ -10,7 +10,7 @@ const VL_INSP = new Set(["Foto's en Steekproef","Foto's","Fysiek Controleren","T
 const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
 
 // ── Column index map (0-based, row 2 = headers) ───────────────────────────
-const COL = {
+let COL = {
   A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8, J:9,
   K:10,L:11,M:12,N:13,O:14,P:15,Q:16,R:17,S:18,T:19,
   U:20,V:21,W:22,X:23,Y:24,Z:25,AA:26
@@ -18,11 +18,52 @@ const COL = {
 
 // State
 let _valRows     = [];   // parsed data rows [{cells:[], errors:{}, warnings:{}}]
-let _valHeaders  = [];   // header row (row index 1 in file)
-let _valOwners   = [];   // owner row (row index 0 in file)
+let _valHeaders  = [];   // header row (detected dynamically)
+let _valOwners   = [];   // owner row (row before headers, if present)
 let _valCOO      = new Set(); // country codes from Master tab
 let _usdRate     = null; // cached EUR/USD rate
 let _valWb       = null; // original workbook for write-back
+let _virtualCols = {};   // { Z: true, AA: true } when columns are IHC-added (not in file)
+let _valHdrIdx  = 1;     // row index (0-based) where headers were found
+
+// ── Remap COL indices from actual header names ──────────────────────────────
+// Columns found by name keep their real index.
+// Columns missing from the file get virtual indices beyond the last column.
+function _remapColumns() {
+  // Reset to defaults first
+  COL = {
+    A:0,  B:1,  C:2,  D:3,  E:4,  F:5,  G:6,  H:7,  I:8,  J:9,
+    K:10, L:11, M:12, N:13, O:14, P:15, Q:16, R:17, S:18, T:19,
+    U:20, V:21, W:22, X:23, Y:24, Z:25, AA:26
+  };
+  _virtualCols = {};
+
+  const hdrs = _valHeaders;
+  const find = (pattern) => hdrs.findIndex(h => h && new RegExp(pattern,'i').test(String(h)));
+
+  // Re-detect key columns by name so they work regardless of position
+  const dgIdx   = find('dangerous');
+  const inspIdx = find('inspection');
+
+  let nextVirtual = hdrs.length; // append virtual cols after file cols
+
+  if (dgIdx >= 0) {
+    COL.Z = dgIdx;
+  } else {
+    // Column not in file — add as virtual column
+    COL.Z = nextVirtual++;
+    _virtualCols.Z = true;
+    _valHeaders[COL.Z] = 'Dangerous Goods?';
+  }
+
+  if (inspIdx >= 0) {
+    COL.AA = inspIdx;
+  } else {
+    COL.AA = nextVirtual++;
+    _virtualCols.AA = true;
+    _valHeaders[COL.AA] = 'Inspection Level';
+  }
+}
 
 // ── parseHColumn: parse Mark/Label multi-value notation ────────────────────
 function parseHColumn(value) {
@@ -325,6 +366,7 @@ function renderValidationTable(usdPrice, usdRate) {
     'AA'              // IHC: Inspection Level
   ];
   const IHC_COLS = new Set(['A','B','I','J','W','AA']); // teal tint = IHC to fill
+  const VIRT_COLS = new Set(Object.keys(_virtualCols));  // amber tint = IHC-added column
 
   const html = _valRows.map((row, ri) => {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
@@ -341,6 +383,7 @@ function renderValidationTable(usdPrice, usdRate) {
       const disp = val !== null && val !== undefined ? String(val) : '';
 
       let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
+      if (VIRT_COLS.has(col)) cellCls += ' val-cell-virtual';
       if (err) cellCls += ' val-cell-err';
       else if (wrn) cellCls += ' val-cell-warn';
 
@@ -414,23 +457,52 @@ function exportValidatedItemlijst() {
   if (!_valWb) { alert('Laad eerst een Itemlijst.'); return; }
   const ws = _valWb.Sheets[_valWb.SheetNames[0]];
 
-  // Write back edited/computed values (rows start at index 2 in the worksheet = row 3)
+  // Data rows in worksheet start at: hdrIdx row (0-based) + 1 header row = hdrIdx+1 (0-based)
+  // In 1-based row index: _valHdrIdx + 2  (hdrIdx is 0-based, +1 for header, +1 for 1-based)
+  const dataRowStart = _valHdrIdx + 1; // 0-based row index of first data row
+
+  // Write virtual column headers into the worksheet if they are IHC-added
+  const virtualEntries = Object.entries(_virtualCols);
+  if (virtualEntries.length > 0) {
+    virtualEntries.forEach(([letter]) => {
+      const ci = COL[letter];
+      // Write owner row label (if there is one)
+      if (_valHdrIdx > 0) {
+        const ownerAddr = XLSX.utils.encode_cell({ r: _valHdrIdx - 1, c: ci });
+        ws[ownerAddr] = { v: 'IHC', t: 's' };
+      }
+      // Write column header
+      const hdrAddr = XLSX.utils.encode_cell({ r: _valHdrIdx, c: ci });
+      ws[hdrAddr] = { v: _valHeaders[ci] || letter, t: 's' };
+    });
+    // Expand worksheet range to include new columns
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    const maxVirtCol = Math.max(...Object.values(_virtualCols).map
+      ? Object.keys(_virtualCols).map(l => COL[l])
+      : [range.e.c]);
+    if (maxVirtCol > range.e.c) range.e.c = maxVirtCol;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+
+  // Write back edited/computed values
   _valRows.forEach((row, ri) => {
-    if (!row._edited && !row.computed) return;
-    const wsRow = ri + 3; // 1=owner, 2=header, 3+=data
-    // Edited cells
+    const wsRowIdx = dataRowStart + ri; // 0-based
+    // Edited cells (including virtual column values)
     Object.entries(COL).forEach(([colLetter, colIdx]) => {
       const val = row.cells[colIdx];
-      if (row._edited && val !== undefined) {
-        const addr = XLSX.utils.encode_cell({ r: wsRow - 1, c: colIdx });
-        if (!ws[addr]) ws[addr] = {};
-        ws[addr].v = val;
-        ws[addr].t = typeof val === 'number' ? 'n' : 's';
+      if (val !== undefined && val !== null && val !== '') {
+        const isVirtual = _virtualCols[colLetter];
+        if (row._edited || isVirtual) {
+          const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: colIdx });
+          if (!ws[addr]) ws[addr] = {};
+          ws[addr].v = val;
+          ws[addr].t = typeof val === 'boolean' ? 'b' : typeof val === 'number' ? 'n' : 's';
+        }
       }
     });
     // Computed volume W
     if (row.computed?.W !== undefined) {
-      const addr = XLSX.utils.encode_cell({ r: wsRow - 1, c: COL.W });
+      const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: COL.W });
       ws[addr] = { v: row.computed.W, t: 'n' };
     }
   });
@@ -470,7 +542,7 @@ function buildValHeader() {
 
   const ownerMap  = {};
   COLS_SHOW.forEach(col => {
-    ownerMap[col] = ownerRow[COL[col]] || '';
+    ownerMap[col] = VIRT_COLS.has(col) ? 'IHC ✚' : (ownerRow[COL[col]] || '');
   });
 
   const th1 = `<tr>
@@ -484,9 +556,9 @@ function buildValHeader() {
   </tr>`;
   const th2 = `<tr>
     ${COLS_SHOW.map(col => {
-      const hdr = headerRow[COL[col]] || col;
-      const cls = IHC_OWN.has(col) ? 'col-owner-ihc' : '';
-      return `<th class="${cls}" title="${esc(hdr)}">${esc(hdr)}</th>`;
+      const hdr = (headerRow[COL[col]] || col) + (VIRT_COLS.has(col) ? ' ✚' : '');
+      const cls = IHC_OWN.has(col) ? 'col-owner-ihc' : VIRT_COLS.has(col) ? 'col-owner-virtual' : '';
+      return `<th class="${cls}" title="${esc(VIRT_COLS.has(col) ? 'Door IHC in te vullen vóór export' : hdr)}">${esc(hdr)}</th>`;
     }).join('')}
   </tr>`;
   thEl.innerHTML = th1 + th2;
@@ -526,8 +598,13 @@ function handleValFile(fileOrEvent) {
       const count = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim()).length;
       if (count > hdrMax) { hdrMax = count; hdrIdx = i; }
     }
+    _valHdrIdx  = hdrIdx;
     _valOwners  = hdrIdx > 0 ? (raw[hdrIdx - 1] || []) : [];
     _valHeaders = raw[hdrIdx] || [];
+
+    // ── Remap COL to actual column positions by header name ───────────────
+    // Also add virtual columns for DG / Inspection if missing from the file
+    _remapColumns();
 
     _valRows = (raw.slice(hdrIdx + 1) || [])
       .filter(r => hasVal(r[0]) && hasVal(r[2]))
