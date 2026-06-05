@@ -11,8 +11,6 @@
 </head>
 <body>
 
-<!-- shared.js injects the nav bar automatically -->
-
 <div class="site-wrapper">
   <section class="content-panel">
     <div class="section-head">
@@ -21,37 +19,39 @@
 
     <!-- Upload -->
     <div class="val-dz" id="val-dz"
-      ondragover="valDragOver(event)" ondragleave="valDragLeave()" ondrop="valDrop(event)"
+      ondragover="valDragOver(event)"
+      ondragleave="valDragLeave()"
+      ondrop="valDrop(event)"
       onclick="document.getElementById('val-file-input').click()">
-      <label class="val-dz-label">📋 Sleep een Itemlijst (.xlsx) hierheen of klik om te uploaden</label>
+      <div class="val-dz-label">📋 Sleep een Itemlijst (.xlsx) hierheen of klik om te uploaden</div>
       <div class="val-filename" id="val-filename"></div>
-      <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm" onchange="handleValFile(event)">
+      <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm"
+             onchange="handleValFile(this.files[0])">
     </div>
 
     <!-- Toolbar -->
     <div class="val-toolbar">
-      <button class="btn-val btn-val-run" id="btn-val-run" disabled onclick="runValidation()">▶ Valideer</button>
+      <button class="btn-val btn-val-run"    id="btn-val-run"    disabled onclick="runValidation()">▶ Valideer</button>
       <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
-      <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Genereer Merken/Labels</button>
+      <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Merken/Labels</button>
       <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
         <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
         <input type="text" id="val-consignee" class="val-consignee-input"
-          value="PACIFIC SHIPBUILDING JSC"
-          placeholder="Consignee naam"
-          title="Verschijnt als Shipping Marks op de labels">
+               value="PACIFIC SHIPBUILDING JSC"
+               placeholder="Consignee naam">
       </div>
       <div id="val-sheet-warnings"></div>
     </div>
 
-    <!-- Summary -->
+    <!-- Summary / status -->
     <div id="val-summary"></div>
 
     <!-- Legend -->
     <div class="val-legend">
       <span><span class="lsq" style="background:rgba(34,197,94,.25)"></span> Correct</span>
-      <span><span class="lsq" style="background:rgba(239,68,68,.35)"></span> Fout (verplicht veld / ongeldige waarde)</span>
+      <span><span class="lsq" style="background:rgba(239,68,68,.35)"></span> Fout</span>
       <span><span class="lsq" style="background:rgba(245,158,11,.25)"></span> Waarschuwing</span>
-      <span><span class="lsq" style="background:rgba(0,180,216,.2)"></span> IHC invullen (klik om te bewerken)</span>
+      <span><span class="lsq" style="background:rgba(0,180,216,.2)"></span> IHC invullen</span>
       <span>🔴 DG = Dangerous Goods</span>
     </div>
 
@@ -62,31 +62,52 @@
         <tbody id="val-tbody"></tbody>
       </table>
     </div>
-
   </section>
 </div>
 
-<!-- Minimal state needed for validator standalone mode -->
 <script>
-  // Stub fileData so validator.js (designed for PO-Matcher) doesn't break
-  const fileData = { expediting: null, moeder: null };
-  const allRows  = [];
-  let currentFilter = 'validator';
-  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function setStatus(msg) { const el = document.getElementById('val-summary'); if (el) el.textContent = msg; }
+// ── Stubs required by validator.js ────────────────────────────────────────
+const fileData     = { expediting: null, moeder: null };
+const allRows      = [];
+let   currentFilter = 'validator';
 
-  // When nav bar restores the expediting file, make it available for H-column lookup
-  function onNavFileLoaded(role, buf, name) {
-    if (role === 'expediting') {
-      try {
-        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        fileData.expediting = { data, name };
-      } catch(e) { console.warn('Could not parse expediting from IndexedDB', e); }
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function setStatus(msg, isErr) {
+  const el = document.getElementById('val-summary');
+  if (el) el.innerHTML = isErr
+    ? `<span style="color:#ef4444">${esc(msg)}</span>`
+    : `<span style="color:var(--muted)">${msg}</span>`;
+}
+
+// Optional: restore expediting file from shared storage for H-column lookup
+async function _tryRestoreExpediting() {
+  try {
+    const IDB_NAME  = 'ihc-expedite2-shared';
+    const IDB_STORE = 'files';
+    const db = await new Promise((res, rej) => {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath: 'role' });
+      req.onsuccess = e => res(e.target.result);
+      req.onerror   = rej;
+    });
+    const rec = await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get('expediting');
+      req.onsuccess = e => res(e.target.result || null);
+      req.onerror   = rej;
+    });
+    if (rec && rec.buf) {
+      const wb = XLSX.read(rec.buf, { type:'array', cellDates:true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      fileData.expediting = { data: XLSX.utils.sheet_to_json(ws, { defval:'' }), name: rec.name };
     }
-  }
+  } catch(e) { /* no shared storage or no expediting file — that's OK */ }
+}
+_tryRestoreExpediting();
 </script>
+
 <script src="js/validator.js"></script>
 <script src="../shared/shared.js"></script>
 </body>
