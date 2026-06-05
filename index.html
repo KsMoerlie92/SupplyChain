@@ -4,274 +4,95 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Royal IHC — Logistics Tools</title>
-  <link rel="stylesheet" href="shared/nav.css">
   <style>
-    :root{--red:#D91F2C;--navy:#0A1628;--teal:#00B4D8;--white:#F0F4FA;--glow:0 0 18px rgba(0,180,216,.45)}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body.home{font-family:'Segoe UI',Arial,sans-serif;background:var(--navy);color:var(--white);min-height:100vh;display:flex;flex-direction:column;align-items:center}
-
-    .hero{text-align:center;margin-top:5rem;margin-bottom:2.5rem}
-    .logo{font-size:2.4rem;font-weight:900;letter-spacing:.04em}
-    .logo span{background:var(--red);color:#fff;padding:.1em .35em;border-radius:4px;margin-left:.25em}
-    .subtitle{font-size:1rem;font-weight:400;color:rgba(240,244,250,.5);margin-top:.6rem;letter-spacing:.06em;text-transform:uppercase}
-
-    .upload-section{width:100%;max-width:860px;padding:0 1.5rem;margin-bottom:2rem}
-    .upload-hint{text-align:center;font-size:.82rem;color:rgba(240,244,250,.45);margin-bottom:1.5rem;line-height:1.5}
-    .upload-hint strong{color:var(--teal)}
-    .upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-    @media(max-width:640px){.upload-grid{grid-template-columns:1fr}}
-
-    .drop-zone{position:relative;background:#0d1d38;border:2px dashed #1e3a6e;border-radius:12px;padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:border-color .25s,box-shadow .25s,transform .15s}
-    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--teal);box-shadow:var(--glow);transform:translateY(-2px)}
-    .drop-zone.loaded{border-color:#22c55e;border-style:solid}
-    .drop-zone.loaded .dz-icon{color:#22c55e}
-    .dz-icon{font-size:2.4rem;margin-bottom:.6rem;display:block;color:var(--teal);transition:color .25s}
-    .dz-title{font-size:1rem;font-weight:700;margin-bottom:.3rem}
-    .dz-sub{font-size:.75rem;color:rgba(240,244,250,.4);line-height:1.5}
-    .dz-status{margin-top:.8rem;font-size:.7rem;font-weight:600;letter-spacing:.04em}
-    .dz-status.pending{color:rgba(240,244,250,.35)}
-    .dz-status.ok{color:#22c55e}
-    .dz-file-input{display:none}
-    .drop-zone:not(.loaded)::after{content:'';position:absolute;inset:-4px;border-radius:14px;border:2px solid var(--teal);opacity:0;animation:pulse-ring 2.5s ease-out infinite;pointer-events:none}
-    @keyframes pulse-ring{0%{opacity:.5;transform:scale(1)}100%{opacity:0;transform:scale(1.04)}}
-
-    .once-badge{display:inline-flex;align-items:center;gap:.4rem;background:rgba(0,180,216,.12);border:1px solid rgba(0,180,216,.25);border-radius:6px;padding:.35rem .8rem;margin-top:.8rem;font-size:.72rem;color:var(--teal);font-weight:600}
-
-    /* ── Reset button ──────────────────────── */
-    .reset-btn{background:transparent;border:1px solid rgba(239,68,68,.35);color:#f87171;border-radius:6px;padding:.4rem 1rem;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s}
-    .reset-btn:hover{background:rgba(239,68,68,.12);border-color:#ef4444;color:#ef4444}
-
-    .sp-section{text-align:center;margin-top:1.5rem}
-    .sp-btn{display:inline-flex;align-items:center;gap:.5rem;background:linear-gradient(135deg,#0078d4,#005a9e);color:#fff;border:none;border-radius:8px;padding:.65rem 1.6rem;font-size:.82rem;font-weight:600;cursor:pointer;transition:box-shadow .2s,transform .15s}
-    .sp-btn:hover{box-shadow:0 0 16px rgba(0,120,212,.5);transform:translateY(-1px)}
-    .sp-btn:disabled{opacity:.5;cursor:not-allowed}
-    .sp-btn svg{width:18px;height:18px;fill:currentColor}
-    .sp-divider{display:flex;align-items:center;gap:.8rem;color:rgba(240,244,250,.25);font-size:.7rem;margin:1.2rem auto;max-width:300px}
-    .sp-divider::before,.sp-divider::after{content:'';flex:1;height:1px;background:rgba(240,244,250,.12)}
-    .sp-status{font-size:.72rem;margin-top:.6rem;min-height:1.2em}
-
-    .config-toggle{background:none;border:none;color:rgba(240,244,250,.3);font-size:.68rem;cursor:pointer;margin-top:1rem;text-decoration:underline}
-    .config-toggle:hover{color:var(--teal)}
-    .config-panel{display:none;background:#0d1d38;border:1px solid #1e3a6e;border-radius:8px;padding:1rem;margin-top:.8rem;max-width:700px;width:100%;text-align:left}
-    .config-panel.open{display:block}
-    .config-panel label{display:block;font-size:.7rem;color:rgba(240,244,250,.5);margin-bottom:.2rem;margin-top:.6rem}
-    .config-panel input{width:100%;background:#0a1628;border:1px solid #1e3a6e;border-radius:4px;color:var(--white);padding:.4rem .5rem;font-size:.75rem;font-family:monospace}
-    .config-panel input:focus{border-color:var(--teal);outline:none}
-    .config-save{background:var(--teal);color:#0a1628;border:none;border-radius:4px;padding:.35rem .8rem;font-size:.72rem;font-weight:700;cursor:pointer;margin-top:.8rem}
-
-    .feature-strip{display:flex;gap:1.8rem;flex-wrap:wrap;justify-content:center;margin-top:2rem;padding:0 1rem}
-    .feat{display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:rgba(240,244,250,.35)}
-    .feat-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
-    footer{margin-top:auto;padding:2rem;font-size:.68rem;color:rgba(240,244,250,.2);letter-spacing:.06em}
+    :root {
+      --red:   #D91F2C;
+      --navy:  #0A1628;
+      --teal:  #00B4D8;
+      --white: #F0F4FA;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .logo { font-size: 2rem; font-weight: 900; letter-spacing: .04em; margin-bottom: 2rem; }
+    .logo span { background: var(--red); color: #fff; padding: .1em .35em; border-radius: 4px; margin-left: .25em; }
+    h1 { font-size: 1.1rem; font-weight: 400; color: rgba(240,244,250,.6); margin-bottom: 3rem; letter-spacing: .06em; text-transform: uppercase; }
+    .cards { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+    .card {
+      background: #0F2040;
+      border: 1px solid #1e3a6e;
+      border-radius: 8px;
+      padding: 2rem 2.5rem;
+      width: 280px;
+      text-decoration: none;
+      color: var(--white);
+      transition: border-color .2s, transform .15s;
+      text-align: center;
+    }
+    .card:hover { border-color: var(--teal); transform: translateY(-3px); }
+    .card-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
+    .card-desc { font-size: .8rem; color: rgba(240,244,250,.55); line-height: 1.6; }
+    .card-badge {
+      display: inline-block;
+      margin-top: .8rem;
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      border: 1px solid var(--teal);
+      border-radius: 3px;
+      padding: .2em .6em;
+    }
+    footer { margin-top: 4rem; font-size: .7rem; color: rgba(240,244,250,.3); letter-spacing: .06em; }
   </style>
 </head>
-<body class="home">
-  <div class="hero">
-    <div class="logo">Royal <span>IHC</span></div>
-    <div class="subtitle">Logistics Tools &#8212; Expediting &amp; Shipment</div>
+<body>
+  <div class="logo">Royal <span>IHC</span></div>
+  <h1>Logistics Tools — Expediting &amp; Shipment</h1>
+
+  <div class="cards">
+    <a class="card" href="PO-Matcher/">
+      <div class="card-icon">🔍</div>
+      <div class="card-title">PO Matcher</div>
+      <div class="card-desc">
+        Koppel Expediting lijst aan Moederlijst via XLOOKUP op PO + Item #.
+        Export naar Excel, legplan en container advies.
+      </div>
+      <span class="card-badge">Expediting</span>
+    </a>
+
+    <a class="card" href="Legplan/">
+      <div class="card-icon">📦</div>
+      <div class="card-title">Legplan &amp; CIPL</div>
+      <div class="card-desc">
+        3D container packing visualisatie, CIPL document generatie met
+        handtekening en AI-advies voor laadvolgorde.
+      </div>
+      <span class="card-badge">Shipment</span>
+    </a>
+
+    <a class="card" href="DG-Overview/">
+      <div class="card-icon">&#9888;&#65039;</div>
+      <div class="card-title">Dangerous Goods Overview</div>
+      <div class="card-desc">
+        Analyseer de Expediting lijst automatisch op gevaarlijke stoffen
+        volgens IHM, IMDG, EU SRR en CLP/REACH classificaties.
+      </div>
+      <span class="card-badge" style="color:#f87171;border-color:#f87171">Hazardous</span>
+    </a>
   </div>
 
-  <section class="upload-section">
-    <p class="upload-hint">
-      Upload je <strong>Moederlijst</strong> en <strong>Expediting lijst</strong> hieronder.<br>
-      De bestanden worden in de browser bewaard &#8212; je hoeft ze maar <strong>&#233;&#233;n keer</strong> te laden.
-    </p>
-    <div class="upload-grid">
-      <div class="drop-zone" id="dz-moeder" tabindex="0">
-        <span class="dz-icon">&#128203;</span>
-        <div class="dz-title">Moederlijst</div>
-        <div class="dz-sub">Sleep je .xlsx / .xlsm hier<br>of klik om te bladeren</div>
-        <div class="dz-status pending" id="status-moeder">&#9203; Nog niet geladen</div>
-        <input type="file" class="dz-file-input" id="file-moeder" accept=".xlsx,.xlsm,.xls,.csv">
-      </div>
-      <div class="drop-zone" id="dz-expedite" tabindex="0">
-        <span class="dz-icon">&#128202;</span>
-        <div class="dz-title">Expediting lijst</div>
-        <div class="dz-sub">Sleep je .xlsx / .xlsm hier<br>of klik om te bladeren</div>
-        <div class="dz-status pending" id="status-expedite">&#9203; Nog niet geladen</div>
-        <input type="file" class="dz-file-input" id="file-expedite" accept=".xlsx,.xlsm,.xls,.csv">
-      </div>
-    </div>
-    <div style="text-align:center">
-      <div class="once-badge">&#128161; E&#233;nmalig uploaden &#8212; geldig voor alle tools in deze sessie</div>
-    </div>
-
-    <!-- ── Reset / Project wisselen ───────────── -->
-    <div style="text-align:center;margin-top:1rem">
-      <button class="reset-btn" id="btn-reset-cache">
-        &#128465; Project wisselen &#8212; cache wissen
-      </button>
-    </div>
-
-    <!-- SharePoint login -->
-    <div class="sp-section">
-      <div class="sp-divider">of</div>
-      <button class="sp-btn" id="btn-sp-login">
-        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-        Inloggen via SharePoint
-      </button>
-      <div class="sp-status" id="sp-status"></div>
-      <button class="config-toggle" id="btn-config">&#9881; Configuratie</button>
-      <div class="config-panel" id="config-panel">
-        <label>Azure Client ID (App Registration)</label>
-        <input type="text" id="cfg-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-        <label>Moederlijst SharePoint URL</label>
-        <input type="text" id="cfg-moeder-url" placeholder="https://ihcmerwede.sharepoint.com/sites/...xlsx">
-        <label>Expediting lijst SharePoint URL</label>
-        <input type="text" id="cfg-exp-url" placeholder="https://ihcmerwede.sharepoint.com/sites/...xlsm">
-        <button class="config-save" id="btn-config-save">Opslaan</button>
-      </div>
-    </div>
-  </section>
-
-  <div class="feature-strip">
-    <div class="feat"><span class="feat-dot"></span>PO Matching &amp; XLOOKUP</div>
-    <div class="feat"><span class="feat-dot"></span>3D Container Packing</div>
-    <div class="feat"><span class="feat-dot"></span>CIPL &amp; Merk/Label PDF</div>
-    <div class="feat"><span class="feat-dot"></span>Itemlijst Validatie</div>
-    <div class="feat"><span class="feat-dot"></span>HS-code Douane Check</div>
-    <div class="feat"><span class="feat-dot"></span>Dangerous Goods Analyse</div>
-  </div>
-  <footer>Royal IHC &#8212; Intern gebruik &#183; Logistics &amp; Expediting</footer>
-
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
-  <script src="shared/shared-root.js"></script>
-  <script src="shared/sharepoint.js"></script>
-  <script src="shared/cache-reset.js"></script>
-  <script>
-  (function(){
-    const DB_NAME='ihc-logistics-files',DB_VER=1,STORE='files';
-    function openDB(){return new Promise((ok,fail)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);r.onsuccess=e=>ok(e.target.result);r.onerror=e=>fail(e.target.error)})}
-    async function dbPut(k,b,n){const db=await openDB();return new Promise((ok,fail)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put({data:b,name:n,ts:Date.now()},k);tx.oncomplete=()=>ok();tx.onerror=e=>fail(e.target.error)})}
-    async function dbGet(k){const db=await openDB();return new Promise((ok,fail)=>{const tx=db.transaction(STORE,'readonly');const r=tx.objectStore(STORE).get(k);r.onsuccess=()=>ok(r.result||null);r.onerror=e=>fail(e.target.error)})}
-
-    function wireZone(zoneId,inputId,statusId,dbKey){
-      const zone=document.getElementById(zoneId),input=document.getElementById(inputId),status=document.getElementById(statusId);
-      zone.addEventListener('click',()=>input.click());
-      zone.addEventListener('keydown',e=>{if(e.key==='Enter')input.click()});
-      zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over')});
-      zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
-      zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0],zone,status,dbKey)});
-      input.addEventListener('change',()=>{if(input.files.length)handleFile(input.files[0],zone,status,dbKey)});
-      dbGet(dbKey).then(rec=>{if(rec&&rec.data){zone.classList.add('loaded');status.className='dz-status ok';status.textContent='\u2705 '+(rec.name||dbKey)+' geladen'}}).catch(()=>{});
-    }
-    async function handleFile(file,zone,statusEl,dbKey){
-      statusEl.className='dz-status pending';statusEl.textContent='\u23F3 Laden\u2026';
-      try{const buf=await file.arrayBuffer();await dbPut(dbKey,buf,file.name);zone.classList.add('loaded');statusEl.className='dz-status ok';statusEl.textContent='\u2705 '+file.name+' geladen';
-        window.dispatchEvent(new CustomEvent('ihc-file-loaded',{detail:{key:dbKey,name:file.name}}));
-      }catch(err){statusEl.className='dz-status pending';statusEl.textContent='\u274C Fout: '+err.message}
-    }
-    wireZone('dz-moeder','file-moeder','status-moeder','moederlijst');
-    wireZone('dz-expedite','file-expedite','status-expedite','expediting');
-
-    /* ── Config panel ──────────────────────── */
-    const cfgBtn=document.getElementById('btn-config');
-    const cfgPanel=document.getElementById('config-panel');
-    cfgBtn.addEventListener('click',()=>cfgPanel.classList.toggle('open'));
-
-    const cfg=window.IHC_SP?window.IHC_SP.getConfig():{};
-    document.getElementById('cfg-client-id').value=cfg.clientId||'';
-    document.getElementById('cfg-moeder-url').value=cfg.moederUrl||'https://ihcmerwede.sharepoint.com/sites/TeamsitesExternal/ihclogistics/Shared Documents/01 - AFS FOLDER VOOR CUSTOMS EN PROJECTEN/06 - YN1320 - OMS/Moederlijst (1320-OMS).xlsx';
-    document.getElementById('cfg-exp-url').value=cfg.expUrl||'';
-
-    document.getElementById('btn-config-save').addEventListener('click',()=>{
-      const c={
-        clientId:document.getElementById('cfg-client-id').value.trim(),
-        moederUrl:document.getElementById('cfg-moeder-url').value.trim(),
-        expUrl:document.getElementById('cfg-exp-url').value.trim(),
-      };
-      if(window.IHC_SP) window.IHC_SP.saveConfig(c);
-      cfgPanel.classList.remove('open');
-      document.getElementById('sp-status').textContent='\u2705 Configuratie opgeslagen';
-      document.getElementById('sp-status').style.color='#22c55e';
-    });
-
-    /* ── SharePoint login button ───────────── */
-    document.getElementById('btn-sp-login').addEventListener('click',async()=>{
-      const statusEl=document.getElementById('sp-status');
-      const config=window.IHC_SP?window.IHC_SP.getConfig():{};
-
-      if(!config.clientId){
-        statusEl.textContent='\u26A0\uFE0F Stel eerst een Client ID in via \u2699 Configuratie';
-        statusEl.style.color='#f59e0b';
-        cfgPanel.classList.add('open');
-        return;
-      }
-
-      try{
-        statusEl.textContent='\u23F3 Inloggen bij Microsoft\u2026';statusEl.style.color='var(--teal)';
-        window.IHC_SP.init(config.clientId);
-        await window.IHC_SP.login();
-        statusEl.textContent='\u2705 Ingelogd! Bestanden ophalen\u2026';statusEl.style.color='#22c55e';
-
-        if(config.moederUrl){
-          statusEl.textContent='\u23F3 Moederlijst ophalen van SharePoint\u2026';
-          await window.IHC_SP.loadToIDB(config.moederUrl, 'moederlijst');
-          const dzM=document.getElementById('dz-moeder');
-          const stM=document.getElementById('status-moeder');
-          dzM.classList.add('loaded');stM.className='dz-status ok';
-          stM.textContent='\u2705 Moederlijst geladen via SharePoint';
-        }
-
-        if(config.expUrl){
-          statusEl.textContent='\u23F3 Expediting lijst ophalen van SharePoint\u2026';
-          await window.IHC_SP.loadToIDB(config.expUrl, 'expediting');
-          const dzE=document.getElementById('dz-expedite');
-          const stE=document.getElementById('status-expedite');
-          dzE.classList.add('loaded');stE.className='dz-status ok';
-          stE.textContent='\u2705 Expediting lijst geladen via SharePoint';
-        }
-
-        statusEl.textContent='\u2705 Alle bestanden geladen via SharePoint \u2014 kies een tool bovenaan.';
-        statusEl.style.color='#22c55e';
-      }catch(err){
-        statusEl.textContent='\u274C '+err.message;
-        statusEl.style.color='#ef4444';
-        console.error('SharePoint login error:',err);
-      }
-    });
-
-    /* ══════════════════════════════════════════════════════
-       Reset / Project wisselen knop
-    ══════════════════════════════════════════════════════ */
-    document.getElementById('btn-reset-cache').addEventListener('click', async () => {
-      const ok = confirm(
-        'Wil je de opgeslagen bestanden wissen?\n\n' +
-        'Je kunt daarna een ander project koppelen.\n' +
-        '(Moederlijst + Expediting lijst worden verwijderd)'
-      );
-      if (!ok) return;
-
-      try {
-        await window.IHC_clearCache(['moederlijst', 'expediting']);
-
-        /* Reset drop zones UI */
-        ['dz-moeder', 'dz-expedite'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.classList.remove('loaded');
-        });
-        const stM = document.getElementById('status-moeder');
-        const stE = document.getElementById('status-expedite');
-        if (stM) { stM.className = 'dz-status pending'; stM.textContent = '\u23F3 Nog niet geladen'; }
-        if (stE) { stE.className = 'dz-status pending'; stE.textContent = '\u23F3 Nog niet geladen'; }
-
-        /* Reset file inputs */
-        const fM = document.getElementById('file-moeder');
-        const fE = document.getElementById('file-expedite');
-        if (fM) fM.value = '';
-        if (fE) fE.value = '';
-
-        /* Status melding */
-        const sp = document.getElementById('sp-status');
-        if (sp) { sp.textContent = '\u2705 Cache gewist \u2014 upload een nieuw project'; sp.style.color = '#f59e0b'; }
-      } catch (err) {
-        alert('Fout bij wissen: ' + err.message);
-      }
-    });
-        
-  })();
-  </script>
-  <script src="shared/data-bridge.js"></script>
+  <footer>Royal IHC — Intern gebruik · Logistics &amp; Expediting</footer>
 </body>
 </html>
