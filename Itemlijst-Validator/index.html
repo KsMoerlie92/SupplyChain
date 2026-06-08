@@ -74,20 +74,17 @@
 <script src="../PO-Matcher/js/utils.js"></script>
 <script src="../PO-Matcher/js/state.js"></script>
 <script src="../PO-Matcher/js/validator.js"></script>
-
-<!-- Route setStatus to #val-summary in standalone mode -->
 <script>
-(function () {
-  const _origSetStatus = setStatus;
-  setStatus = function (msg, isError) {
-    // Write to val-summary (visible) instead of status-msg (hidden)
-    const el = document.getElementById('val-summary');
-    if (el) el.innerHTML = isError
-      ? `<span style="color:var(--red,#D91F2C)">${esc(String(msg))}</span>`
-      : `<span style="color:var(--muted,#6b7a99)">${String(msg)}</span>`;
-  };
-})();
+// Override setStatus to write to #val-summary (visible) instead of #status-msg (hidden)
+setStatus = function(msg, isError) {
+  const el = document.getElementById('val-summary');
+  if (el) el.innerHTML = isError
+    ? '<span style="color:#ef4444">' + String(msg) + '</span>'
+    : '<span style="color:var(--muted)">' + String(msg) + '</span>';
+};
 </script>
+
+
 
 <script src="../shared/shared.js"></script>
 </body>
