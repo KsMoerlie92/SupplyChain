@@ -436,7 +436,7 @@ function renderValidationTable(usdPrice, usdRate) {
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
     return `<tr class="val-row ${rowCls}">
       <td class="val-cell val-cell-num">${ri+1}</td>
-      <td class="val-cell" style="text-align:center">${rowStatus}</td>
+      <td class="val-cell" style="text-align:center;white-space:nowrap">${rowStatus} <button type="button" class="exm-mailbtn sm" title="Mail leverancier over deze regel" onclick="valMail(${ri})">✉</button></td>
       ${cells}
     </tr>`;
   }).join('');
@@ -450,6 +450,16 @@ function valCellEdit(rowIdx, colIdx, value) {
     _valRows[rowIdx].cells[colIdx] = value;
     _valRows[rowIdx]._edited = true;
   }
+}
+
+// ── Expediting Mailer hook: mail de leverancier over deze Itemlijst-regel ───
+function valMail(ri) {
+  const r = _valRows[ri];
+  if (!r) return;
+  if (!window.ExpeditingMailer) { alert('Expediting Mailer niet geladen.'); return; }
+  const po = String(r.cells[COL.C] ?? '').trim();   // C = IHC PO
+  if (!po) { alert('Geen IHC PO op deze regel — vul kolom C in.'); return; }
+  ExpeditingMailer.openForPO(po, { templateId: 'documentatie_verzoek_nl' });
 }
 
 // ── Export corrected Itemlijst ─────────────────────────────────────────────
