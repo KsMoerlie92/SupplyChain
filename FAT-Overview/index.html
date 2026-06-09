@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAT Overview | IHC Expediting</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/nav.css">
+</head>
+<body>
+
+  <!-- ═══════ HEADER ═══════ -->
+  <div class="header">
+    <div>
+      <h1>🧪 FAT <span class="accent">Overview</span> <span class="version">v2.1</span></h1>
+      <div class="sub">IHC Expediting — chronologisch overzicht van geplande en nog te bezoeken FAT's</div>
+    </div>
+    <div class="sub" id="fileLabel">Geen bestand geladen</div>
+  </div>
+
+  <div class="container">
+
+    <!-- Library error banner -->
+    <div class="lib-error" id="libError">⛔ SheetJS library kon niet worden geladen. Controleer je internetverbinding.</div>
+
+    <!-- ═══════ UPLOAD ZONE ═══════ -->
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">📁</div>
+      <p><strong>Sleep hier je FAT CLIPPED bestand heen</strong></p>
+      <p>of klik om een bestand te selecteren</p>
+      <div class="formats">.xlsx / .xlsm / .xls — ondersteunt zowel FAT CLIPPED als directe FAT-list indeling</div>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+    </div>
+
+    <!-- ═══════ STATS BAR ═══════ -->
+    <div class="stats-bar" id="statsBar" style="display:none">
+      <div class="stat-card">
+        <div class="num" id="statTotal">0</div>
+        <div class="label">Totaal regels</div>
+      </div>
+      <div class="stat-card green">
+        <div class="num" id="statUpcoming">0</div>
+        <div class="label">Nog te bezoeken</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="num" id="statAttention">0</div>
+        <div class="label">Leadtime afwijking</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="num" id="statClient">0</div>
+        <div class="label">Client required</div>
+      </div>
+    </div>
+
+    <!-- ═══════ CONTROLS ═══════ -->
+    <div class="controls" id="controlsBar" style="display:none">
+      <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+      <button class="btn btn-toggle" id="btnUpcoming" onclick="toggleFilter('upcoming')">📅 Upcoming</button>
+      <button class="btn btn-toggle" id="btnAttention" onclick="toggleFilter('attention')">⚠️ Afwijkingen</button>
+      <button class="btn btn-toggle" id="btnClient" onclick="toggleFilter('client')">👥 Client required</button>
+      <input type="text" id="searchBox" class="search-box" placeholder="🔍 Zoek op system no, PO, naam, leverancier, remarks..." oninput="renderCurrentView()">
+    </div>
+
+    <!-- ═══════ TAB BAR ═══════ -->
+    <div class="tab-bar" id="tabBar" style="display:none">
+      <button class="tab active" id="tabSheet" onclick="switchTab('sheet')">📋 Sheet View</button>
+      <button class="tab" id="tabTimeline" onclick="switchTab('timeline')">📅 Timeline</button>
+    </div>
+
+    <!-- ═══════ SHEET VIEW ═══════ -->
+    <div class="sheet-wrap" id="sheetView" style="display:none">
+      <table class="fat-sheet" id="fatTable">
+        <thead>
+          <tr>
+            <th class="th-system">System No.</th>
+            <th class="th-po">PO Number</th>
+            <th class="th-name">Name</th>
+            <th class="th-fat">FAT</th>
+            <th class="th-vendor">Leverancier</th>
+            <th class="th-location">FAT Location</th>
+            <th class="th-client">Client<br>Required</th>
+            <th class="th-fatdate">Expected FAT Date<br><span class="th-sub">(Yellow = confirmed by supplier)</span></th>
+            <th class="th-invite">Client invite<br>before</th>
+            <th class="th-protocol">Protocol<br>goedgekeurd</th>
+            <th class="th-ihc">Aanwezig IHC</th>
+            <th class="th-klant">Aanwezig<br>klant</th>
+            <th class="th-delivery">Planned Delivery<br>Date (exw)</th>
+            <th class="th-remarks">Remarks</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══════ TIMELINE VIEW ═══════ -->
+    <div class="timeline-wrap" id="timelineView" style="display:none">
+      <div id="timelineContainer"></div>
+    </div>
+
+    <!-- ═══════ LEGEND ═══════ -->
+    <div class="legend" id="legend" style="display:none">
+      <div><span class="legend-box yellow"></span> Expected FAT Date (geel = bevestigd door leverancier)</div>
+      <div><span class="legend-box blue"></span> Client attendance required</div>
+      <div><span class="legend-box red"></span> Leadtime afwijking FAT vs leverdatum (&lt;28 of &gt;35 dagen)</div>
+      <div><span class="legend-box green"></span> Protocol goedgekeurd / detail informatie</div>
+    </div>
+
+    <!-- ═══════ INFO PANEL ═══════ -->
+    <div class="info-panel" id="infoPanel">
+      <h3>ℹ️ Kolommapping FAT CLIPPED → Sheet weergave</h3>
+      <table class="mapping-table">
+        <thead><tr><th>Sheet kolom</th><th>Bron (FAT CLIPPED)</th><th>Toelichting</th></tr></thead>
+        <tbody>
+          <tr><td>System No.</td><td>Design Object ID</td><td>Wordt direct overgenomen</td></tr>
+          <tr><td>PO Number</td><td>Order No</td><td>Inkoop ordernummer</td></tr>
+          <tr><td>Name</td><td>Part Description</td><td>Beschrijving van het onderdeel</td></tr>
+          <tr><td>FAT</td><td>—</td><td>Vaste waarde "FAT"</td></tr>
+          <tr><td>Leverancier</td><td>Vendor Name</td><td>Naam leverancier</td></tr>
+          <tr><td>FAT Location</td><td>Test Location</td><td>Locatie van de FAT</td></tr>
+          <tr><td>Client Required</td><td>Customer Attendance ID</td><td>"x" indien klant aanwezig moet zijn</td></tr>
+          <tr><td>Expected FAT Date</td><td>Date Required</td><td>Geplande FAT datum</td></tr>
+          <tr><td>Client invite before</td><td><em>berekend</em></td><td>FAT datum − 14 dagen (alleen bij client required)</td></tr>
+          <tr><td>Protocol goedgekeurd</td><td>Approved / IHC Acceptance Description</td><td>"Y" bij status Approved / APP</td></tr>
+          <tr><td>Aanwezig IHC</td><td>Responsible Name</td><td>Verantwoordelijke IHC medewerker</td></tr>
+          <tr><td>Aanwezig klant</td><td>Customer Attendance ID</td><td>"x" indien klant aanwezig</td></tr>
+          <tr><td>Planned Delivery Date (exw)</td><td>Wanted Delivery Date</td><td>Rood gemarkeerd bij leadtime afwijking</td></tr>
+          <tr><td>Remarks</td><td><em>samengesteld</em></td><td>Leadtime status + Invitation ID + Additional Information</td></tr>
+        </tbody>
+      </table>
+      <p class="info-note">💡 <strong>Directe FAT-list bestanden</strong> (zoals 260216 - 01320-FAT-list) worden ook herkend — kolommen worden dan 1:1 overgenomen op basis van de headernamen.</p>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="loadFallbackXLSX()"></script>
+  <script src="app.js"></script>
+  <script src="../shared/shared.js"></script>
+</body>
+</html>
