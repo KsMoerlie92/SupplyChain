@@ -394,7 +394,7 @@ function renderLateItems() {
       <td class="rc">${i + 1}</td>
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
-      <td>${esc(r.colJ)} ${relBadge}</td>
+      <td>${esc(r.colJ)} ${relBadge} <button type="button" class="exm-mailbtn sm" title="Mail leverancier over deze PO" onclick="event.stopPropagation(); if(window.ExpeditingMailer){ExpeditingMailer.openForPO('${String(r.colA).replace(/'/g,'')}');}else{alert('Expediting Mailer niet geladen.');}">✉</button></td>
       <td class="date-cell">${_fmtDate(r.tDate)}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.uDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
