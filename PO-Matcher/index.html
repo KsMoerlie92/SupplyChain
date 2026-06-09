@@ -9,6 +9,11 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="../shared/nav.css">
   <link rel="stylesheet" href="../shared/expediting-mailer.css">
+  <style>
+    #result-table thead .th-sort { cursor: pointer; user-select: none; }
+    #result-table thead .th-sort:hover { color: var(--ihc-teal, #00B4D8); }
+    #result-table thead .sort-ind { font-size: .8em; opacity: .85; }
+  </style>
 </head>
 <body>
 
@@ -157,11 +162,11 @@
         <table id="result-table">
           <thead>
             <tr>
-              <th>IHC PO + Item <small>Expediting referentie</small></th>
-              <th>Leverancier <small>Moeder · Kol K</small></th>
-              <th>Qty <small>Moeder F / Exp O</small></th>
-              <th>Moeder Kol E</th>
-              <th>Status</th>
+              <th class="th-sort" onclick="sortResultTable('ref')">IHC PO + Item <small>Expediting referentie</small><span class="sort-ind" id="si-ref"></span></th>
+              <th class="th-sort" onclick="sortResultTable('supplier')">Leverancier <small>Moeder · Kol K</small><span class="sort-ind" id="si-supplier"></span></th>
+              <th class="th-sort" onclick="sortResultTable('qty')">Qty <small>Moeder F / Exp O</small><span class="sort-ind" id="si-qty"></span></th>
+              <th class="th-sort" onclick="sortResultTable('colE')">Moeder Kol E<span class="sort-ind" id="si-colE"></span></th>
+              <th class="th-sort" onclick="sortResultTable('status')">Status<span class="sort-ind" id="si-status"></span></th>
             </tr>
           </thead>
           <tbody id="result-tbody"></tbody>
