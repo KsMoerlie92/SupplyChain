@@ -296,6 +296,7 @@ async function runValidation() {
   const btn = document.getElementById('btn-val-run');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Valideren…'; }
 
+  try {
   // Get USD rate if needed
   const pHeader  = _valHeaders[COL.P] || '';
   const usdPrice = isUSD(pHeader);
@@ -347,6 +348,13 @@ async function runValidation() {
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
+  } catch (err) {
+    console.error('Validatie mislukt:', err);
+    if (sumEl) sumEl.innerHTML = '<span style="color:#ef4444">❌ Validatie mislukt: ' + esc(String((err && err.message) || err)) + '</span>';
+  } finally {
+    // Knop altijd herstellen — kan nooit blijven hangen op "Valideren…"
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Valideer'; }
+  }
 }
 
 // ── Render validation table ────────────────────────────────────────────────
