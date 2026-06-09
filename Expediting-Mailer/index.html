@@ -1,531 +1,149 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Expediting Mailer · Royal IHC</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expediting Mailer · IHC Expedite 2.0</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="js/templates.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="../shared/expediting-mailer.css">
 <style>
-:root{
-  --navy:#012a4a; --navy-2:#013a63; --navy-3:#01497c;
-  --teal:#2c7da0; --teal-2:#61a5c2;
-  --red:#bc3908; --red-2:#d64545;
-  --amber:#e09f3e; --amber-2:#f0c059;
-  --green:#2a9d8f;
-  --ink:#0d1b2a; --muted:#5b6b7b; --line:#dbe4ec;
-  --bg:#eef3f7; --panel:#ffffff; --panel-2:#f7fafc;
-  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{font-family:var(--mono);background:var(--bg);color:var(--ink);font-size:13px;line-height:1.45}
-button{font-family:var(--mono);cursor:pointer}
-input,select{font-family:var(--mono);font-size:12.5px}
-
-/* ---- top bar (suite-stijl) ---- */
-header.topbar{background:var(--navy);color:#fff;display:flex;align-items:center;gap:18px;
-  padding:0 18px;height:52px;border-bottom:3px solid var(--teal)}
-.topbar .brand{font-weight:800;letter-spacing:.5px;font-size:14px;white-space:nowrap}
-.topbar .brand span{color:var(--amber-2)}
-nav.suite{display:flex;gap:2px;flex:1;overflow:auto}
-nav.suite a{color:#cfe2ef;text-decoration:none;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
-nav.suite a:hover{background:var(--navy-2);color:#fff}
-nav.suite a.active{background:var(--teal);color:#fff;font-weight:700}
-
-/* ---- layout ---- */
-.wrap{max-width:1500px;margin:0 auto;padding:16px}
-.dropzone{background:var(--panel);border:2px dashed var(--teal-2);border-radius:12px;
-  padding:34px;text-align:center;transition:.15s}
-.dropzone.drag{background:#e6f1f7;border-color:var(--teal)}
-.dropzone h2{margin:0 0 6px;font-size:16px;color:var(--navy)}
-.dropzone p{margin:4px 0;color:var(--muted)}
-.btn{background:var(--teal);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:700;font-size:12.5px}
-.btn:hover{background:var(--teal-2)}
-.btn.navy{background:var(--navy-2)} .btn.navy:hover{background:var(--navy-3)}
-.btn.red{background:var(--red)} .btn.red:hover{background:var(--red-2)}
-.btn:disabled{background:#b9c6d1;cursor:not-allowed}
-
-.grid{display:grid;grid-template-columns:380px 1fr;gap:16px;margin-top:14px}
-@media(max-width:1080px){.grid{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.panel .ph{background:var(--navy);color:#fff;padding:10px 14px;font-weight:700;font-size:12.5px;
-  display:flex;align-items:center;justify-content:space-between}
-.panel .pb{padding:12px 14px}
-
-/* ---- worklist ---- */
-.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.tools input[type=text]{flex:1;min-width:120px;padding:7px 10px;border:1px solid var(--line);border-radius:7px}
-.chip{border:1px solid var(--line);background:var(--panel-2);border-radius:20px;padding:6px 11px;font-size:11px;font-weight:600;color:var(--muted)}
-.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-.suplist{max-height:62vh;overflow:auto;border-top:1px solid var(--line)}
-.sup{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
-.sup:hover{background:var(--panel-2)}
-.sup.sel{background:#e6f1f7;box-shadow:inset 3px 0 0 var(--teal)}
-.score{font-weight:800;min-width:46px;text-align:center;padding:6px 0;border-radius:7px;color:#fff;font-size:13px}
-.s-hi{background:var(--red)} .s-md{background:var(--amber)} .s-lo{background:var(--green)}
-.sup .nm{flex:1;min-width:0}
-.sup .nm b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sup .nm small{color:var(--muted);font-size:10.5px}
-.mini{display:inline-block;margin-right:7px}
-.mini.l{color:var(--red)} .mini.u{color:var(--amber)} .mini.p{color:var(--teal)}
-
-/* ---- compose ---- */
-.empty{padding:48px;text-align:center;color:var(--muted)}
-.row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.fld{flex:1;min-width:180px}
-.fld label{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
-.fld input,.fld select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#fff}
-.toggle{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--red);user-select:none}
-.lines{width:100%;border-collapse:collapse;font-size:11.5px;margin:6px 0 12px}
-.lines th{background:var(--navy-2);color:#fff;text-align:left;padding:7px 8px;font-size:10.5px;position:sticky;top:0}
-.lines td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-.lines tr:hover td{background:var(--panel-2)}
-.lwrap{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
-.badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff}
-.b-late{background:var(--red)} .b-ontime{background:var(--green)} .b-early{background:var(--teal)}
-.b-rel{background:var(--amber)} .b-conf{background:var(--navy-3)} .b-plan{background:#7a8b9a} .b-other{background:#9aa7b3}
-.subj{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-weight:700;background:#fff;color:var(--navy)}
-.preview{border:1px solid var(--line);border-radius:8px;background:#fff;padding:14px;max-height:340px;overflow:auto;
-  font-family:Calibri,Arial,sans-serif;font-size:13px;line-height:1.5;color:#222;margin-top:6px}
-.preview table{border-collapse:collapse;width:100%;margin-top:8px}
-.preview th{background:#013a63;color:#fff;font-size:11px;padding:5px 7px;text-align:left}
-.preview td{border:1px solid #cfd8e0;padding:4px 7px;font-size:11px}
-.hint{font-size:10.5px;color:var(--muted);margin-top:4px}
-.kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;text-align:center;flex:1;min-width:88px}
-.kpi b{display:block;font-size:18px;color:var(--navy)} .kpi small{color:var(--muted);font-size:10px}
-.actions{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
-.statusbar{font-size:11px;color:var(--muted)}
+:root{--ihc-red:#D91F2C;--ihc-navy:#0A1628;--ihc-mid:#0F2040;--ihc-steel:#1e3a6e;--ihc-teal:#00B4D8;--ihc-white:#F0F4FA;--ihc-muted:#6b7a99;--ihc-mono:'JetBrains Mono','Courier New',monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',Arial,sans-serif;background:var(--ihc-navy);color:var(--ihc-white);min-height:100vh}
+.wrap{max-width:780px;margin:0 auto;padding:1.5rem}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.7rem;font-weight:800;margin-bottom:.2rem}
+h1 .r{color:var(--ihc-red)}
+.lead{color:var(--ihc-muted);margin-bottom:1.2rem;font-size:.92rem}
+.lead a{color:var(--ihc-teal)}
+.dz{background:var(--ihc-mid);border:2px dashed var(--ihc-steel);border-radius:10px;padding:2rem;text-align:center}
+.dz.drag{border-color:var(--ihc-teal)}
+.btn{display:inline-block;background:var(--ihc-teal);color:var(--ihc-navy);border:0;border-radius:7px;padding:.55rem 1.1rem;font-weight:700;font-family:var(--ihc-mono);font-size:.78rem;cursor:pointer}
+.muted{color:var(--ihc-muted);font-size:.76rem;font-family:var(--ihc-mono)}
+.banner{background:#0c2a1f;border:1px solid #2a9d6b;color:#8fe3c0;border-radius:8px;padding:.6rem .9rem;font-size:.78rem;font-family:var(--ihc-mono);margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}
+.banner a{color:#bff3dc;font-weight:700}
+.kpis{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+.kpi{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:8px;padding:.6rem .9rem;text-align:center;flex:1;min-width:84px}
+.kpi b{display:block;font-size:1.3rem;font-family:'Barlow Condensed',sans-serif;color:var(--ihc-teal)}
+.kpi small{color:var(--ihc-muted);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em}
+.panel{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:10px;overflow:hidden}
+.ph{background:var(--ihc-navy);color:#cfe0f4;padding:.6rem .9rem;font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;font-family:var(--ihc-mono);border-bottom:2px solid var(--ihc-red)}
+.pb{padding:.8rem .9rem}
+.tools{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem}
+.tools input{flex:1;min-width:120px;padding:.5rem .7rem;border:1px solid var(--ihc-steel);border-radius:7px;background:#0c1a36;color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem}
+.chip{border:1px solid var(--ihc-steel);background:#0c1a36;border-radius:16px;padding:.35rem .7rem;font-size:.7rem;font-weight:600;color:var(--ihc-muted);cursor:pointer;font-family:var(--ihc-mono)}
+.chip.on{background:var(--ihc-teal);color:var(--ihc-navy);border-color:var(--ihc-teal)}
+.suplist{max-height:60vh;overflow:auto;border-top:1px solid var(--ihc-steel)}
+.sup{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;border-bottom:1px solid var(--ihc-steel);cursor:pointer}
+.sup:hover{background:#0c1a36}
+.score{font-weight:800;min-width:44px;text-align:center;padding:.35rem 0;border-radius:6px;color:#fff;font-size:.82rem;font-family:'Barlow Condensed',sans-serif}
+.s-hi{background:var(--ihc-red)}.s-md{background:#e0a500;color:#1a1200}.s-lo{background:#2a9d6b}
+.nm{flex:1;min-width:0}.nm b{display:block;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--ihc-mono)}
+.nm small{color:var(--ihc-muted);font-size:.66rem;font-family:var(--ihc-mono)}
+.mini{margin-right:.5rem}.mini.l{color:#ff6b5e}.mini.u{color:#ffce5a}
 </style>
 </head>
 <body>
-
-<header class="topbar">
-  <div class="brand">ROYAL <span>IHC</span> · SUPPLY CHAIN</div>
-  <nav class="suite" id="suiteNav">
-    <a href="../PO-Matcher/index.html">PO Matcher</a>
-    <a href="../Itemlijst-Validator/index.html">Itemlijst Validator</a>
-    <a href="index.html" class="active">Expediting Mailer</a>
-  </nav>
-</header>
-
 <div class="wrap">
+  <h1>Expediting <span class="r">Mailer</span></h1>
+  <p class="lead">Werklijst per leverancier, gebundeld over alle projecten. Selecteer een leverancier om een
+    uitvraag op te stellen en als <code>.eml</code> in Outlook te openen.</p>
 
-  <!-- upload -->
-  <div id="dropzone" class="dropzone">
-    <h2>Expediting Mailer</h2>
-    <p>Upload de bedrijfsbrede Expeditelijst (.xlsx) om leverancier-gebundelde uitvragen op te stellen.</p>
-    <p class="hint">Tabblad <b>Result</b> · headerrij wordt automatisch gedetecteerd.</p>
-    <p style="margin-top:14px">
-      <input type="file" id="fileInput" accept=".xlsx,.xlsm" hidden>
-      <label class="btn" for="fileInput">Bestand kiezen</label>
-      &nbsp;<span class="statusbar" id="loadMsg">of sleep het bestand hierheen</span>
-    </p>
+  <div id="dropzone" class="dz">
+    <p class="muted" style="margin-bottom:.7rem">Geen centrale lijst gevonden. Upload hier, of doe dit eenmalig op de
+      <a href="../Admin/" style="color:var(--ihc-teal)">Admin-pagina</a>.</p>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsm" hidden>
+    <label class="btn" for="fileInput">Bestand kiezen</label>
+    <span class="muted" id="loadMsg" style="margin-left:.5rem">of sleep het bestand hierheen</span>
   </div>
 
-  <!-- app -->
   <div id="app" style="display:none">
+    <div class="banner" id="srcBanner"></div>
     <div class="kpis" id="kpis"></div>
-    <div class="grid">
-
-      <!-- left: prioritized worklist -->
-      <div class="panel">
-        <div class="ph">Werklijst · prioriteit <span id="supCount" class="statusbar" style="color:#cfe2ef"></span></div>
-        <div class="pb">
-          <div class="tools">
-            <input type="text" id="search" placeholder="zoek leverancier / project…">
-          </div>
-          <div class="tools">
-            <span class="chip on" data-f="all">Alle open</span>
-            <span class="chip" data-f="late">Te laat</span>
-            <span class="chip" data-f="unconf">Onbevestigd</span>
-            <span class="chip" data-f="multi">Multi-project</span>
-          </div>
-        </div>
-        <div class="suplist" id="suplist"></div>
-      </div>
-
-      <!-- right: compose -->
-      <div class="panel">
-        <div class="ph">Uitvraag opstellen <span id="composeSup" class="statusbar" style="color:#cfe2ef"></span></div>
-        <div class="pb" id="compose">
-          <div class="empty">Selecteer een leverancier in de werklijst om een gebundelde uitvraag op te stellen.</div>
+    <div class="panel">
+      <div class="ph">Werklijst · prioriteit <span id="supCount" style="color:#9fb3d1"></span></div>
+      <div class="pb">
+        <div class="tools"><input type="text" id="search" placeholder="zoek leverancier / project…"></div>
+        <div class="tools">
+          <span class="chip on" data-f="all">Alle open</span>
+          <span class="chip" data-f="late">Te laat</span>
+          <span class="chip" data-f="unconf">Onbevestigd</span>
+          <span class="chip" data-f="multi">Multi-project</span>
         </div>
       </div>
-
+      <div class="suplist" id="suplist"></div>
     </div>
   </div>
 </div>
 
+<!-- Expediting Mailer (gedeelde functie) -->
+<script src="../shared/templates.js"></script>
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script src="../shared/expediting-mailer.js"></script>
 <script>
-/* ============================================================
-   Expediting Mailer — leverancier-gebundeld, multi-project
-   ============================================================ */
-const OPEN = ['Released','Confirmed','Planned'];
-const EU = new Set(['NL','BE','DE','FR','IT','ES','PT','PL','RO','CZ','SK','HU','AT','DK','SE','FI','IE','GR','BG','HR','SI','LT','LV','EE','LU','MT','CY','EU']);
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+let LINES=[], SUPPLIERS=[], curFilter='all';
+const dz=document.getElementById('dropzone'),fi=document.getElementById('fileInput');
 
-let MODEL = [];          // alle open regels (objecten)
-let SUPPLIERS = [];      // geaggregeerd per leverancier
-let curFilter = 'all';
-let curSupplier = null;
+(async function init(){
+  const stored=await ExpeditingData.load();
+  if(stored&&stored.length){ const meta=await ExpeditingData.meta(); boot(stored,meta,true); }
+})();
 
-/* ---------- helpers ---------- */
-function toDate(v){
-  if(v==null||v==='') return null;
-  if(v instanceof Date) return isNaN(v)?null:v;
-  if(typeof v==='number'){ // excel serial
-    const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d;
-  }
-  const d=new Date(v); return isNaN(d)?null:d;
-}
-function dmy(d){ if(!d) return '—'; const z=n=>String(n).padStart(2,'0'); return `${z(d.getDate())}/${z(d.getMonth()+1)}/${d.getFullYear()}`; }
-function shortD(d){ if(!d) return '—'; return `${d.getDate()} ${MONTHS[d.getMonth()]}`; }
-function num(v){ return typeof v==='number'?v:0; }
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-
-/* ---------- file load ---------- */
-const dz=document.getElementById('dropzone'), fi=document.getElementById('fileInput');
-fi.addEventListener('change',e=>{ if(e.target.files[0]) readFile(e.target.files[0]); });
+fi.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
 ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
-dz.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) readFile(f); });
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)read(f);});
 
-function readFile(file){
+function read(file){
   document.getElementById('loadMsg').textContent='Inlezen…';
   const r=new FileReader();
-  r.onload=ev=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
-      const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
-      const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
-      buildModel(raw);
-    }catch(err){ document.getElementById('loadMsg').textContent='Fout: '+err.message; }
-  };
+  r.onload=async ev=>{ try{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+    const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const lines=ExpeditingCore.normalizeFromRaw(raw);
+    await ExpeditingData.save(lines,{filename:file.name});
+    boot(lines,{filename:file.name,uploaded:new Date().toISOString()},false);
+  }catch(err){ document.getElementById('loadMsg').textContent='Fout: '+err.message; } };
   r.readAsArrayBuffer(file);
 }
 
-/* densest of first 7 rows = headerrij */
-function detectHeader(raw){
-  let best=0,bestN=-1;
-  for(let i=0;i<Math.min(7,raw.length);i++){
-    const n=(raw[i]||[]).filter(c=>c!=null&&c!=='').length;
-    if(n>bestN){bestN=n;best=i;}
-  }
-  return best;
-}
-
-function buildModel(raw){
-  const h=detectHeader(raw);
-  const header=raw[h].map(x=>String(x==null?'':x).trim());
-  const ix={}; header.forEach((c,i)=>{ if(!(c in ix)) ix[c]=i; });
-  const get=(row,name)=>{ const i=ix[name]; return i==null?null:row[i]; };
-
-  MODEL=[];
-  for(let r=h+1;r<raw.length;r++){
-    const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
-    const status=get(row,'PO Line Status');
-    if(!OPEN.includes(status)) continue;
-    const lwr=toDate(get(row,'Latest Wanted Receipt Date'));
-    const planned=toDate(get(row,'Planned Delivery Date'));
-    const lastConf=toDate(get(row,'Last Confirmed'));
-    const o={
-      po:get(row,'Purchase Order No'),
-      sub:get(row,'Sub Project ID'),
-      subDesc:get(row,'Sub Project Description'),
-      supplier:get(row,'Supplier Name'),
-      buyer:get(row,'Buyer Name'),
-      tc:get(row,'Technical Coordinator Name'),
-      part:get(row,'Part No'),
-      desc:get(row,'Description'),
-      uref:get(row,'Unified Reference Code'),
-      qtyRec:get(row,'Purchase Qty to Receive'),
-      status, dstatus:get(row,'Delivery Status'),
-      lwr, planned, lastConf,
-      lastExp:toDate(get(row,'Last Expedited')),
-      total:num(get(row,'Total/Currency')),
-      origin:get(row,'Country of Origin'),
-      customs:get(row,'Customs Stat No'),
-      terms:get(row,'Delivery Terms'),
-      fatReq:toDate(get(row,'FAT Date Required')),
-    };
-    o.unconf = (status==='Released') || !lastConf;
-    o.late = o.dstatus==='Late';
-    o.score = lineScore(o);
-    MODEL.push(o);
-  }
-  aggregate();
-  renderKpis(); renderSuppliers();
+function boot(lines,meta,fromStore){
+  LINES=lines; SUPPLIERS=ExpeditingCore.aggregate(LINES);
   dz.style.display='none'; document.getElementById('app').style.display='block';
+  document.getElementById('srcBanner').innerHTML=
+    '<span>Centrale lijst: <b>'+ExpeditingCore.esc((meta&&meta.filename)||'lijst')+'</b>'+(fromStore?' (uit opslag)':' (zojuist geüpload)')+' · '+LINES.length.toLocaleString('nl-NL')+' open regels</span>'+
+    '<a href="../Admin/">beheren</a>';
+  renderKpis(); renderSuppliers();
 }
-
-/* ---------- scoring (urgentie × impact) ---------- */
-function lineScore(o){
-  let s=0;
-  if(o.lwr){
-    const days=(TODAY-o.lwr)/86400000;
-    if(days>0) s+=Math.min(days,60)*0.6;      // te laat = zwaar
-    else s+=Math.max(0,14+days)*0.25;          // nadert binnen 14 dagen
-  }
-  if(o.status==='Released'||!o.lastConf) s+=10;
-  else if(o.planned&&o.lastConf&&o.lastConf<o.planned) s+=4;
-  if(o.total>100000) s+=8; else if(o.total>25000) s+=4; else if(o.total>5000) s+=2;
-  const oc=(o.origin||'').toString().trim().toUpperCase();
-  if(oc&&!EU.has(oc)) s+=5;
-  if(o.customs) s+=2;
-  const t=(o.terms||'').toString().toUpperCase();
-  if(t&&!t.startsWith('DAP')) s+=2;            // wij regelen transport = meer lead-time-risico
-  return s;
-}
-
-function aggregate(){
-  const m=new Map();
-  for(const o of MODEL){
-    const k=o.supplier||'(onbekend)';
-    if(!m.has(k)) m.set(k,{supplier:k,lines:[],projects:new Set(),buyers:new Map(),score:0,late:0,unconf:0,value:0});
-    const g=m.get(k);
-    g.lines.push(o);
-    if(o.sub) g.projects.add(o.sub);
-    if(o.buyer) g.buyers.set(o.buyer,(g.buyers.get(o.buyer)||0)+1);
-    g.score+=o.score; if(o.late)g.late++; if(o.unconf)g.unconf++; g.value+=o.total;
-  }
-  SUPPLIERS=[...m.values()];
-  SUPPLIERS.forEach(g=>{ g.nProj=g.projects.size;
-    g.topBuyer=[...g.buyers.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0])[0]||''; });
-  SUPPLIERS.sort((a,b)=>b.score-a.score);
-}
-
-/* ---------- render: KPIs ---------- */
 function renderKpis(){
-  const totalLines=MODEL.length;
-  const multi=SUPPLIERS.filter(s=>s.nProj>1).length;
-  const late=MODEL.filter(o=>o.late).length;
-  const unconf=MODEL.filter(o=>o.unconf).length;
-  document.getElementById('kpis').innerHTML=
-    kpi(SUPPLIERS.length,'leveranciers')+kpi(totalLines,'open regels')+
-    kpi(multi,'multi-project')+kpi(late,'te laat')+kpi(unconf,'onbevestigd');
+  const multi=SUPPLIERS.filter(s=>s.nProj>1).length, late=LINES.filter(o=>o.late).length, unconf=LINES.filter(o=>o.unconf).length;
+  document.getElementById('kpis').innerHTML=[[SUPPLIERS.length,'leveranciers'],[LINES.length,'open regels'],[multi,'multi-project'],[late,'te laat'],[unconf,'onbevestigd']]
+    .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
 }
-function kpi(v,l){ return `<div class="kpi"><b>${v.toLocaleString('nl-NL')}</b><small>${l}</small></div>`; }
-
-/* ---------- render: supplier worklist ---------- */
-function passFilter(g){
-  if(curFilter==='late') return g.late>0;
-  if(curFilter==='unconf') return g.unconf>0;
-  if(curFilter==='multi') return g.nProj>1;
-  return true;
-}
+function passFilter(g){ if(curFilter==='late')return g.late>0; if(curFilter==='unconf')return g.unconf>0; if(curFilter==='multi')return g.nProj>1; return true; }
 function renderSuppliers(){
   const q=(document.getElementById('search').value||'').toLowerCase();
-  const list=SUPPLIERS.filter(g=>passFilter(g)).filter(g=>{
-    if(!q) return true;
-    if(g.supplier.toLowerCase().includes(q)) return true;
-    return [...g.projects].some(p=>String(p).toLowerCase().includes(q));
-  });
+  const list=SUPPLIERS.filter(passFilter).filter(g=>!q||g.supplier.toLowerCase().includes(q)||[...g.projects].some(p=>String(p).toLowerCase().includes(q)));
   document.getElementById('supCount').textContent=list.length+' van '+SUPPLIERS.length;
-  const maxS=SUPPLIERS.length?SUPPLIERS[0].score:1;
-  const el=document.getElementById('suplist');
+  const maxS=SUPPLIERS.length?SUPPLIERS[0].score:1, el=document.getElementById('suplist');
   el.innerHTML=list.slice(0,300).map(g=>{
     const cls=g.score>maxS*0.5?'s-hi':g.score>maxS*0.2?'s-md':'s-lo';
-    return `<div class="sup ${curSupplier===g.supplier?'sel':''}" data-s="${esc(g.supplier)}">
-      <div class="score ${cls}">${Math.round(g.score)}</div>
-      <div class="nm"><b>${esc(g.supplier)}</b>
-        <small>
-          <span class="mini">${g.lines.length} regels · ${g.nProj} proj</span>
-          ${g.late?`<span class="mini l">▲ ${g.late} laat</span>`:''}
-          ${g.unconf?`<span class="mini u">● ${g.unconf} onbev.</span>`:''}
-        </small></div>
-    </div>`;
-  }).join('')||'<div class="empty">Geen leveranciers in deze selectie.</div>';
-  el.querySelectorAll('.sup').forEach(n=>n.onclick=()=>selectSupplier(n.dataset.s));
+    return '<div class="sup" data-s="'+ExpeditingCore.esc(g.supplier)+'">'+
+      '<div class="score '+cls+'">'+Math.round(g.score)+'</div>'+
+      '<div class="nm"><b>'+ExpeditingCore.esc(g.supplier)+'</b><small>'+
+        '<span class="mini">'+g.lines.length+' regels · '+g.nProj+' proj</span>'+
+        (g.late?'<span class="mini l">▲ '+g.late+' laat</span>':'')+
+        (g.unconf?'<span class="mini u">● '+g.unconf+' onbev.</span>':'')+
+      '</small></div></div>';
+  }).join('')||'<div style="padding:1.8rem;text-align:center;color:var(--ihc-muted);font-family:var(--ihc-mono)">Geen leveranciers in deze selectie.</div>';
+  el.querySelectorAll('.sup').forEach(n=>n.onclick=()=>ExpeditingMailer.openForSupplier(n.dataset.s));
 }
-
 document.getElementById('search').addEventListener('input',renderSuppliers);
-document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
-  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
-  c.classList.add('on'); curFilter=c.dataset.f; renderSuppliers();
-});
-
-/* ---------- compose ---------- */
-function buyerBook(){ try{return JSON.parse(localStorage.getItem('ihc_buyer_emails')||'{}');}catch{return {}} }
-function saveBuyer(name,email){ const b=buyerBook(); if(name&&email){b[name]=email;localStorage.setItem('ihc_buyer_emails',JSON.stringify(b));} }
-
-function selectSupplier(name){
-  curSupplier=name; renderSuppliers();
-  const g=SUPPLIERS.find(s=>s.supplier===name); if(!g) return;
-  document.getElementById('composeSup').textContent=name;
-  const lines=[...g.lines].sort((a,b)=>b.score-a.score);
-
-  const langOpts=t=>EXPEDITING_TEMPLATES.templates.filter(x=>x.taal===t)
-    .map(x=>`<option value="${x.id}">${esc(x.naam)}</option>`).join('');
-  const ccPrefill=buyerBook()[g.topBuyer]||'';
-
-  document.getElementById('compose').innerHTML=`
-    <div class="row">
-      <div class="fld"><label>Taal</label>
-        <select id="lang"><option value="NL">Nederlands</option><option value="EN">Engels</option></select></div>
-      <div class="fld" style="flex:2"><label>Reden van aanschrijven (template)</label>
-        <select id="tpl">${langOpts('NL')}</select></div>
-      <div class="fld" style="max-width:140px"><label>Urgentie</label>
-        <label class="toggle"><input type="checkbox" id="urgent"> URGENT</label></div>
-    </div>
-    <div class="row">
-      <div class="fld"><label>Aan (leverancier — handmatig)</label>
-        <input type="text" id="toAddr" placeholder="leverancier@voorbeeld.com"></div>
-      <div class="fld"><label>Cc — Buyer: ${esc(g.topBuyer||'—')}</label>
-        <input type="text" id="ccAddr" placeholder="buyer@royalihc.com" value="${esc(ccPrefill)}"></div>
-    </div>
-
-    <label class="fld" style="display:block"><span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Regels in deze uitvraag (${lines.length})</span></label>
-    <div class="tools" style="margin:4px 0 2px">
-      <span class="chip on" data-lf="all">Alle</span>
-      <span class="chip" data-lf="late">Alleen te laat</span>
-      <span class="chip" data-lf="unconf">Alleen onbevestigd</span>
-      <button class="btn navy" style="padding:5px 10px;font-size:11px" id="selAll">Alles aan/uit</button>
-    </div>
-    <div class="lwrap"><table class="lines"><thead><tr>
-      <th style="width:26px"></th><th>Project</th><th>PO-regel</th><th>Omschrijving</th>
-      <th>Open</th><th>Lev.status</th><th>Status</th><th>Gewenst</th><th>Laatst bev.</th></tr></thead>
-      <tbody id="lineBody"></tbody></table></div>
-
-    <label class="fld" style="display:block;margin-top:12px"><span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Onderwerp</span></label>
-    <input type="text" id="subject" class="subj">
-    <div class="hint">Opbouw: Project - PO - Leverancier - Reden · bij meerdere projecten → "Royal IHC Projects [aantal]".</div>
-
-    <label class="fld" style="display:block;margin-top:12px"><span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Voorbeeld mailtekst</span></label>
-    <div class="preview" id="preview"></div>
-
-    <div class="actions">
-      <button class="btn red" id="genEml">⬇ Genereer .eml (opent als concept in Outlook)</button>
-      <span class="statusbar" id="genMsg"></span>
-    </div>`;
-
-  // template list reacts to language
-  const langSel=document.getElementById('lang'), tplSel=document.getElementById('tpl');
-  langSel.onchange=()=>{ tplSel.innerHTML=langOpts(langSel.value); refresh(); };
-  tplSel.onchange=refresh; document.getElementById('urgent').onchange=refresh;
-  document.getElementById('toAddr').oninput=()=>{};
-  let lineFilter='all';
-  document.querySelectorAll('[data-lf]').forEach(c=>c.onclick=()=>{
-    document.querySelectorAll('[data-lf]').forEach(x=>x.classList.remove('on'));
-    c.classList.add('on'); lineFilter=c.dataset.lf; renderLines();
-  });
-  const sel=new Set(lines.map((_,i)=>i)); // standaard alles geselecteerd
-  document.getElementById('selAll').onclick=()=>{
-    const visible=visibleIdx(); const allOn=visible.every(i=>sel.has(i));
-    visible.forEach(i=>allOn?sel.delete(i):sel.add(i)); renderLines();
-  };
-  function visibleIdx(){ return lines.map((o,i)=>i).filter(i=>{
-    const o=lines[i]; if(lineFilter==='late')return o.late; if(lineFilter==='unconf')return o.unconf; return true; }); }
-  function renderLines(){
-    const vis=visibleIdx();
-    document.getElementById('lineBody').innerHTML=vis.map(i=>{
-      const o=lines[i];
-      return `<tr><td><input type="checkbox" data-i="${i}" ${sel.has(i)?'checked':''}></td>
-        <td><b>${esc(o.sub||'—')}</b></td>
-        <td>${esc(o.po||'—')}</td>
-        <td>${esc((o.desc||'').toString().split('\\n')[0]).slice(0,46)}</td>
-        <td>${o.qtyRec??'—'}</td>
-        <td>${dbadge(o.dstatus)}</td>
-        <td>${sbadge(o.status)}</td>
-        <td>${dmy(o.lwr)}</td>
-        <td>${dmy(o.lastConf)}</td></tr>`;
-    }).join('');
-    document.querySelectorAll('#lineBody input[type=checkbox]').forEach(cb=>cb.onchange=()=>{
-      const i=+cb.dataset.i; cb.checked?sel.add(i):sel.delete(i); refresh();
-    });
-    refresh();
-  }
-  function chosen(){ return [...sel].sort((a,b)=>a-b).map(i=>lines[i]); }
-  function refresh(){ buildSubjectAndPreview(g,chosen()); }
-  window.__gen=()=>{ const ch=chosen(); if(!ch.length){alert('Selecteer minimaal één regel.');return;}
-    saveBuyer(g.topBuyer,document.getElementById('ccAddr').value.trim());
-    generateEml(g,ch); };
-  document.getElementById('genEml').onclick=()=>window.__gen();
-  renderLines();
-}
-
-function sbadge(s){ const m={Released:'b-rel',Confirmed:'b-conf',Planned:'b-plan'}; return `<span class="badge ${m[s]||'b-other'}">${esc(s)}</span>`; }
-function dbadge(s){ const m={Late:'b-late','On Time':'b-ontime',Early:'b-early'}; return `<span class="badge ${m[s]||'b-other'}">${esc(s||'—')}</span>`; }
-
-/* ---------- subject + preview ---------- */
-function curTpl(){ return EXPEDITING_TEMPLATES.templates.find(t=>t.id===document.getElementById('tpl').value); }
-
-function buildSubject(g,lines){
-  const tpl=curTpl();
-  const projs=[...new Set(lines.map(o=>o.sub).filter(Boolean))];
-  const pos=[...new Set(lines.map(o=>o.po).filter(Boolean))];
-  const urgent=document.getElementById('urgent').checked?'URGENT - ':'';
-  const reason=tpl?tpl.onderwerp_issue:'';
-  if(projs.length>1){
-    return `${urgent}Royal IHC Projects [${projs.length}] - ${g.supplier} - ${reason}`;
-  }
-  const proj=projs[0]||'—';
-  const poSeg=pos.length>1?`[${pos.length}] PO's`:(pos[0]||'—');
-  return `${urgent}${proj} - ${poSeg} - ${g.supplier} - ${reason}`;
-}
-
-function fillPlaceholders(html,g,lines){
-  const supplier=esc(g.supplier);
-  const single=lines.length===1?lines[0]:null;
-  const poTxt = single?esc(single.po):(document.getElementById('lang').value==='EN'?'the purchase orders listed below':'de onderstaande inkooporders');
-  const urefTxt = single?esc(single.uref||'—'):(document.getElementById('lang').value==='EN'?'see table below':'zie onderstaande tabel');
-  return html
-    .replace(/\[Naam leverancier\]/g,supplier).replace(/\[Supplier Name\]/g,supplier)
-    .replace(/\[PO[\u2011\-]nummer\]|\[PO[\u2011\-]regel\]/g,poTxt)
-    .replace(/\[PO number\]|\[PO Number\]/g,poTxt)
-    .replace(/\[Design Object[\u2011\-]nummer\]/g,urefTxt).replace(/\[Design Object Number\]/g,urefTxt);
-}
-
-function lineTableHtml(lines){
-  const h=`<tr><th>Project</th><th>PO-regel</th><th>Omschrijving</th><th>Open</th><th>Status</th><th>Gewenst</th><th>Laatst bevestigd</th></tr>`;
-  const rows=lines.map(o=>`<tr><td>${esc(o.sub||'—')}</td><td>${esc(o.po||'—')}</td>
-    <td>${esc((o.desc||'').toString().split('\n')[0])}</td><td>${o.qtyRec??'—'}</td>
-    <td>${esc(o.status)}</td><td>${dmy(o.lwr)}</td><td>${dmy(o.lastConf)}</td></tr>`).join('');
-  return `<table>${h}${rows}</table>`;
-}
-
-function buildBodyHtml(g,lines){
-  const tpl=curTpl(); if(!tpl) return '';
-  const body=fillPlaceholders(tpl.body_html,g,lines);
-  return `<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#222">
-    ${body}<br><br>${lineTableHtml(lines)}</div>`;
-}
-
-function buildSubjectAndPreview(g,lines){
-  const subj=document.getElementById('subject'); if(subj) subj.value=buildSubject(g,lines);
-  const pv=document.getElementById('preview'); if(pv) pv.innerHTML=lines.length?buildBodyHtml(g,lines):'<i>Geen regels geselecteerd.</i>';
-}
-
-/* ---------- .eml export (X-Unsent = bewerkbaar concept in Outlook) ---------- */
-function generateEml(g,lines){
-  const to=document.getElementById('toAddr').value.trim();
-  const cc=document.getElementById('ccAddr').value.trim();
-  const subject=document.getElementById('subject').value;
-  const html=buildBodyHtml(g,lines);
-  const eml=[
-    'X-Unsent: 1',
-    'To: '+to,
-    cc?('Cc: '+cc):null,
-    'Subject: '+subject,
-    'Content-Type: text/html; charset=utf-8',
-    'Content-Transfer-Encoding: 8bit',
-    '',
-    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>'+html+'</body></html>'
-  ].filter(x=>x!==null).join('\r\n');
-
-  const blob=new Blob([eml],{type:'message/rfc822'});
-  const url=URL.createObjectURL(blob);
-  const safe=s=>String(s||'').replace(/[^a-z0-9]+/gi,'_').slice(0,40);
-  const a=document.createElement('a');
-  a.href=url; a.download=`Expediting_${safe(g.supplier)}_${safe(curTpl().onderwerp_issue)}.eml`;
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  document.getElementById('genMsg').textContent=`✓ .eml met ${lines.length} regel(s) gegenereerd — open in Outlook, vul het adres aan en verstuur.`;
-}
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); curFilter=c.dataset.f; renderSuppliers(); });
 </script>
+<script src="../shared/shared.js"></script>
 </body>
 </html>
