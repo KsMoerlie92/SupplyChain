@@ -10,6 +10,7 @@
     { href: '../Itemlijst-Validator/',icon: '📋', label: 'Itemlijst Validator',  badge: 'Validatie'  },
     { href: '../DG-Overview/',        icon: '⚠️', label: 'DG Overview',          badge: 'Hazardous'  },
     { href: '../Expediting-Mailer/',  icon: '✉️', label: 'Expediting Mailer',    badge: 'Mailer'     },
+    { href: '../FAT-Overview/',       icon: '🏭', label: 'FAT Overview',         badge: 'FAT'        },
     { href: '../Admin/',              icon: '⚙️', label: 'Admin',                badge: 'Beheer'     },
   ];
 
