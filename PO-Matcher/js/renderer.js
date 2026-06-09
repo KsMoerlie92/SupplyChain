@@ -168,6 +168,36 @@ function applyFilters() {
   }
 }
 
+// ── Sorteren via tabelkoppen (hoofdtabel "In beide lijsten") ───────────────
+let resultSortKey = null;
+let resultSortDir = 1; // 1 = oplopend, -1 = aflopend
+function sortResultTable(key) {
+  if (resultSortKey === key) { resultSortDir = -resultSortDir; }
+  else { resultSortKey = key; resultSortDir = 1; }
+  const dir = resultSortDir;
+  const val = (r) => {
+    switch (key) {
+      case 'ref':      return String(r.xlookup || r.combined || '').toLowerCase();
+      case 'supplier': return String(r.colSupplier || '').toLowerCase();
+      case 'qty':      { const n = parseFloat(String(r.colF || '').replace(',', '.')); return isNaN(n) ? -Infinity : n; }
+      case 'colE':     return String(r.colE || '').toLowerCase();
+      case 'status':   return r.noMatch ? 1 : 0;
+      default:         return '';
+    }
+  };
+  allRows.sort((a, b) => {
+    const va = val(a), vb = val(b);
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
+  // pijl-indicatoren in de koppen bijwerken
+  document.querySelectorAll('#result-table thead .sort-ind').forEach(s => { s.textContent = ''; });
+  const ind = document.getElementById('si-' + key);
+  if (ind) ind.textContent = dir === 1 ? ' ▲' : ' ▼';
+  applyFilters(); // respecteert huidige filter + zoekterm en hertekent de tabel
+}
+
 // ── Export naar Excel ─────────────────────────────────────────────────────
 
 // ── Late Items tab ─────────────────────────────────────────────────────────

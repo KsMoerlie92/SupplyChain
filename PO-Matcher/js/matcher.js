@@ -133,8 +133,15 @@ function _doMatch() {
 
   allRows = results;
 
-  renderTable(results);
   updateStats(results, expColASize);
+
+  // Start standaard in de tab "In beide lijsten" (niet alle rijen tonen) en
+  // laad meteen de bijbehorende besturing (o.a. de "Verberg Not Received Yet"-toggle).
+  document.getElementById('filter-row').classList.add('visible');
+  document.getElementById('stats-bar').classList.add('visible');
+  const matchChip = document.querySelector('.filter-chip.match-chip');
+  if (matchChip) { setFilter('match', matchChip); }
+  else { currentFilter = 'match'; applyFilters(); }
 
   const nMatch   = results.filter(r => !r.noMatch).length;
   const nNoMatch = results.filter(r =>  r.noMatch).length;
