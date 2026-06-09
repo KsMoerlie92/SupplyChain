@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · IHC Expedite 2.0</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<style>
+:root{--ihc-red:#D91F2C;--ihc-navy:#0A1628;--ihc-mid:#0F2040;--ihc-steel:#1e3a6e;--ihc-teal:#00B4D8;--ihc-white:#F0F4FA;--ihc-muted:#6b7a99;--ihc-mono:'JetBrains Mono','Courier New',monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',Arial,sans-serif;background:var(--ihc-navy);color:var(--ihc-white);min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:1.5rem}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.7rem;font-weight:800;letter-spacing:.02em;margin-bottom:.2rem}
+h1 .r{color:var(--ihc-red)}
+.lead{color:var(--ihc-muted);margin-bottom:1.2rem;font-size:.95rem}
+.panel{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:10px;padding:1.4rem;margin-bottom:1.2rem}
+.dz{border:2px dashed var(--ihc-steel);border-radius:10px;padding:2.2rem;text-align:center;transition:.15s;cursor:pointer}
+.dz.drag{background:#0c1a36;border-color:var(--ihc-teal)}
+.dz b{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem}
+.btn{display:inline-block;background:var(--ihc-teal);color:var(--ihc-navy);border:0;border-radius:7px;padding:.6rem 1.2rem;font-weight:700;font-family:var(--ihc-mono);font-size:.8rem;cursor:pointer;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+.btn.red{background:var(--ihc-red);color:#fff}
+.muted{color:var(--ihc-muted);font-size:.78rem;font-family:var(--ihc-mono)}
+.status{padding:.7rem 1rem;border-radius:8px;font-size:.82rem;margin-top:.8rem;font-family:var(--ihc-mono)}
+.status.ok{background:#0c2a1f;border:1px solid #2a9d6b;color:#8fe3c0}
+.status.none{background:#3a2a00;border:1px solid #e0a500;color:#ffd98a}
+.kpis{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem}
+.kpi{background:#0c1a36;border:1px solid var(--ihc-steel);border-radius:8px;padding:.7rem 1rem;text-align:center;flex:1;min-width:92px}
+.kpi b{display:block;font-size:1.4rem;font-family:'Barlow Condensed',sans-serif;color:var(--ihc-teal)}
+.kpi small{color:var(--ihc-muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em}
+code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(--ihc-mono);font-size:.78rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Bedrijfsbrede Expedite<span class="r">lijst</span></h1>
+  <p class="lead">Upload de lijst hier één keer. Hij wordt centraal in de browser opgeslagen en is daarna
+    beschikbaar als mailer-functie op PO Matcher, Itemlijst Validator en de Expediting Mailer — zonder opnieuw uploaden.</p>
+
+  <div class="panel">
+    <div class="dz" id="dz" onclick="document.getElementById('file').click()">
+      <p><b>Sleep de .xlsx hierheen</b> of klik om te kiezen</p>
+      <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
+      <p class="muted" style="margin-top:.6rem">Tabblad <code>Result</code> · headerrij wordt automatisch gedetecteerd</p>
+      <p class="muted" id="msg" style="margin-top:.4rem">—</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h1 style="font-size:1.1rem;margin-bottom:.6rem">Huidige status</h1>
+    <div id="statusBox"></div>
+    <div class="kpis" id="kpis" style="display:none"></div>
+    <p style="margin-top:1rem"><button class="btn red" id="clear">Centrale lijst wissen</button></p>
+  </div>
+</div>
+
+<!-- Expediting datalaag -->
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script>
+const dz=document.getElementById('dz'),fi=document.getElementById('file');
+fi.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)read(f);});
+
+function read(file){
+  document.getElementById('msg').textContent='Inlezen…';
+  const r=new FileReader();
+  r.onload=async ev=>{ try{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+    const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const lines=ExpeditingCore.normalizeFromRaw(raw);
+    await ExpeditingData.save(lines,{filename:file.name});
+    document.getElementById('msg').textContent='Opgeslagen ✓';
+    showStatus();
+  }catch(err){ document.getElementById('msg').textContent='Fout: '+err.message; } };
+  r.readAsArrayBuffer(file);
+}
+async function showStatus(){
+  const meta=await ExpeditingData.meta(), lines=await ExpeditingData.load();
+  const box=document.getElementById('statusBox'), kpis=document.getElementById('kpis');
+  if(!meta||!lines){ box.className='status none'; box.textContent='Nog geen lijst geladen. Upload hierboven om te beginnen.'; kpis.style.display='none'; return; }
+  const sup=ExpeditingCore.aggregate(lines);
+  const multi=sup.filter(s=>s.nProj>1).length, late=lines.filter(o=>o.late).length, unconf=lines.filter(o=>o.unconf).length;
+  box.className='status ok';
+  box.innerHTML='Actief: <b>'+ExpeditingCore.esc(meta.filename||'lijst')+'</b> · geüpload '+new Date(meta.uploaded).toLocaleString('nl-NL');
+  kpis.style.display='flex';
+  kpis.innerHTML=[[lines.length,'open regels'],[sup.length,'leveranciers'],[multi,'multi-project'],[late,'te laat'],[unconf,'onbevestigd']]
+    .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
+}
+document.getElementById('clear').onclick=async()=>{ if(confirm('Centrale lijst wissen?')){ await ExpeditingData.clear(); showStatus(); } };
+showStatus();
+</script>
+<script src="../shared/shared.js"></script>
+</body>
+</html>
