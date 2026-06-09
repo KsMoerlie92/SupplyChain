@@ -547,6 +547,7 @@ function exportValidatedItemlijst() {
 function buildValHeader() {
   const thEl = document.getElementById('val-thead');
   if (!thEl) return;
+  const VIRT_COLS = new Set(Object.keys(_virtualCols));  // virtuele (door IHC toegevoegde) kolommen
   const COLS_SHOW = [
     'A','B',
     'C','D','E','F','G','H',
