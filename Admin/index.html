@@ -36,8 +36,8 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 <body>
 <div class="wrap">
   <h1>Bedrijfsbrede Expedite<span class="r">lijst</span></h1>
-  <p class="lead">Upload de lijst hier één keer. Hij wordt centraal in de browser opgeslagen en is daarna
-    beschikbaar als mailer-functie op PO Matcher, Itemlijst Validator en de Expediting Mailer — zonder opnieuw uploaden.</p>
+  <p class="lead">Upload de bedrijfsbrede Expediten (totaaloverzicht) hier één keer. Hij wordt centraal in de browser opgeslagen en is daarna
+    beschikbaar op PO Matcher (selectie op Sub Project ID), Itemlijst Validator en de Expediting Mailer — zonder opnieuw uploaden.</p>
 
   <div class="panel">
     <div class="dz" id="dz" onclick="document.getElementById('file').click()">
@@ -46,6 +46,12 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
       <p class="muted" style="margin-top:.6rem">Tabblad <code>Result</code> · headerrij wordt automatisch gedetecteerd</p>
       <p class="muted" id="msg" style="margin-top:.4rem">—</p>
     </div>
+    <p class="muted" style="margin-top:.9rem;line-height:1.55">
+      Na het inlezen wordt automatisch <code>expediting-data.json</code> gedownload.
+      Commit dat bestand naar <code>shared/</code> in de repo (net als de andere bestanden) en deploy —
+      daarna gebruikt iedereen op alle pagina's automatisch dezelfde lijst.
+      <button class="btn" id="redownload" style="margin-left:.4rem">↻ Bestand opnieuw downloaden</button>
+    </p>
   </div>
 
   <div class="panel">
@@ -61,6 +67,12 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 <script src="../shared/expediting-data.js"></script>
 <script>
 const dz=document.getElementById('dz'),fi=document.getElementById('file');
+let _lastCommitJSON=null;
+function _offerDownload(text,name){
+  const blob=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
 fi.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
 ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
@@ -74,14 +86,17 @@ function read(file){
     const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
     const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
     const lines=ExpeditingCore.normalizeFromRaw(raw);
-    await ExpeditingData.save(lines,{filename:file.name});
-    document.getElementById('msg').textContent='Opgeslagen ✓';
+    const rawTable=ExpeditingCore.rawTable(raw);
+    await ExpeditingData.save(lines,{filename:file.name},rawTable);
+    _lastCommitJSON = ExpeditingData.buildCommitJSON(rawTable,{filename:file.name});
+    _offerDownload(_lastCommitJSON,'expediting-data.json');
+    document.getElementById('msg').textContent='Verwerkt ✓ — commit het gedownloade expediting-data.json naar shared/';
     showStatus();
   }catch(err){ document.getElementById('msg').textContent='Fout: '+err.message; } };
   r.readAsArrayBuffer(file);
 }
 async function showStatus(){
-  const meta=await ExpeditingData.meta(), lines=await ExpeditingData.load();
+  const meta=await ExpeditingData.metaLocal(), lines=await ExpeditingData.loadLocal();
   const box=document.getElementById('statusBox'), kpis=document.getElementById('kpis');
   if(!meta||!lines){ box.className='status none'; box.textContent='Nog geen lijst geladen. Upload hierboven om te beginnen.'; kpis.style.display='none'; return; }
   const sup=ExpeditingCore.aggregate(lines);
@@ -93,6 +108,11 @@ async function showStatus(){
     .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
 }
 document.getElementById('clear').onclick=async()=>{ if(confirm('Centrale lijst wissen?')){ await ExpeditingData.clear(); showStatus(); } };
+document.getElementById('redownload').onclick=async()=>{
+  const raw=await ExpeditingData.loadRawLocal(), m=await ExpeditingData.metaLocal();
+  if(!raw){ alert('Nog geen lijst geüpload in deze browser. Upload eerst hierboven.'); return; }
+  _offerDownload(ExpeditingData.buildCommitJSON(raw, m||{}), 'expediting-data.json');
+};
 showStatus();
 </script>
 <script src="../shared/shared.js"></script>
