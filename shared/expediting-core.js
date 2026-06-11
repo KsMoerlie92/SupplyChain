@@ -113,9 +113,28 @@
     return arr;
   }
 
+  // raw = array-of-arrays. Geeft { headers, rows } met ONTDUBBELDE headers en
+  // rijen als objecten gekeyed op header (kolomvolgorde behouden) — exact het
+  // formaat dat PO-Matcher (en andere tools) van een ingeladen lijst verwachten.
+  function rawTable(raw){
+    const h=detectHeader(raw);
+    const seen={};
+    const headers=(raw[h]||[]).map((c,i)=>{
+      let name=String(c==null?'':c).trim()||('__COL_'+i);
+      if(seen[name]){ seen[name]++; name=name+'_'+seen[name]; } else seen[name]=1;
+      return name;
+    });
+    const rows=[];
+    for(let r=h+1;r<raw.length;r++){
+      const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
+      const o={}; headers.forEach((hd,i)=>{ o[hd]=row[i]==null?'':row[i]; }); rows.push(o);
+    }
+    return { headers, rows };
+  }
+
   global.ExpeditingCore = {
     OPEN, EU, MONTHS, COLS,
     toDate, num, dmy, shortD, esc, detectHeader,
-    normalizeFromRaw, score, aggregate, startOfToday
+    normalizeFromRaw, rawTable, score, aggregate, startOfToday
   };
 })(window);
