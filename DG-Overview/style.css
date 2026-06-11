@@ -1,13 +1,14 @@
 /* Hazardous Substance Analyzer — style.css — v2.2 */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0d1b2a;--card:#1b263b;--card-hover:#243447;
-  --text:#e0e1dd;--text-dim:#8d99ae;
-  --accent:#ff6f00;--red:#e63946;--orange:#f4a261;
-  --yellow:#e9c46a;--green:#2a9d8f;
-  --border:#2d3e50;--input-bg:#0f2030
+  --bg:#0A1628;--card:#0F2040;--card-hover:#162B52;
+  --text:#D4DEF0;--text-dim:#8FA3BF;
+  --accent:#00B4C8;--red:#D91F2C;--orange:#FFB300;
+  --yellow:#FFC83D;--green:#00C853;
+  --border:#1E3A5F;--input-bg:#0A1628;
+  --condensed:'Barlow Condensed',sans-serif;--mono:'JetBrains Mono',monospace
 }
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+body{font-family:'Barlow',Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
 
 /* Header */
 .header{background:linear-gradient(135deg,#1a237e 0%,#0d1b2a 100%);padding:20px 30px;border-bottom:3px solid var(--accent);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
@@ -44,7 +45,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .actions{display:flex;gap:12px;margin-bottom:25px;flex-wrap:wrap;align-items:center}
 .btn{padding:10px 22px;border:none;border-radius:8px;cursor:pointer;font-size:.9em;font-weight:600;transition:all .2s;display:inline-flex;align-items:center;gap:8px}
 .btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:#e65100;transform:translateY(-1px)}
+.btn-primary:hover{background:#0090a8;transform:translateY(-1px)}
 .btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{background:var(--card-hover)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -159,3 +160,26 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
   .cat-body{max-height:none!important}
   .header{background:#1a237e;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ── Volledige-pagina watermerk (zoals Itemlijst Validator) ── */
+body::after{content:'';position:fixed;inset:0;background-image:url('img/bg0.png');background-size:cover;background-position:center 40%;opacity:.07;pointer-events:none;z-index:0}
+.container{position:relative;z-index:1}
+
+/* ── Sub Project ID-filter (centrale lijst) ── */
+.dg-filter{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:25px}
+.dg-filter-title{font-weight:700;margin-bottom:10px;color:var(--text)}
+.dg-status{color:var(--text-dim);font-size:.9em;margin-bottom:12px;line-height:1.5}
+.dg-status a{color:var(--accent)}
+.dg-search{width:100%;max-width:none;margin-bottom:10px}
+.dg-actions{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.dg-sel{margin-left:auto;color:var(--accent);font-size:.82em}
+.dg-list{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.dg-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;color:var(--text);font-size:.9em}
+.dg-item:hover{background:var(--card-hover)}
+.dg-item .dg-n{margin-left:auto;color:var(--text-dim);font-size:.82em}
+.dg-empty{color:var(--text-dim);padding:8px}
+
+/* ── IHC-typografie consistentie ── */
+.stat-card .num{font-family:var(--condensed)}
+.btn,.cat-badge{font-family:var(--mono)}
+.dg-filter-title{font-family:var(--condensed);font-size:1.05rem;letter-spacing:.01em}

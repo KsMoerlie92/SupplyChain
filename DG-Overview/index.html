@@ -4,29 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hazardous Substance Analyzer | IHC Expediting</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="../shared/nav.css">
 </head>
 <body>
 
-<div class="header">
-  <div>
-    <h1>⚠️ Hazardous Substance <span class="accent">Analyzer</span> <span class="version">v2.2</span></h1>
-    <div class="sub">IHC Expediting — Gevaarlijke Stoffen Analyse op basis van IHM / IMDG / EU SRR</div>
-  </div>
-  <div class="sub" id="fileLabel">Geen bestand geladen</div>
-</div>
+<span id="fileLabel" hidden></span>
 
 <div class="container">
 
   <div class="lib-error" id="libError">⛔ SheetJS library kon niet worden geladen. Controleer je internetverbinding.</div>
 
-  <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-    <div class="icon">📁</div>
-    <p><strong>Sleep je Expediting lijst hierheen</strong></p>
-    <p>of klik om een bestand te selecteren</p>
-    <div class="formats">.xlsx / .xlsm / .xls — Kolom "Description" wordt automatisch gevonden</div>
-    <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+  <div class="dg-filter" id="dgFilter">
+    <div class="dg-filter-title">📋 Bedrijfsbreed Expediten — selecteer Sub Project ID</div>
+    <div class="dg-status" id="dgStatus">Centrale lijst laden…</div>
+    <div class="dg-pick" id="dgPick" style="display:none">
+      <input class="search-box dg-search" id="dgSearch" placeholder="🔍 Zoek Sub Project ID…" oninput="dgRenderSubs()">
+      <div class="dg-actions">
+        <button class="btn btn-secondary" type="button" onclick="dgSelectAll(true)">Alles</button>
+        <button class="btn btn-secondary" type="button" onclick="dgSelectAll(false)">Wis</button>
+        <span class="dg-sel" id="dgSelCount">0 geselecteerd</span>
+      </div>
+      <div class="dg-list" id="dgList"></div>
+    </div>
   </div>
 
   <div class="stats-bar" id="statsBar" style="display:none">
@@ -105,6 +106,8 @@
 </div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="loadFallbackXLSX()"></script>
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
 <script src="app.js"></script>
 <script src="../shared/shared.js"></script>
 </body>
