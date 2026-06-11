@@ -324,11 +324,34 @@ function getFilteredData(){
     }
     return true;
   }).sort(function(a, b){
+    if(fatSortKey){ return fatCompare(a, b, fatSortKey) * fatSortDir; }
     if(a.fatDate && b.fatDate) return a.fatDate - b.fatDate;
     if(a.fatDate && !b.fatDate) return -1;
     if(!a.fatDate && b.fatDate) return 1;
     return a.poNumber.localeCompare(b.poNumber);
   });
+}
+
+// ── Sorteren via tabelkoppen ───────────────────────────────
+var fatSortKey = null, fatSortDir = 1; // 1 = oplopend, -1 = aflopend
+function fatVal(r, key){
+  var v = r[key];
+  if(key === 'fatDate' || key === 'inviteBefore' || key === 'plannedDelivery') return v ? v.getTime() : -Infinity;
+  if(key === 'clientRequired' || key === 'aanwezigKlant') return v ? 1 : 0;
+  return clean(v).toLowerCase();
+}
+function fatCompare(a, b, key){
+  var va = fatVal(a, key), vb = fatVal(b, key);
+  if(va < vb) return -1; if(va > vb) return 1; return 0;
+}
+function sortFatTable(key){
+  if(fatSortKey === key) fatSortDir = -fatSortDir;
+  else { fatSortKey = key; fatSortDir = 1; }
+  var inds = document.querySelectorAll('.fat-sheet thead .sort-ind');
+  for(var i=0;i<inds.length;i++) inds[i].textContent = '';
+  var ind = document.getElementById('fsi-' + key);
+  if(ind) ind.textContent = fatSortDir === 1 ? ' \u25b2' : ' \u25bc';
+  renderCurrentView();
 }
 
 function updateStats(){

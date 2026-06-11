@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FAT Overview | IHC Expediting</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="../shared/nav.css">
 </head>
@@ -72,20 +73,20 @@
       <table class="fat-sheet" id="fatTable">
         <thead>
           <tr>
-            <th class="th-system">System No.</th>
-            <th class="th-po">PO Number</th>
-            <th class="th-name">Name</th>
-            <th class="th-fat">FAT</th>
-            <th class="th-vendor">Leverancier</th>
-            <th class="th-location">FAT Location</th>
-            <th class="th-client">Client<br>Required</th>
-            <th class="th-fatdate">Expected FAT Date<br><span class="th-sub">(Yellow = confirmed by supplier)</span></th>
-            <th class="th-invite">Client invite<br>before</th>
-            <th class="th-protocol">Protocol<br>goedgekeurd</th>
-            <th class="th-ihc">Aanwezig IHC</th>
-            <th class="th-klant">Aanwezig<br>klant</th>
-            <th class="th-delivery">Planned Delivery<br>Date (exw)</th>
-            <th class="th-remarks">Remarks</th>
+            <th class="th-system th-sort" onclick="sortFatTable('systemNo')">System No.<span class="sort-ind" id="fsi-systemNo"></span></th>
+            <th class="th-po th-sort" onclick="sortFatTable('poNumber')">PO Number<span class="sort-ind" id="fsi-poNumber"></span></th>
+            <th class="th-name th-sort" onclick="sortFatTable('name')">Name<span class="sort-ind" id="fsi-name"></span></th>
+            <th class="th-fat th-sort" onclick="sortFatTable('fatType')">FAT<span class="sort-ind" id="fsi-fatType"></span></th>
+            <th class="th-vendor th-sort" onclick="sortFatTable('leverancier')">Leverancier<span class="sort-ind" id="fsi-leverancier"></span></th>
+            <th class="th-location th-sort" onclick="sortFatTable('fatLocation')">FAT Location<span class="sort-ind" id="fsi-fatLocation"></span></th>
+            <th class="th-client th-sort" onclick="sortFatTable('clientRequired')">Client<br>Required<span class="sort-ind" id="fsi-clientRequired"></span></th>
+            <th class="th-fatdate th-sort" onclick="sortFatTable('fatDate')">Expected FAT Date<br><span class="th-sub">(Yellow = confirmed by supplier)</span><span class="sort-ind" id="fsi-fatDate"></span></th>
+            <th class="th-invite th-sort" onclick="sortFatTable('inviteBefore')">Client invite<br>before<span class="sort-ind" id="fsi-inviteBefore"></span></th>
+            <th class="th-protocol th-sort" onclick="sortFatTable('protocol')">Protocol<br>goedgekeurd<span class="sort-ind" id="fsi-protocol"></span></th>
+            <th class="th-ihc th-sort" onclick="sortFatTable('aanwezigIHC')">Aanwezig IHC<span class="sort-ind" id="fsi-aanwezigIHC"></span></th>
+            <th class="th-klant th-sort" onclick="sortFatTable('aanwezigKlant')">Aanwezig<br>klant<span class="sort-ind" id="fsi-aanwezigKlant"></span></th>
+            <th class="th-delivery th-sort" onclick="sortFatTable('plannedDelivery')">Planned Delivery<br>Date (exw)<span class="sort-ind" id="fsi-plannedDelivery"></span></th>
+            <th class="th-remarks th-sort" onclick="sortFatTable('remarks')">Remarks<span class="sort-ind" id="fsi-remarks"></span></th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
