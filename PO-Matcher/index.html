@@ -13,6 +13,21 @@
     #result-table thead .th-sort { cursor: pointer; user-select: none; }
     #result-table thead .th-sort:hover { color: var(--ihc-teal, #00B4D8); }
     #result-table thead .sort-ind { font-size: .8em; opacity: .85; }
+    /* Expediting Sub Project ID-filter (zijbalk) */
+    .exp-filter{background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .8rem;margin-top:.2rem}
+    .exp-status{font-size:.72rem;line-height:1.45;color:rgba(240,244,250,.72);margin:.45rem 0}
+    .exp-status a{color:var(--ihc-teal,#00B4D8)}
+    .exp-search{width:100%;padding:.4rem .55rem;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.28);color:#fff;font-size:.74rem;margin-bottom:.45rem}
+    .exp-search:focus{outline:none;border-color:var(--ihc-teal,#00B4D8)}
+    .exp-actions{display:flex;align-items:center;gap:.4rem;margin-bottom:.45rem}
+    .exp-mini{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:.22rem .55rem;font-size:.68rem;cursor:pointer}
+    .exp-mini:hover{background:rgba(255,255,255,.16)}
+    .exp-sel{font-size:.66rem;color:var(--ihc-teal,#00B4D8);margin-left:auto}
+    .exp-list{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:.12rem}
+    .exp-item{display:flex;align-items:center;gap:.45rem;font-size:.74rem;padding:.22rem .3rem;border-radius:5px;cursor:pointer;color:rgba(240,244,250,.88)}
+    .exp-item:hover{background:rgba(255,255,255,.06)}
+    .exp-item .exp-n{margin-left:auto;font-size:.66rem;color:rgba(240,244,250,.45)}
+    .exp-empty{font-size:.72rem;color:rgba(240,244,250,.45);padding:.4rem}
   </style>
 </head>
 <body>
@@ -68,24 +83,21 @@
         </div>
       </div>
 
-      <div class="drop-zone" id="dz-expediting">
-        <input type="file" id="file-expediting" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'expediting')">
+      <!-- Expediting: selectie uit de bedrijfsbrede lijst (upload via Admin) -->
+      <div class="exp-filter" id="exp-filter">
         <div class="dz-badge b-expediting">Expediting</div>
-        <div class="dz-title">Expediting Lijst</div>
-        <div class="dz-meta">Blad: Sheet 1 (automatisch)<br>Kolom A = lookup &amp; return array</div>
-        <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
-        <div class="dz-filename" id="fn-expediting">—</div>
-      </div>
-      <div class="sp-toggle-wrap">
-        <label class="sp-toggle">
-          <input type="checkbox" id="sp-toggle-expediting" onchange="toggleSP('expediting')">
-          <span>🔗 Laden via SharePoint URL</span>
-        </label>
-        <div class="sp-url-wrap" id="sp-wrap-expediting">
-          <input class="sp-url-input" id="sp-url-expediting"
-            placeholder="https://ihcmerwede.sharepoint.com/…/Expediting.xlsx">
-          <button class="btn-sp-load" onclick="loadFromSP('expediting')">⬇ Laden</button>
+        <div class="dz-title">Bedrijfsbreed Expediten</div>
+        <div class="exp-status" id="exp-status">Centrale lijst laden…</div>
+        <div class="exp-pick" id="exp-pick" style="display:none">
+          <input class="exp-search" id="exp-search" placeholder="🔍 Zoek Sub Project ID…" oninput="renderSubList()">
+          <div class="exp-actions">
+            <button type="button" class="exp-mini" onclick="selectAllSubs(true)">Alles</button>
+            <button type="button" class="exp-mini" onclick="selectAllSubs(false)">Wis</button>
+            <span class="exp-sel" id="exp-sel-count">0 geselecteerd</span>
+          </div>
+          <div class="exp-list" id="exp-list"></div>
         </div>
+        <div class="dz-filename" id="fn-expediting">—</div>
       </div>
     </div>
 
