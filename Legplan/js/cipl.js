@@ -488,11 +488,13 @@ function _renderCIPLFromSheet2() {
   const statsEl  = document.getElementById('cipl-stats');
   const totEl    = document.getElementById('cipl-totals');
   tbody.innerHTML = ''; if(statsEl)statsEl.textContent=''; if(totEl)totEl.innerHTML='';
+  const infoEl = document.getElementById('cipl-shipinfo'); if(infoEl) infoEl.innerHTML='';
   if (!shipment) { if(statsEl)statsEl.textContent='Kies een Shipment #.'; return; }
   const rows = mData.filter(r => String(r[shipCol]||'').trim() === shipment);
   _ciplRows = rows;
   if (!rows.length) { if(statsEl)statsEl.textContent='Geen regels voor Shipment #'+shipment; return; }
   const headers = Object.keys(mData[0]);
+  if (infoEl) infoEl.innerHTML = _ciplShipInfoHTML(rows, headers);
   const fC = n => headers.find(h=>h&&h.trim().toLowerCase().includes(n));
   // Support both Moederlijst (IHC PO) and CIPL-format (Delivery reference) column names
   const cRef   = fC('delivery reference') || fC('ihc po');
