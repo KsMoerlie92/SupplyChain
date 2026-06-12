@@ -140,6 +140,8 @@ function renderCIPL() {
   tbody.innerHTML = '';
   if (statsEl) statsEl.textContent = '';
   if (totEl)   totEl.innerHTML = '';
+  const infoEl = document.getElementById('cipl-shipinfo');
+  if (infoEl) infoEl.innerHTML = '';
   if (!shipment) {
     if (statsEl) statsEl.textContent = 'Kies een Shipment # om de CIPL te tonen.';
     return;
@@ -150,6 +152,7 @@ function renderCIPL() {
     if (statsEl) statsEl.textContent = `Geen regels voor Shipment #${shipment}.`;
     return;
   }
+  if (infoEl) infoEl.innerHTML = _ciplShipInfoHTML(rows, moeder.ciplHeaders || []);
   const g = (row, key) => String(row[key] || '').trim().replace('(leeg)', '');
   let totQty=0, totVal=0, totGross=0, totNett=0;
   const frag = document.createDocumentFragment();
@@ -538,3 +541,54 @@ function _renderCIPLFromSheet2() {
     `<span>Netto: <strong>${tN.toLocaleString('nl-NL')} kg</strong></span>`;
 }
 
+
+// ── Shipment-infobalk (kolommen AI–AN) + Hapag-Lloyd container tracking ─────
+// Date load / ETD / ETA / NCR = shipment-waarde; Container + BL # kunnen
+// meerdere unieke combinaties hebben (meerdere containers per shipment).
+function _hapagUrl(container){
+  const c = String(container||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const m = c.match(/^([A-Z]{4})(\d{6,7})$/);              // bv. HLBU8191850
+  const param = m ? (m[1] + '++' + m[2]) : encodeURIComponent(c);  // -> HLBU++8191850
+  return 'https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=' + param;
+}
+
+function _ciplShipInfoHTML(rows, headers){
+  const findH = (re) => headers.find(h => re.test(String(h)));
+  const hLoad = findH(/date\s*load/i)                                       || headers[34];
+  const hEtd  = findH(/^\s*etd\b/i)                                         || headers[35];
+  const hEta  = findH(/^\s*eta\b/i)                                         || headers[36];
+  const hNcr  = findH(/\bncr\b/i)                                           || headers[37];
+  const hCont = findH(/container/i)                                         || headers[38];
+  const hBl   = findH(/bill\s*of\s*lading|b\.?\s*\/?\s*l\b|^\s*bl\b|bl\s*#/i) || headers[39];
+  const val   = (row,h) => h ? String(row[h]==null?'':row[h]).trim().replace('(leeg)','') : '';
+  const first = (h) => { for (const r of rows){ const v = val(r,h); if (v) return v; } return ''; };
+
+  const pairs = [], seen = {};
+  rows.forEach(r => {
+    const c = val(r,hCont), b = val(r,hBl);
+    if (!c && !b) return;
+    const k = c + '|' + b;
+    if (seen[k]) return; seen[k] = 1;
+    pairs.push({ container:c, bl:b });
+  });
+
+  const cell = (label,v) => `<div class="ci-cell"><span class="ci-l">${esc(label)}</span><span class="ci-v">${esc(v||'—')}</span></div>`;
+  let html = '<div class="ci-row">'
+    + cell(hLoad || 'Date load', first(hLoad))
+    + cell(hEtd  || 'ETD',       first(hEtd))
+    + cell(hEta  || 'ETA',       first(hEta))
+    + cell(hNcr  || 'NCR',       first(hNcr))
+    + '</div>';
+  if (pairs.length){
+    html += '<div class="ci-containers"><span class="ci-l">Container / BL #</span><div class="ci-pairs">'
+      + pairs.map(p => {
+          const blTxt = p.bl || '—';
+          const bl = (p.bl && p.container)
+            ? `<a href="${_hapagUrl(p.container)}" target="_blank" rel="noopener" title="Track container ${esc(p.container)} bij Hapag-Lloyd">${esc(blTxt)}</a>`
+            : esc(blTxt);
+          return `<div class="ci-pair"><span class="ci-cont">\uD83D\uDCE6 ${esc(p.container||'—')}</span><span class="ci-bl">BL ${bl}</span></div>`;
+        }).join('')
+      + '</div></div>';
+  }
+  return html;
+}
