@@ -10,6 +10,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="../shared/nav.css">
+  <style>
+    .cipl-shipinfo{margin:.5rem 0 .8rem;display:flex;flex-direction:column;gap:.5rem}
+    .cipl-shipinfo .ci-row{display:flex;flex-wrap:wrap;gap:.5rem}
+    .cipl-shipinfo .ci-cell{background:var(--navy);border:1px solid var(--steel);border-radius:3px;padding:.35rem .65rem;min-width:110px}
+    .cipl-shipinfo .ci-l{display:block;font-family:var(--mono);font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+    .cipl-shipinfo .ci-v{font-size:.82rem;color:var(--text);font-weight:600}
+    .cipl-shipinfo .ci-containers{background:var(--navy);border:1px solid var(--steel);border-radius:3px;padding:.4rem .65rem}
+    .cipl-shipinfo .ci-pairs{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.35rem}
+    .cipl-shipinfo .ci-pair{display:flex;flex-direction:column;gap:.1rem;background:var(--mid,#0F2040);border:1px solid var(--steel);border-radius:3px;padding:.3rem .55rem}
+    .cipl-shipinfo .ci-cont{font-family:var(--mono);font-size:.72rem;color:var(--text)}
+    .cipl-shipinfo .ci-bl{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+    .cipl-shipinfo .ci-bl a{color:var(--teal);text-decoration:none;border-bottom:1px dotted var(--teal)}
+    .cipl-shipinfo .ci-bl a:hover{color:var(--white,#fff)}
+  </style>
 </head>
 <body>
 
@@ -189,6 +203,7 @@
         </div>
       </div>
       <div class="cipl-stats" id="cipl-stats"></div>
+      <div class="cipl-shipinfo" id="cipl-shipinfo"></div>
       <div class="tbl-scroll">
         <table id="cipl-table">
           <thead><tr>
