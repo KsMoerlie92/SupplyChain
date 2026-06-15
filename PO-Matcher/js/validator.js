@@ -26,6 +26,70 @@ let _valWb       = null; // original workbook for write-back
 let _virtualCols = {};   // { Z: true, AA: true } when columns are IHC-added (not in file)
 let _valHdrIdx  = 1;     // row index (0-based) where headers were found
 
+// ── Country of Origin normalisatie: volledige (EN/NL) landnamen → ISO-2 ─────
+const _COO_MAP = {
+  'nederland':'NL','netherlands':'NL','the netherlands':'NL','holland':'NL',
+  'duitsland':'DE','germany':'DE','deutschland':'DE',
+  'belgie':'BE','belgium':'BE','belgique':'BE',
+  'frankrijk':'FR','france':'FR',
+  'italie':'IT','italy':'IT','italia':'IT',
+  'spanje':'ES','spain':'ES','espana':'ES',
+  'portugal':'PT',
+  'oostenrijk':'AT','austria':'AT',
+  'zwitserland':'CH','switzerland':'CH','suisse':'CH',
+  'verenigd koninkrijk':'GB','united kingdom':'GB','great britain':'GB','groot brittannie':'GB','england':'GB','engeland':'GB','uk':'GB',
+  'ierland':'IE','ireland':'IE',
+  'denemarken':'DK','denmark':'DK',
+  'zweden':'SE','sweden':'SE',
+  'noorwegen':'NO','norway':'NO',
+  'finland':'FI',
+  'polen':'PL','poland':'PL',
+  'tsjechie':'CZ','czech republic':'CZ','czechia':'CZ',
+  'slowakije':'SK','slovakia':'SK',
+  'hongarije':'HU','hungary':'HU',
+  'roemenie':'RO','romania':'RO',
+  'bulgarije':'BG','bulgaria':'BG',
+  'griekenland':'GR','greece':'GR',
+  'luxemburg':'LU','luxembourg':'LU',
+  'slovenie':'SI','slovenia':'SI',
+  'kroatie':'HR','croatia':'HR',
+  'estland':'EE','estonia':'EE',
+  'letland':'LV','latvia':'LV',
+  'litouwen':'LT','lithuania':'LT',
+  'turkije':'TR','turkey':'TR','turkiye':'TR',
+  'verenigde staten':'US','united states':'US','united states of america':'US','usa':'US','u s a':'US','america':'US',
+  'china':'CN','volksrepubliek china':'CN','prc':'CN',
+  'japan':'JP',
+  'zuid korea':'KR','south korea':'KR','korea':'KR','republic of korea':'KR',
+  'india':'IN',
+  'taiwan':'TW',
+  'vietnam':'VN',
+  'indonesie':'ID','indonesia':'ID',
+  'thailand':'TH',
+  'maleisie':'MY','malaysia':'MY',
+  'singapore':'SG',
+  'brazilie':'BR','brazil':'BR',
+  'canada':'CA',
+  'mexico':'MX',
+  'australie':'AU','australia':'AU',
+  'rusland':'RU','russia':'RU',
+  'oekraine':'UA','ukraine':'UA',
+  'verenigde arabische emiraten':'AE','united arab emirates':'AE','uae':'AE',
+  'zuid afrika':'ZA','south africa':'ZA'
+};
+
+// ISO-2 blijft ISO-2; bekende landnaam → ISO-2; onbekend → null (origineel laten staan)
+function _normalizeCOO(val){
+  if (val === null || val === undefined) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  const key = s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // accenten weg (Italië → italie)
+    .replace(/[.\-_,/]/g,' ').replace(/\s+/g,' ').trim();
+  return _COO_MAP[key] || null;
+}
+
 // ── Remap COL indices from actual header names ──────────────────────────────
 // Columns found by name keep their real index.
 // Columns missing from the file get virtual indices beyond the last column.
@@ -258,6 +322,15 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (xVal !== null && yVal !== null && yVal > xVal)
     errors['Y'] = `Nett weight (${yVal}) mag niet groter zijn dan Gross weight (${xVal})`;
 
+  // ── Maatvoering & gewicht → voormelding AFS (≥2 maten > 3 m OF bruto > 10.000 kg) ──
+  const dimsOver = [t, u, h2].filter(d => d !== null && d > 300).length; // maten in cm; 3 m = 300
+  if (dimsOver >= 2 || (xVal !== null && xVal > 10000)) {
+    const why = [];
+    if (dimsOver >= 2)                 why.push('\u22652 maten > 3 m');
+    if (xVal !== null && xVal > 10000) why.push('bruto > 10.000 kg');
+    computed['_afs'] = why.join(' + ');
+  }
+
   // ── AA: Inspection Level — optional but must be valid if filled ───────────
   const aaVal = vs('AA');
   if (aaVal && !VL_INSP.has(aaVal)) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
@@ -334,6 +407,18 @@ async function runValidation() {
       `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>`;
   }
 
+  // ── AFS voormelding-banner ──
+  const afsEl = document.getElementById('val-afs-banner');
+  if (afsEl) {
+    const flagged = _valRows.filter(r => r.computed && r.computed._afs);
+    afsEl.innerHTML = flagged.length
+      ? `<div class="val-afs-banner"><span class="val-afs-ico">\ud83d\udce3</span>` +
+        `<span><b>${flagged.length} regel(s)</b> vereisen een voormelding bij AFS ` +
+        `(\u22652 maten > 3 m of bruto > 10.000 kg).</span>` +
+        `<button class="val-afs-btn" onclick="afsNotify()">\u2709 Voormelding AFS opstellen</button></div>`
+      : '';
+  }
+
   // Sheet warnings
   if (shWEl) {
     shWEl.innerHTML = sheetWarnings.map(w =>
@@ -380,7 +465,8 @@ function renderValidationTable(usdPrice, usdRate) {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
     const anyErr = Object.keys(row.errors).length > 0;
     const anyWrn = Object.keys(row.warnings).length > 0;
-    const rowCls = hasDG ? 'val-row-dg' : anyErr ? 'val-row-err' : anyWrn ? 'val-row-warn' : 'val-row-ok';
+    const rowCls = (hasDG ? 'val-row-dg' : anyErr ? 'val-row-err' : anyWrn ? 'val-row-warn' : 'val-row-ok')
+      + (row.computed && row.computed._afs ? ' val-row-afs' : '');
 
     const cells = COLS_SHOW.map(col => {
       const ci  = COL[col];
@@ -628,6 +714,12 @@ function handleValFile(fileOrEvent) {
     _valRows = (raw.slice(hdrIdx + 1) || [])
       .filter(r => hasVal(r[0]) && hasVal(r[2]))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
+
+    // Normaliseer Country of Origin (kolom N) bij inlezen → ISO-2 (Nederland→NL, Duitsland→DE, …)
+    _valRows.forEach(r => {
+      const n = _normalizeCOO(r.cells[COL.N]);
+      if (n !== null) r.cells[COL.N] = n;
+    });
 
     // Load country codes from Master tab
     _valCOO = new Set();
@@ -1157,4 +1249,32 @@ function _setHSCellState(rowIdx, stateClass, badgeHtml) {
   td.className = `val-cell ${stateClass}`;
   const iconEl = td.querySelector('.hs-icon');
   if (iconEl) iconEl.innerHTML = badgeHtml || '';
+}
+
+// ── AFS voormelding: open e-mail naar AFS met de gemarkeerde regels ─────────
+function afsNotify(){
+  const flagged = _valRows.filter(r => r.computed && r.computed._afs);
+  if (!flagged.length) return;
+  const cons = (document.getElementById('val-consignee')?.value || '').trim();
+  const fn   = (document.getElementById('val-filename')?.textContent || '').trim();
+  const lines = flagged.map(r => {
+    const c = r.cells;
+    const ref  = String(c[COL.A] || '').trim() || '(geen ref)';
+    const desc = String(c[COL.D] || c[COL.C] || '').trim();
+    const L = c[COL.T], W = c[COL.U], H = c[COL.V], G = c[COL.X];
+    return `- ${ref} | ${desc} | L\u00d7B\u00d7H: ${L||'?'}\u00d7${W||'?'}\u00d7${H||'?'} cm | bruto: ${G||'?'} kg [${r.computed._afs}]`;
+  }).join('\n');
+  const subject = `Voormelding AFS \u2014 oversized/zware items${cons ? ' \u2014 ' + cons : ''}`;
+  const body =
+`Beste Mark,
+
+In onderstaande zending zitten ${flagged.length} regel(s) die een voormelding vereisen (oversized en/of > 10.000 kg). Graag rekening houden met een laad- en losplan.
+${fn ? '\nBestand: ' + fn + '\n' : ''}
+${lines}
+
+Met vriendelijke groet,
+Royal IHC`;
+  window.location.href = 'mailto:Mark.Kruisbeek@afsfreightsolutions.com'
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body='    + encodeURIComponent(body);
 }
