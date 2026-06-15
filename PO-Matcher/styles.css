@@ -974,3 +974,6 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
   border: none; border-radius: 3px; cursor: pointer; font-weight: 700;
 }
 .val-afs-btn:hover { filter: brightness(1.1); }
+
+.late-sortable:hover{color:var(--teal)}
+.late-sortable.late-sort-active{color:var(--teal)}

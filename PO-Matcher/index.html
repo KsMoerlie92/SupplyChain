@@ -8,27 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="../shared/nav.css">
-  <link rel="stylesheet" href="../shared/expediting-mailer.css">
-  <style>
-    #result-table thead .th-sort { cursor: pointer; user-select: none; }
-    #result-table thead .th-sort:hover { color: var(--ihc-teal, #00B4D8); }
-    #result-table thead .sort-ind { font-size: .8em; opacity: .85; }
-    /* Expediting Sub Project ID-filter (zijbalk) */
-    .exp-filter{background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.7rem .8rem;margin-top:.2rem}
-    .exp-status{font-size:.72rem;line-height:1.45;color:rgba(240,244,250,.72);margin:.45rem 0}
-    .exp-status a{color:var(--ihc-teal,#00B4D8)}
-    .exp-search{width:100%;padding:.4rem .55rem;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.28);color:#fff;font-size:.74rem;margin-bottom:.45rem}
-    .exp-search:focus{outline:none;border-color:var(--ihc-teal,#00B4D8)}
-    .exp-actions{display:flex;align-items:center;gap:.4rem;margin-bottom:.45rem}
-    .exp-mini{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:.22rem .55rem;font-size:.68rem;cursor:pointer}
-    .exp-mini:hover{background:rgba(255,255,255,.16)}
-    .exp-sel{font-size:.66rem;color:var(--ihc-teal,#00B4D8);margin-left:auto}
-    .exp-list{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:.12rem}
-    .exp-item{display:flex;align-items:center;gap:.45rem;font-size:.74rem;padding:.22rem .3rem;border-radius:5px;cursor:pointer;color:rgba(240,244,250,.88)}
-    .exp-item:hover{background:rgba(255,255,255,.06)}
-    .exp-item .exp-n{margin-left:auto;font-size:.66rem;color:rgba(240,244,250,.45)}
-    .exp-empty{font-size:.72rem;color:rgba(240,244,250,.45);padding:.4rem}
-  </style>
 </head>
 <body>
 
@@ -83,21 +62,24 @@
         </div>
       </div>
 
-      <!-- Expediting: selectie uit de bedrijfsbrede lijst (upload via Admin) -->
-      <div class="exp-filter" id="exp-filter">
+      <div class="drop-zone" id="dz-expediting">
+        <input type="file" id="file-expediting" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'expediting')">
         <div class="dz-badge b-expediting">Expediting</div>
-        <div class="dz-title">Bedrijfsbreed Expediten</div>
-        <div class="exp-status" id="exp-status">Centrale lijst laden…</div>
-        <div class="exp-pick" id="exp-pick" style="display:none">
-          <input class="exp-search" id="exp-search" placeholder="🔍 Zoek Sub Project ID…" oninput="renderSubList()">
-          <div class="exp-actions">
-            <button type="button" class="exp-mini" onclick="selectAllSubs(true)">Alles</button>
-            <button type="button" class="exp-mini" onclick="selectAllSubs(false)">Wis</button>
-            <span class="exp-sel" id="exp-sel-count">0 geselecteerd</span>
-          </div>
-          <div class="exp-list" id="exp-list"></div>
-        </div>
+        <div class="dz-title">Expediting Lijst</div>
+        <div class="dz-meta">Blad: Sheet 1 (automatisch)<br>Kolom A = lookup &amp; return array</div>
+        <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
         <div class="dz-filename" id="fn-expediting">—</div>
+      </div>
+      <div class="sp-toggle-wrap">
+        <label class="sp-toggle">
+          <input type="checkbox" id="sp-toggle-expediting" onchange="toggleSP('expediting')">
+          <span>🔗 Laden via SharePoint URL</span>
+        </label>
+        <div class="sp-url-wrap" id="sp-wrap-expediting">
+          <input class="sp-url-input" id="sp-url-expediting"
+            placeholder="https://ihcmerwede.sharepoint.com/…/Expediting.xlsx">
+          <button class="btn-sp-load" onclick="loadFromSP('expediting')">⬇ Laden</button>
+        </div>
       </div>
     </div>
 
@@ -150,13 +132,6 @@
       <button class="filter-chip match-chip active" data-filter="match"   onclick="setFilter('match',this)">✓ In beide lijsten</button>
       <button class="filter-chip late-chip"         data-filter="lateitems" onclick="setFilter('lateitems',this)">⚠ Late Items</button>
       <button class="filter-chip val-chip"          data-filter="validator" onclick="setFilter('validator',this)">📋 Itemlijst Validator</button>
-      <!-- Late Items sort controls -->
-      <div class="late-sort-wrap" id="late-sort-wrap" style="display:none">
-        <span class="late-sort-label">Sorteer offset:</span>
-        <button class="late-sort-btn active" id="late-sort-asc"  onclick="setLateSort('asc')">▲ Offset laag→hoog</button>
-        <button class="late-sort-btn"        id="late-sort-desc" onclick="setLateSort('desc')">▼ Offset hoog→laag</button>
-        <button class="late-sort-btn"        id="late-sort-date" onclick="setLateSort('date')">📅 Datum confirmed</button>
-      </div>
       <label class="mr-toggle-wrap" id="mr-toggle-wrap" title="Verberg rijen waarbij MR ID 'not received yet' is">
         <span class="mr-toggle-label">🚫 Verberg Not Received Yet</span>
         <span class="lp-toggle-switch">
@@ -174,11 +149,11 @@
         <table id="result-table">
           <thead>
             <tr>
-              <th class="th-sort" onclick="sortResultTable('ref')">IHC PO + Item <small>Expediting referentie</small><span class="sort-ind" id="si-ref"></span></th>
-              <th class="th-sort" onclick="sortResultTable('supplier')">Leverancier <small>Moeder · Kol K</small><span class="sort-ind" id="si-supplier"></span></th>
-              <th class="th-sort" onclick="sortResultTable('qty')">Qty <small>Moeder F / Exp O</small><span class="sort-ind" id="si-qty"></span></th>
-              <th class="th-sort" onclick="sortResultTable('colE')">Moeder Kol E<span class="sort-ind" id="si-colE"></span></th>
-              <th class="th-sort" onclick="sortResultTable('status')">Status<span class="sort-ind" id="si-status"></span></th>
+              <th>IHC PO + Item <small>Expediting referentie</small></th>
+              <th>Leverancier <small>Moeder · Kol K</small></th>
+              <th>Qty <small>Moeder F / Exp O</small></th>
+              <th>Moeder Kol E</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="result-tbody"></tbody>
@@ -262,11 +237,6 @@
 <script src="js/renderer.js"></script>
 <script src="js/export.js"></script>
 <script src="js/validator.js"></script>
-<!-- Expediting Mailer (gedeelde functie) -->
-<script src="../shared/templates.js"></script>
-<script src="../shared/expediting-core.js"></script>
-<script src="../shared/expediting-data.js"></script>
-<script src="../shared/expediting-mailer.js"></script>
 <script src="../shared/shared.js"></script>
 </body>
 </html>
