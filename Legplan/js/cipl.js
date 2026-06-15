@@ -425,11 +425,8 @@ ${rows_html}
   <td colspan="9"></td>
   <td></td>
   <td class="r"><strong>${totVal.toLocaleString('nl-NL',{minimumFractionDigits:2})}</strong></td>
-  <td class="r sig-col">
+  <td class="r">
     <strong>${totVal.toLocaleString('nl-NL',{minimumFractionDigits:2})}</strong>
-    <div class="sig-block">
-      <img src="data:image/jpeg;base64,${SIG_B64}" alt="Handtekening R. Balgobind">
-    </div>
   </td>
 </tr>
 </tbody>
@@ -518,7 +515,9 @@ function _renderCIPLFromSheet2() {
   let tQ=0,tV=0,tG=0,tN=0;
   const html = rows.map((row,i)=>{
     const qty=num(row,cQty);
-    const vtot=cVtot?num(row,cVtot):(cVpc?num(row,cVpc)*qty:0);
+    const vpcRaw=cVpc?num(row,cVpc):0;
+    const vtotRaw=cVtot?num(row,cVtot):(vpcRaw*qty);
+    const vpc=_convValue(vpcRaw), vtot=_convValue(vtotRaw);
     tQ+=qty; tV+=vtot; tG+=num(row,cGross); tN+=num(row,cNett);
     return `<tr><td>${i+1}</td>
       <td style="font-family:var(--mono);font-size:.7rem">${esc(g(row,cItem))}</td>
@@ -529,7 +528,7 @@ function _renderCIPLFromSheet2() {
       <td>${esc(g(row,cCOO))}</td>
       <td style="font-family:var(--mono)" class="hs-cell" data-hs="${esc(g(row,cHS))}" onclick="toggleHSMeasures('${esc(g(row,cHS))}',this.closest('tr'))" title="Klik voor douanemaatregelen">${esc(g(row,cHS))}</td>
       <td class="hs-status" data-hs="${esc(g(row,cHS))}">—</td>
-      <td class="num">${vtot>0?vtot.toFixed(2):esc(g(row,cVpc))}</td>
+      <td class="num">${vpc>0?vpc.toFixed(2):''}</td>
       <td class="num" style="font-weight:600">${vtot>0?vtot.toFixed(2):''}</td>
       <td>${esc(g(row,cPkg))}</td><td class="num">${esc(g(row,cCollo))}</td>
       <td class="num">${esc(g(row,cGross))}</td><td class="num">${esc(g(row,cNett))}</td></tr>`;
@@ -538,20 +537,19 @@ function _renderCIPLFromSheet2() {
   if(statsEl)statsEl.innerHTML=`<span>Shipment <strong>#${shipment}</strong></span><span>${rows.length} regels</span>`;
   if(totEl)totEl.innerHTML=
     `<span>Qty: <strong>${tQ.toLocaleString('nl-NL')}</strong></span>`+
-    `<span>Waarde: <strong>$ ${tV.toLocaleString('nl-NL',{minimumFractionDigits:2})}</strong></span>`+
+    `<span>Waarde: <strong>${_convSymbol()} ${tV.toLocaleString('nl-NL',{minimumFractionDigits:2})}</strong></span>`+
     `<span>Bruto: <strong>${tG.toLocaleString('nl-NL')} kg</strong></span>`+
     `<span>Netto: <strong>${tN.toLocaleString('nl-NL')} kg</strong></span>`;
 }
 
 
-// ── Shipment-infobalk (kolommen AI–AN) + Hapag-Lloyd container tracking ─────
+// ── Shipment-infobalk (kolommen AI–AN) + Pier2Pier container tracking ───────
 // Date load / ETD / ETA / NCR = shipment-waarde; Container + BL # kunnen
 // meerdere unieke combinaties hebben (meerdere containers per shipment).
-function _hapagUrl(container){
+function _trackUrl(container){
+  // Pier2Pier container tracking — werkt voor alle rederijen (MSCU, MAEU, CMAU, HLXU, TRLU, TGHU, …)
   const c = String(container||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  const m = c.match(/^([A-Z]{4})(\d{6,7})$/);              // bv. HLBU8191850
-  const param = m ? (m[1] + '++' + m[2]) : encodeURIComponent(c);  // -> HLBU++8191850
-  return 'https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=' + param;
+  return 'https://www.pier2pier.com/links/tracking2.php?Type=CONT&ID=' + encodeURIComponent(c) + '&Company=P2P';
 }
 
 function _ciplShipInfoHTML(rows, headers){
@@ -584,13 +582,95 @@ function _ciplShipInfoHTML(rows, headers){
   if (pairs.length){
     html += '<div class="ci-containers"><span class="ci-l">Container / BL #</span><div class="ci-pairs">'
       + pairs.map(p => {
-          const blTxt = p.bl || '—';
-          const bl = (p.bl && p.container)
-            ? `<a href="${_hapagUrl(p.container)}" target="_blank" rel="noopener" title="Track container ${esc(p.container)} bij Hapag-Lloyd">${esc(blTxt)}</a>`
-            : esc(blTxt);
-          return `<div class="ci-pair"><span class="ci-cont">\uD83D\uDCE6 ${esc(p.container||'—')}</span><span class="ci-bl">BL ${bl}</span></div>`;
+          const url     = p.container ? _trackUrl(p.container) : '';
+          const contTxt = esc(p.container || '—');
+          const cont    = p.container
+            ? `<a href="${url}" target="_blank" rel="noopener" title="Track container ${contTxt} via Pier2Pier">\uD83D\uDCE6 ${contTxt}</a>`
+            : `\uD83D\uDCE6 ${contTxt}`;
+          const blTxt   = esc(p.bl || '—');
+          const bl      = (p.bl && p.container)
+            ? `<a href="${url}" target="_blank" rel="noopener" title="Track container ${contTxt} via Pier2Pier">${blTxt}</a>`
+            : blTxt;
+          return `<div class="ci-pair"><span class="ci-cont">${cont}</span><span class="ci-bl">BL ${bl}</span></div>`;
         }).join('')
       + '</div></div>';
   }
   return html;
+}
+
+// ── Valuta-omrekening (EUR ↔ USD met instelbare factor, of opslag %) ────────
+var _ciplConv = { mode:'none', factor:1.16, markup:38 };
+
+function _convValue(v){
+  v = Number(v) || 0;
+  switch (_ciplConv.mode){
+    case 'eur2usd': return v * (_ciplConv.factor || 1);
+    case 'usd2eur': return v / (_ciplConv.factor || 1);
+    case 'markup':  return v * (1 + (_ciplConv.markup || 0) / 100);
+    default:        return v;
+  }
+}
+function _convSymbol(){ return _ciplConv.mode === 'eur2usd' ? '$' : '\u20ac'; }
+function _convCurrency(){ return _ciplConv.mode === 'eur2usd' ? 'USD' : 'EUR'; }
+
+function onConvChange(){
+  var modeEl = document.getElementById('cipl-conv-mode');
+  var facEl  = document.getElementById('cipl-conv-factor');
+  var mkEl   = document.getElementById('cipl-conv-markup');
+  var mode   = modeEl ? modeEl.value : 'none';
+  var factor = facEl ? (parseFloat(facEl.value) || 1.16) : 1.16;
+  var markup = mkEl  ? (parseFloat(mkEl.value)  || 0)    : 0;
+  _ciplConv = { mode:mode, factor:factor, markup:markup };
+  var fw = document.getElementById('cipl-conv-factor-wrap');
+  var mw = document.getElementById('cipl-conv-markup-wrap');
+  if (fw) fw.style.display = (mode === 'eur2usd' || mode === 'usd2eur') ? '' : 'none';
+  if (mw) mw.style.display = (mode === 'markup') ? '' : 'none';
+  var note = document.getElementById('cipl-conv-note');
+  if (note){
+    if (mode === 'eur2usd')      note.textContent = 'Waarden \u00d7 ' + factor + ' \u2192 USD';
+    else if (mode === 'usd2eur') note.textContent = 'Waarden \u00f7 ' + factor + ' \u2192 EUR';
+    else if (mode === 'markup')  note.textContent = 'Waarden + ' + markup + '% opslag (EUR)';
+    else                         note.textContent = 'Originele waarden (EUR)';
+  }
+  renderCIPL();
+}
+
+// ── Excel-export van de CIPL paklijst (bewerkbaar .xlsx) ────────────────────
+function exportCIPLExcel(){
+  if (typeof XLSX === 'undefined'){ alert('Excel-bibliotheek (SheetJS) niet geladen.'); return; }
+  var sel = document.getElementById('cipl-shipment-sel');
+  var shipment = sel ? sel.value : '';
+  var rows = _ciplRows || [];
+  if (!rows.length){ alert('Geen regels om te exporteren. Kies eerst een shipment #.'); return; }
+  var mData = (typeof moederFile !== 'undefined' && moederFile && moederFile.data) ? moederFile.data : [];
+  var headers = Object.keys(mData[0] || rows[0] || {});
+  var fC = function(n){ return headers.find(function(h){ return h && h.trim().toLowerCase().includes(n); }); };
+  var cRef=fC('delivery reference')||fC('ihc po'), cItem=fC('item #')||fC('item#')||fC('mark/label')||fC('mark'),
+      cDesc=fC('item description')||fC('description'), cQty=fC('quantity')||fC('totaal'), cUoM=fC('uom'),
+      cCOO=fC('country of origin'), cHS=fC('hs code'), cVpc=fC('value p.p')||fC('value pc'),
+      cVtot=fC('value tot')||fC('value total'), cPkg=fC('type of packaging')||fC('packaging'),
+      cCollo=fC('collo'), cGross=fC('gross weight'), cNett=fC('nett weight')||fC('net weight'), cCont=fC('container');
+  var num = function(r,c){ var v=r[c]; return typeof v==='number'?v:parseFloat(String(v||'').replace(',','.').trim())||0; };
+  var cur = _convCurrency();
+  var aoa = [[
+    '#','Item #','IHC PO / Ref','Collo','Item description','Qty','UoM','Country of Origin','HS Code',
+    'Value p.p ('+cur+')','Value total ('+cur+')','Type of packaging','Gross Weight (kg)','Nett Weight (kg)','Container'
+  ]];
+  rows.forEach(function(r,i){
+    var qty = num(r,cQty);
+    var vpc = _convValue(cVpc?num(r,cVpc):0);
+    var vtot= _convValue(cVtot?num(r,cVtot):(cVpc?num(r,cVpc)*qty:0));
+    aoa.push([
+      i+1, r[cItem]||'', r[cRef]||'', r[cCollo]||'', r[cDesc]||'', (cQty?r[cQty]:'')||'', r[cUoM]||'',
+      r[cCOO]||'', r[cHS]||'',
+      vpc>0?+vpc.toFixed(2):'', vtot>0?+vtot.toFixed(2):'',
+      r[cPkg]||'', r[cGross]||'', r[cNett]||'', r[cCont]||''
+    ]);
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = aoa[0].map(function(_,i){ return { wch: i===4?40:(i===1||i===2?16:12) }; });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, ('CIPL '+(shipment||'')).slice(0,31));
+  var fname = 'CIPL_shipment_' + (shipment||'export') + (_ciplConv.mode!=='none' ? '_'+cur : '') + '.xlsx';
+  XLSX.writeFile(wb, fname);
 }

@@ -1,6 +1,10 @@
 // ── Legplan tab: container nav, renderLegplan, runLegplanAI, exportLegplanPDF
 // ── Multi-container state ─────────────────────────────────────────────────
 let _containerPlan = [];
+
+// ── Legplan-filters: locatie + niet-geboekt ───────────────────────────────
+let _lpSelectedLocs = null;   // null = alle locaties; anders Set van geselecteerde
+let _lpLocs = [];             // huidige distinct locaties (volgorde = checkbox-index)
 let _activeContainerIdx = 0;
 
 function buildContainerNav() {
@@ -34,7 +38,7 @@ function showContainerView(idx) {
   updateLegplanStats(placed, containerKey);
 }
 
-function getLegplanRows() {
+function getLegplanBaseRows() {
   const inclNRY = document.getElementById('toggle-nry')?.checked ?? false;
   return allRows.filter(r => {
     if (!r.noMatch) return false;
@@ -47,7 +51,59 @@ function getLegplanRows() {
   });
 }
 
+function _lpDistinctLocs(rows) {
+  const s = new Set();
+  rows.forEach(r => s.add(((r.colLocation||'').trim()) || '(geen locatie)'));
+  return [...s].sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}));
+}
+
+function buildLegplanLocFilter(baseRows) {
+  const list = document.getElementById('lp-loc-list');
+  if (!list) return;
+  _lpLocs = _lpDistinctLocs(baseRows);
+  if (_lpSelectedLocs === null) _lpSelectedLocs = new Set(_lpLocs);   // standaard: alles aan
+  const allChecked = _lpLocs.length > 0 && _lpLocs.every(l => _lpSelectedLocs.has(l));
+  let html = `<label class="lp-loc-item lp-loc-all"><input type="checkbox" ${allChecked?'checked':''} onchange="lpSelectAllLocs(this.checked)"><b>Alle locaties</b></label>`;
+  html += _lpLocs.map((l, i) =>
+    `<label class="lp-loc-item"><input type="checkbox" ${_lpSelectedLocs.has(l)?'checked':''} onchange="lpToggleLoc(${i}, this.checked)">${esc(l)}</label>`
+  ).join('');
+  list.innerHTML = html;
+}
+
+function lpToggleLoc(idx, on) {
+  const loc = _lpLocs[idx];
+  if (loc === undefined) return;
+  if (!_lpSelectedLocs) _lpSelectedLocs = new Set();
+  if (on) _lpSelectedLocs.add(loc); else _lpSelectedLocs.delete(loc);
+  renderLegplan();
+}
+
+function lpSelectAllLocs(on) {
+  _lpSelectedLocs = on ? new Set(_lpLocs) : new Set();
+  renderLegplan();
+}
+
+function getLegplanRows() {
+  const notBooked = document.getElementById('toggle-notbooked')?.checked ?? false;
+  return getLegplanBaseRows().filter(r => {
+    // Locatie-filter
+    if (_lpSelectedLocs) {
+      const loc = ((r.colLocation||'').trim()) || '(geen locatie)';
+      if (!_lpSelectedLocs.has(loc)) return false;
+    }
+    // Niet-geboekt: shipmentnummer ingevuld én B/L of container leeg
+    if (notBooked) {
+      const hasShip = (r.colShipment||'').trim() !== '';
+      const noBL    = (r.colAL||'').trim() === '';
+      const noCont  = (r.colContainer||'').trim() === '';
+      if (!(hasShip && (noBL || noCont))) return false;
+    }
+    return true;
+  });
+}
+
 function renderLegplan() {
+  buildLegplanLocFilter(getLegplanBaseRows());
   const rows = getLegplanRows();
   const tbody = document.getElementById('legplan-tbody');
   const statsEl = document.getElementById('legplan-stats');

@@ -247,6 +247,8 @@ function buildAllRows(data) {
   const colMRID        = fC(['mr id','mrid']);
   const colAL          = fC(['bl #','bl#','bill of lading']);
   const colLocation    = fC(['location']);
+  const colShipment    = fC(['shipment']);
+  const colContainer   = fC(['container']);
   const colReceived    = fC(['received']);
   const colPO          = headers[2];
   const colItem        = headers[3];
@@ -269,6 +271,8 @@ function buildAllRows(data) {
     colMRID:       g(row,colMRID),
     colAL:         g(row,colAL),
     colLocation:   g(row,colLocation),
+    colShipment:   g(row,colShipment),
+    colContainer:  g(row,colContainer),
     colZ:          g(row,colReceived),
   }));
 }
