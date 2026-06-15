@@ -958,3 +958,19 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 }
 .hs-flag-warn  { background: rgba(245,158,11,.2); color: var(--amber); border: 1px solid rgba(245,158,11,.4); }
 .hs-flag-alert { background: rgba(239,68,68,.15); color: #f87171;  border: 1px solid rgba(239,68,68,.3); }
+
+/* ── AFS voormelding (Itemlijst Validator): oversized / >10.000 kg ────────── */
+.val-row-afs > td { box-shadow: inset 4px 0 0 var(--amber); }
+.val-afs-banner {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin: .5rem 0; padding: .55rem .8rem;
+  background: rgba(255,179,0,.12); border: 1px solid var(--amber);
+  border-radius: 4px; font-family: var(--body); font-size: .8rem; color: var(--text);
+}
+.val-afs-banner .val-afs-ico { font-size: 1.1rem; }
+.val-afs-btn {
+  margin-left: auto; font-family: var(--mono); font-size: .72rem;
+  padding: .35rem .7rem; background: var(--amber); color: #1a1200;
+  border: none; border-radius: 3px; cursor: pointer; font-weight: 700;
+}
+.val-afs-btn:hover { filter: brightness(1.1); }
