@@ -36,6 +36,7 @@
         <button class="btn-val btn-val-run"    id="btn-val-run"    disabled onclick="runValidation()">▶ Valideer</button>
         <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
         <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Genereer Merken/Labels</button>
+        <button class="btn-val btn-val-mail" id="btn-val-mail" onclick="ValMailer.open()">✉ Mail opstellen</button>
         <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
           <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
           <input type="text" id="val-consignee" class="val-consignee-input"
@@ -96,5 +97,6 @@ setStatus = function(msg, isError) {
 <script src="../shared/expediting-data.js"></script>
 <script src="../shared/expediting-mailer.js"></script>
 <script src="../shared/shared.js"></script>
+<script src="val-mailgen.js"></script>
 </body>
 </html>
