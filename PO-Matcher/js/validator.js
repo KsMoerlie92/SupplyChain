@@ -408,16 +408,7 @@ async function runValidation() {
   }
 
   // ── AFS voormelding-banner ──
-  const afsEl = document.getElementById('val-afs-banner');
-  if (afsEl) {
-    const flagged = _valRows.filter(r => r.computed && r.computed._afs);
-    afsEl.innerHTML = flagged.length
-      ? `<div class="val-afs-banner"><span class="val-afs-ico">\ud83d\udce3</span>` +
-        `<span><b>${flagged.length} regel(s)</b> vereisen een voormelding bij AFS ` +
-        `(\u22652 maten > 3 m of bruto > 10.000 kg).</span>` +
-        `<button class="val-afs-btn" onclick="afsNotify()">\u2709 Voormelding AFS opstellen</button></div>`
-      : '';
-  }
+  _renderAfsBanner();
 
   // Sheet warnings
   if (shWEl) {
@@ -1252,15 +1243,15 @@ function _setHSCellState(rowIdx, stateClass, badgeHtml) {
 }
 
 // ── AFS voormelding: open e-mail naar AFS met de gemarkeerde regels ─────────
-function afsNotify(){
+function _afsMailtoUrl(){
   const flagged = _valRows.filter(r => r.computed && r.computed._afs);
-  if (!flagged.length) return;
+  if (!flagged.length) return '';
   const cons = (document.getElementById('val-consignee')?.value || '').trim();
   const fn   = (document.getElementById('val-filename')?.textContent || '').trim();
   const lines = flagged.map(r => {
     const c = r.cells;
     const ref  = String(c[COL.A] || '').trim() || '(geen ref)';
-    const desc = String(c[COL.D] || c[COL.C] || '').trim();
+    const desc = String(c[COL.E] || c[COL.D] || '').trim();
     const L = c[COL.T], W = c[COL.U], H = c[COL.V], G = c[COL.X];
     return `- ${ref} | ${desc} | L\u00d7B\u00d7H: ${L||'?'}\u00d7${W||'?'}\u00d7${H||'?'} cm | bruto: ${G||'?'} kg [${r.computed._afs}]`;
   }).join('\n');
@@ -1274,7 +1265,34 @@ ${lines}
 
 Met vriendelijke groet,
 Royal IHC`;
-  window.location.href = 'mailto:Mark.Kruisbeek@afsfreightsolutions.com'
+  return 'mailto:Mark.Kruisbeek@afsfreightsolutions.com'
     + '?subject=' + encodeURIComponent(subject)
     + '&body='    + encodeURIComponent(body);
+}
+
+function afsNotify(){
+  const url = _afsMailtoUrl();
+  if (url) window.location.href = url;
+}
+
+
+// ── Render AFS voormelding-banner (maakt element zelf aan indien afwezig) ───
+function _renderAfsBanner(){
+  const flagged = _valRows.filter(r => r.computed && r.computed._afs);
+  console.log('[Validator] AFS-check (v2): ' + flagged.length + ' regel(s) gemarkeerd voor voormelding');
+  let afsEl = document.getElementById('val-afs-banner');
+  if (!afsEl) {
+    afsEl = document.createElement('div');
+    afsEl.id = 'val-afs-banner';
+    const anchor = document.getElementById('val-summary') || document.getElementById('val-sheet-warnings');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(afsEl, anchor.nextSibling);
+    else (document.getElementById('validator-wrap') || document.body).appendChild(afsEl);
+  }
+  afsEl.innerHTML = flagged.length
+    ? '<div class="val-afs-banner" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:.5rem 0;padding:.55rem .8rem;background:rgba(255,179,0,.12);border:1px solid #FFB300;border-radius:4px;font-size:.8rem">'
+      + '<span style="font-size:1.1rem">\ud83d\udce3</span>'
+      + '<span><b>' + flagged.length + ' regel(s)</b> vereisen een voormelding bij AFS (\u22652 maten &gt; 3 m of bruto &gt; 10.000 kg).</span>'
+      + '<button class="val-afs-btn" onclick="afsNotify()" style="margin-left:auto;font-family:var(--mono,monospace);font-size:.72rem;padding:.35rem .7rem;background:#FFB300;color:#1a1200;border:none;border-radius:3px;cursor:pointer;font-weight:700">\u2709 Voormelding AFS opstellen</button>'
+      + '</div>'
+    : '';
 }
