@@ -23,6 +23,20 @@
     .cipl-shipinfo .ci-bl{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
     .cipl-shipinfo .ci-bl a{color:var(--teal);text-decoration:none;border-bottom:1px dotted var(--teal)}
     .cipl-shipinfo .ci-bl a:hover{color:var(--white,#fff)}
+    .cipl-currency{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin:.4rem 0 .2rem;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+    .cipl-currency label{color:var(--teal);font-weight:600;letter-spacing:.04em}
+    .cipl-currency select,.cipl-currency input{font-family:var(--mono);font-size:.7rem;padding:.25rem .45rem;background:var(--navy);border:1px solid var(--steel);color:var(--text);border-radius:2px;outline:none}
+    .cipl-currency input{width:70px}
+    .cipl-currency .cipl-conv-note{color:var(--green);font-style:italic}
+    .lp-filter-bar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:1rem;margin:.3rem 0 .6rem;padding:.5rem .7rem;background:var(--navy);border:1px solid var(--steel);border-radius:3px}
+    .lp-loc-wrap{display:flex;flex-direction:column;gap:.35rem;min-width:200px;flex:1}
+    .lp-loc-title{font-family:var(--mono);font-size:.62rem;color:var(--teal);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+    .lp-loc-list{display:flex;flex-wrap:wrap;gap:.3rem .9rem;max-height:120px;overflow:auto}
+    .lp-loc-item{display:flex;align-items:center;gap:.3rem;font-family:var(--mono);font-size:.7rem;color:var(--text);white-space:nowrap;cursor:pointer}
+    .lp-loc-item.lp-loc-all{color:var(--teal);font-weight:600}
+    .lp-loc-item input{accent-color:var(--teal)}
+    .lp-nb-toggle{display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.7rem;color:var(--amber);cursor:pointer;align-self:center}
+    .lp-nb-toggle input{accent-color:var(--amber)}
   </style>
 </head>
 <body>
@@ -117,6 +131,16 @@
           <button class="btn-legplan-pdf" id="btn-legplan-pdf" onclick="exportLegplanPDF()">⬇ PDF Export</button>
         </div>
       </div>
+      <div class="lp-filter-bar">
+        <div class="lp-loc-wrap">
+          <span class="lp-loc-title">📍 Locatie — legplan per verzendlocatie</span>
+          <div class="lp-loc-list" id="lp-loc-list"></div>
+        </div>
+        <label class="lp-nb-toggle" title="Alleen shipments met een shipmentnummer maar zonder B/L en/of container (afgekaderd, nog niet geboekt bij de rederij)">
+          <input type="checkbox" id="toggle-notbooked" onchange="renderLegplan()">
+          <span>Alleen niet-geboekt (shipmentnr. zonder B/L/container)</span>
+        </label>
+      </div>
       <div class="tbl-scroll">
         <table id="legplan-table">
           <thead><tr>
@@ -200,9 +224,22 @@
             title="Peildatum voor link naar douane.nl (niet voor lokale controle)">
           <button class="btn-hs-check" id="btn-hs-check" onclick="checkHSCodes()">🔍 Controleer HS Codes</button>
           <button class="btn-cipl-pdf" onclick="exportCIPLPDF()">⬇ PDF Export</button>
+          <button class="btn-cipl-pdf" onclick="exportCIPLExcel()">⬇ Excel Export</button>
         </div>
       </div>
       <div class="cipl-stats" id="cipl-stats"></div>
+      <div class="cipl-currency" id="cipl-currency">
+        <label>Waarde-omrekening</label>
+        <select id="cipl-conv-mode" onchange="onConvChange()">
+          <option value="none">Geen (EUR)</option>
+          <option value="eur2usd">EUR → USD (× factor)</option>
+          <option value="usd2eur">USD → EUR (÷ factor)</option>
+          <option value="markup">Opslag % op waarde</option>
+        </select>
+        <span id="cipl-conv-factor-wrap">factor <input type="number" id="cipl-conv-factor" value="1.16" step="0.01" min="0" oninput="onConvChange()"></span>
+        <span id="cipl-conv-markup-wrap" style="display:none">opslag <input type="number" id="cipl-conv-markup" value="38" step="1" oninput="onConvChange()"> %</span>
+        <span class="cipl-conv-note" id="cipl-conv-note">Originele waarden (EUR)</span>
+      </div>
       <div class="cipl-shipinfo" id="cipl-shipinfo"></div>
       <div class="tbl-scroll">
         <table id="cipl-table">
