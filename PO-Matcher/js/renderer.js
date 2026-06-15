@@ -168,36 +168,6 @@ function applyFilters() {
   }
 }
 
-// ── Sorteren via tabelkoppen (hoofdtabel "In beide lijsten") ───────────────
-let resultSortKey = null;
-let resultSortDir = 1; // 1 = oplopend, -1 = aflopend
-function sortResultTable(key) {
-  if (resultSortKey === key) { resultSortDir = -resultSortDir; }
-  else { resultSortKey = key; resultSortDir = 1; }
-  const dir = resultSortDir;
-  const val = (r) => {
-    switch (key) {
-      case 'ref':      return String(r.xlookup || r.combined || '').toLowerCase();
-      case 'supplier': return String(r.colSupplier || '').toLowerCase();
-      case 'qty':      { const n = parseFloat(String(r.colF || '').replace(',', '.')); return isNaN(n) ? -Infinity : n; }
-      case 'colE':     return String(r.colE || '').toLowerCase();
-      case 'status':   return r.noMatch ? 1 : 0;
-      default:         return '';
-    }
-  };
-  allRows.sort((a, b) => {
-    const va = val(a), vb = val(b);
-    if (va < vb) return -dir;
-    if (va > vb) return dir;
-    return 0;
-  });
-  // pijl-indicatoren in de koppen bijwerken
-  document.querySelectorAll('#result-table thead .sort-ind').forEach(s => { s.textContent = ''; });
-  const ind = document.getElementById('si-' + key);
-  if (ind) ind.textContent = dir === 1 ? ' ▲' : ' ▼';
-  applyFilters(); // respecteert huidige filter + zoekterm en hertekent de tabel
-}
-
 // ── Export naar Excel ─────────────────────────────────────────────────────
 
 // ── Late Items tab ─────────────────────────────────────────────────────────
@@ -221,13 +191,13 @@ function sortResultTable(key) {
 //  AG(32) FAT                    → detail if filled
 //  AH(33) FAT Datum              → detail if filled
 
-let _lateSortDir = 'asc';  // 'asc' | 'desc' | 'date'
+// Kolomsorteerder Late Items — klik op een kolomkop sorteert beide secties (verstreken + komende)
+let _lateSortCol = 'offset';   // 'colA' | 'colM' | 'colJ' | 'wanted' | 'confirmed' | 'offset'
+let _lateSortDir = 'asc';      // 'asc' | 'desc'
 
-function setLateSort(dir) {
-  _lateSortDir = dir;
-  document.getElementById('late-sort-asc') .classList.toggle('active', dir === 'asc');
-  document.getElementById('late-sort-desc').classList.toggle('active', dir === 'desc');
-  document.getElementById('late-sort-date')?.classList.toggle('active', dir === 'date');
+function setLateSortCol(key) {
+  if (_lateSortCol === key) _lateSortDir = (_lateSortDir === 'asc') ? 'desc' : 'asc';
+  else { _lateSortCol = key; _lateSortDir = 'asc'; }
   renderLateItems();
 }
 
@@ -363,30 +333,46 @@ function renderLateItems() {
     };
   }).filter(Boolean);
 
-  const sortFn = (a, b) => {
-    if (_lateSortDir === 'date') {
-      // Sort by Confirmed date (col U) ascending — chronological
-      const at = a.uDate?.getTime() ?? Infinity;
-      const bt = b.uDate?.getTime() ?? Infinity;
-      return at - bt;
+  const _lateKey = (r) => {
+    switch (_lateSortCol) {
+      case 'colA':      return (r.colA || '').toLowerCase();
+      case 'colM':      return (r.colM || '').toLowerCase();
+      case 'colJ':      return (r.colJ || '').toLowerCase();
+      case 'wanted':    return r.tDate ? r.tDate.getTime() : null;
+      case 'confirmed': return r.uDate ? r.uDate.getTime() : null;
+      case 'offset':    return (r.offset === null || r.offset === undefined) ? null : r.offset;
+      default:          return null;
     }
-    const aO = a.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
-    const bO = b.offset ?? (_lateSortDir === 'asc' ? Infinity : -Infinity);
-    return _lateSortDir === 'asc' ? aO - bO : bO - aO;
+  };
+  const sortFn = (a, b) => {
+    const dir = (_lateSortDir === 'desc') ? -1 : 1;
+    const av = _lateKey(a), bv = _lateKey(b);
+    const aBlank = (av === null || av === undefined || av === '');
+    const bBlank = (bv === null || bv === undefined || bv === '');
+    if (aBlank && bBlank) return 0;
+    if (aBlank) return 1;            // lege/ontbrekende waarden altijd onderaan
+    if (bBlank) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'nl', { numeric: true }) * dir;
   };
 
   const pastRows   = rows.filter(r =>  r.isPast).sort(sortFn);
   const futureRows = rows.filter(r => !r.isPast).sort(sortFn);
 
+  const _sortTh = (key, label) => {
+    const active = _lateSortCol === key;
+    const arrow  = active ? (_lateSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+    return `<th class="late-sortable${active ? ' late-sort-active' : ''}" onclick="setLateSortCol('${key}')" style="cursor:pointer;user-select:none" title="Sorteer op ${esc(String(label))}">${esc(String(label))}${arrow}</th>`;
+  };
   const thead = `<thead><tr>
     <th style="width:22px"></th>
     <th style="width:26px">#</th>
-    <th>${esc(hn(iA))}</th>
-    <th>${esc(hn(iM))}</th>
-    <th>${esc(hn(iJ))}</th>
-    <th>Wanted</th>
-    <th>Confirmed</th>
-    <th>Offset (T−U)</th>
+    ${_sortTh('colA', hn(iA))}
+    ${_sortTh('colM', hn(iM))}
+    ${_sortTh('colJ', hn(iJ))}
+    ${_sortTh('wanted', 'Wanted')}
+    ${_sortTh('confirmed', 'Confirmed')}
+    ${_sortTh('offset', 'Offset (T\u2212U)')}
   </tr></thead>`;
 
   function buildRow(r, i) {
@@ -424,7 +410,7 @@ function renderLateItems() {
       <td class="rc">${i + 1}</td>
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
-      <td>${esc(r.colJ)} ${relBadge} <button type="button" class="exm-mailbtn sm" title="Mail leverancier over deze PO" onclick="event.stopPropagation(); if(window.ExpeditingMailer){ExpeditingMailer.openForPO('${String(r.colA).replace(/'/g,'')}');}else{alert('Expediting Mailer niet geladen.');}">✉</button></td>
+      <td>${esc(r.colJ)} ${relBadge}</td>
       <td class="date-cell">${_fmtDate(r.tDate)}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.uDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
