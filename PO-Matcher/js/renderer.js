@@ -211,18 +211,21 @@ function _toDate(v) {
   }
   const s = String(v).trim();
   if (!s) return null;
-  // Excel serial number
-  const n = parseFloat(s.replace(',', '.'));
-  if (!isNaN(n) && n > 1000) {
-    const d = new Date(Math.round((n - 25569 + 0.5) * 86400 * 1000));
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // Excel serial number — ALLEEN bij een puur numerieke waarde.
+  // (Niet bij ISO-strings als "2026-07-18": parseFloat zou daar 2026 van maken!)
+  if (typeof v === 'number' || /^\d+([.,]\d+)?$/.test(s)) {
+    const n = parseFloat(s.replace(',', '.'));
+    if (!isNaN(n) && n > 1000) {
+      const d = new Date(Math.round((n - 25569 + 0.5) * 86400 * 1000));
+      return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
   }
-  // European DD-MM-YYYY or DD/MM/YYYY
-  const eu = s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})$/);
-  if (eu) return new Date(+eu[3], +eu[2]-1, +eu[1]);
-  // ISO YYYY-MM-DD
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // ISO YYYY-MM-DD (ook volledige ISO-tijdstempels, bv. centrale JSON-data)
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (iso) return new Date(+iso[1], +iso[2]-1, +iso[3]);
+  // European DD-MM-YYYY or DD/MM/YYYY
+  const eu = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+  if (eu) return new Date(+eu[3], +eu[2]-1, +eu[1]);
   // American MM/DD/YYYY
   const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (us) return new Date(+us[3], +us[1]-1, +us[2]);
