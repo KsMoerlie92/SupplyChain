@@ -259,7 +259,8 @@ function toggleLateDetail(idx) {
 function renderLateItems() {
   const expData = fileData?.expediting?.data;
   const empty = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">
-    Laad eerst de Expediting lijst.</td></tr>`;
+    Selecteer links één of meer Sub Projecten uit de centrale Expediting-lijst.<br>
+    Geen centrale lijst geladen? Upload de bedrijfsbrede Expediten op de <a href="../Admin/" style="color:var(--teal)">Admin-pagina</a>.</td></tr>`;
   if (!expData || !expData.length) {
     const lt = document.getElementById('late-items-table');
     if (lt) lt.innerHTML = empty;
