@@ -141,11 +141,11 @@
         <table id="result-table">
           <thead>
             <tr>
-              <th>IHC PO + Item <small>Expediting referentie</small></th>
-              <th>Leverancier <small>Moeder · Kol K</small></th>
-              <th>Qty <small>Moeder F / Exp O</small></th>
-              <th>Moeder Kol E</th>
-              <th>Status</th>
+              <th class="res-sortable" data-sort="ref" onclick="setResSort('ref')">IHC PO + Item <small>Expediting referentie</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="supplier" onclick="setResSort('supplier')">Leverancier <small>Moeder · Kol K</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="qty" onclick="setResSort('qty')">Qty <small>Moeder F / Exp O</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="colE" onclick="setResSort('colE')">Moeder Kol E<span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="status" onclick="setResSort('status')">Status<span class="res-arrow"></span></th>
             </tr>
           </thead>
           <tbody id="result-tbody"></tbody>
