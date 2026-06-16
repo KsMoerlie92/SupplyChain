@@ -272,25 +272,32 @@ function renderLateItems() {
   const gs = (vals, idx) => String(g(vals, idx)).trim();
   const hn = (idx) => idx >= 0 && headers[idx] ? String(headers[idx]).trim() : `Kol ${idx+1}`;
 
-  // ── Exact column indices from the actual file ─────────────────────────────
-  const iA  = 0;   // Purchase Order No
-  const iE  = 4;   // PO Line Status (Released/Confirmed) — drives row coloring
-  const iF  = 5;   // Sub Project ID
-  const iG  = 6;   // Sub Project Description
-  const iH  = 7;   // Technical Coordinator Name
-  const iI  = 8;   // Buyer Name
-  const iJ  = 9;   // Supplier Name
-  const iK  = 10;  // Part No
-  const iL  = 11;  // Description
-  const iM  = 12;  // Unified Reference Code → visible status column
-  const iT  = 19;  // Latest Wanted Receipt Date
-  const iU  = 20;  // Planned Delivery Date
-  const iW  = 22;  // Last Expedited
-  const iX  = 23;  // PO Header Note
-  const iY  = 24;  // PO Line Note
-  const iZ  = 25;  // Logistieke Instructie
-  const iAG = 32;  // FAT
-  const iAH = 33;  // FAT Datum
+  // ── Kolommen op NAAM opzoeken (robuust; posities als fallback) ────────────
+  // Voorkomt dat een verschoven kolomvolgorde de verkeerde data oplevert.
+  const _hmap = {};
+  headers.forEach((h, i) => { const k = String(h == null ? '' : h).trim(); if (k && !(k in _hmap)) _hmap[k] = i; });
+  const col  = (name, fb) => (name in _hmap) ? _hmap[name] : fb;   // met positionele fallback
+  const colN = (name)     => (name in _hmap) ? _hmap[name] : -1;   // alleen op naam (−1 = afwezig)
+
+  const iA  = col('Purchase Order No', 0);
+  const iE  = col('PO Line Status', 4);
+  const iF  = col('Sub Project ID', 5);
+  const iG  = col('Sub Project Description', 6);
+  const iH  = col('Technical Coordinator Name', 7);
+  const iI  = col('Buyer Name', 8);
+  const iJ  = col('Supplier Name', 9);
+  const iK  = col('Part No', 10);
+  const iL  = col('Description', 11);
+  const iM  = col('Unified Reference Code', 12);
+  const iLwr     = col('Latest Wanted Receipt Date', 19);  // Wanted
+  const iPlanned = col('Planned Delivery Date', 20);        // tijdlijn-anker (verleden/toekomst)
+  const iConf    = colN('Last Confirmed');                  // Confirmed (echte bevestigde datum)
+  // optionele detailvelden — alleen tonen als de kolom écht bestaat
+  const iLastExp = colN('Last Expedited');
+  const iHdrNote = colN('PO Header Note');
+  const iLineNote= colN('PO Line Note');
+  const iFatProt = colN('FAT Supplier Protocol Date');
+  const iFatReq  = colN('FAT Date Required');
 
   const today    = new Date(); today.setHours(0,0,0,0);
   const maxDate  = new Date(today); maxDate.setMonth(today.getMonth() + 1); // 1 month ahead
@@ -300,36 +307,39 @@ function renderLateItems() {
     const colA = gs(vals, iA);
     if (!colA) return null;
 
-    const uDate = _toDate(g(vals, iU));
-    if (!uDate) return null;                  // no delivery date → skip
-    if (uDate > maxDate) return null;         // beyond 1-month window → skip
+    const wantedDate  = _toDate(g(vals, iLwr));                 // Latest Wanted Receipt Date
+    const confDate    = iConf >= 0 ? _toDate(g(vals, iConf)) : null; // Last Confirmed
+    const plannedDate = _toDate(g(vals, iPlanned));             // Planned Delivery Date
 
-    const tDate  = _toDate(g(vals, iT));
-    const offset = (tDate && uDate)
-      ? Math.round((tDate.getTime() - uDate.getTime()) / 86400000) : null;
+    // Tijdlijn-anker = geplande leverdatum (valt terug op confirmed/wanted als planned ontbreekt)
+    const delivDate = plannedDate || confDate || wantedDate;
+    if (!delivDate) return null;                  // geen datum → overslaan
+    if (delivDate > maxDate) return null;         // buiten venster (komende maand) → overslaan
+
+    // Offset = Wanted − Confirmed (negatief = bevestigd ná gewenst = te laat); leeg zonder confirmed
+    const offset = (wantedDate && confDate)
+      ? Math.round((wantedDate.getTime() - confDate.getTime()) / 86400000) : null;
 
     const statusVal   = gs(vals, iE);
     const isReleased  = /released/i.test(statusVal);
     const isConfirmed = /confirmed/i.test(statusVal);
 
-    // Only show items that are still open (Released or Confirmed).
-    // Items with any other status (Received, Closed, Complete, etc.) are excluded.
+    // Alleen nog-open items (Released of Confirmed); overige statussen overslaan.
     if (!isReleased && !isConfirmed) return null;
 
-    const isPast = uDate < today;
+    const isPast = delivDate < today;
 
     return {
       colA, statusVal, isReleased, isConfirmed, isPast,
       colM:  gs(vals, iM),   // Unified Reference Code
       colJ:  gs(vals, iJ),   // Supplier Name
       colH:  gs(vals, iH),   colI:  gs(vals, iI),
-
-      colW:  gs(vals, iW),
-      colX:  gs(vals, iX),   colY:  gs(vals, iY),
-      colZ:  gs(vals, iZ),
-      colAG: vals.length > iAG ? gs(vals, iAG) : '',
-      colAH: vals.length > iAH ? gs(vals, iAH) : '',
-      uDate, tDate, offset,
+      lastExp:  iLastExp  >= 0 ? gs(vals, iLastExp)  : '',
+      hdrNote:  iHdrNote  >= 0 ? gs(vals, iHdrNote)  : '',
+      lineNote: iLineNote >= 0 ? gs(vals, iLineNote) : '',
+      fatProt:  iFatProt  >= 0 ? gs(vals, iFatProt)  : '',
+      fatReq:   iFatReq   >= 0 ? gs(vals, iFatReq)   : '',
+      wantedDate, confDate, plannedDate, delivDate, offset,
     };
   }).filter(Boolean);
 
@@ -338,8 +348,8 @@ function renderLateItems() {
       case 'colA':      return (r.colA || '').toLowerCase();
       case 'colM':      return (r.colM || '').toLowerCase();
       case 'colJ':      return (r.colJ || '').toLowerCase();
-      case 'wanted':    return r.tDate ? r.tDate.getTime() : null;
-      case 'confirmed': return r.uDate ? r.uDate.getTime() : null;
+      case 'wanted':    return r.wantedDate ? r.wantedDate.getTime() : null;
+      case 'confirmed': return r.confDate   ? r.confDate.getTime()   : null;
       case 'offset':    return (r.offset === null || r.offset === undefined) ? null : r.offset;
       default:          return null;
     }
@@ -372,7 +382,7 @@ function renderLateItems() {
     ${_sortTh('colJ', hn(iJ))}
     ${_sortTh('wanted', 'Wanted')}
     ${_sortTh('confirmed', 'Confirmed')}
-    ${_sortTh('offset', 'Offset (T\u2212U)')}
+    ${_sortTh('offset', 'Offset (W\u2212C)')}
   </tr></thead>`;
 
   function buildRow(r, i) {
@@ -395,15 +405,12 @@ function renderLateItems() {
       [hn(iI), r.colI],
     ];
 
-    if (r.colW)  detFields.push([hn(iW),  _fmtDate(_toDate(r.colW))]);
-    if (r.colX)  detFields.push([hn(iX),  r.colX]);
-    if (r.colY)  detFields.push([hn(iY),  r.colY]);
-    if (r.colZ)  detFields.push([hn(iZ),  r.colZ]);
-    if (r.colAG) detFields.push([hn(iAG), r.colAG]);
-    if (r.colAH) {
-      const d = _toDate(r.colAH);
-      detFields.push([hn(iAH), d ? _fmtDate(d) : r.colAH]);
-    }
+    if (r.lastExp)  detFields.push(['Last Expedited', (() => { const d = _toDate(r.lastExp); return d ? _fmtDate(d) : r.lastExp; })()]);
+    if (r.hdrNote)  detFields.push(['PO Header Note', r.hdrNote]);
+    if (r.lineNote) detFields.push(['PO Line Note',   r.lineNote]);
+    if (r.fatProt)  detFields.push(['FAT Supplier Protocol Date', (() => { const d = _toDate(r.fatProt); return d ? _fmtDate(d) : r.fatProt; })()]);
+    if (r.fatReq)   detFields.push(['FAT Date Required',          (() => { const d = _toDate(r.fatReq);  return d ? _fmtDate(d) : r.fatReq;  })()]);
+    if (r.plannedDate) detFields.push(['Planned Delivery Date', _fmtDate(r.plannedDate)]);
 
     const mainRow = `<tr class="late-row ${rowCls} ${offCls}" onclick="toggleLateDetail(${i})" style="cursor:pointer">
       <td class="late-tog-cell"><button class="late-tog-btn" id="late-tog-${i}" tabindex="-1">▼</button></td>
@@ -411,8 +418,8 @@ function renderLateItems() {
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
       <td>${esc(r.colJ)} ${relBadge}</td>
-      <td class="date-cell">${_fmtDate(r.tDate)}</td>
-      <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.uDate)}</td>
+      <td class="date-cell">${_fmtDate(r.wantedDate)}</td>
+      <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.confDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
     </tr>`;
 
