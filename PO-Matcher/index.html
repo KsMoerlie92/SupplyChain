@@ -62,24 +62,17 @@
         </div>
       </div>
 
-      <div class="drop-zone" id="dz-expediting">
-        <input type="file" id="file-expediting" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'expediting')">
+      <div class="exp-central" id="dz-expediting">
         <div class="dz-badge b-expediting">Expediting</div>
-        <div class="dz-title">Expediting Lijst</div>
-        <div class="dz-meta">Blad: Sheet 1 (automatisch)<br>Kolom A = lookup &amp; return array</div>
-        <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
-        <div class="dz-filename" id="fn-expediting">—</div>
-      </div>
-      <div class="sp-toggle-wrap">
-        <label class="sp-toggle">
-          <input type="checkbox" id="sp-toggle-expediting" onchange="toggleSP('expediting')">
-          <span>🔗 Laden via SharePoint URL</span>
-        </label>
-        <div class="sp-url-wrap" id="sp-wrap-expediting">
-          <input class="sp-url-input" id="sp-url-expediting"
-            placeholder="https://ihcmerwede.sharepoint.com/…/Expediting.xlsx">
-          <button class="btn-sp-load" onclick="loadFromSP('expediting')">⬇ Laden</button>
+        <div class="dz-title">Expediting Lijst — centraal (Admin)</div>
+        <div class="exp-status" id="exp-status">Centrale lijst laden…</div>
+        <div class="exp-pick" id="exp-pick" style="display:none">
+          <input class="exp-search" id="exp-search" type="text" placeholder="🔎 Zoek Sub Project ID…" oninput="renderSubList()">
+          <label class="exp-all"><input type="checkbox" id="exp-all-cb" onchange="selectAllSubs(this.checked)"> Alle (gefilterde) projecten</label>
+          <div class="exp-list" id="exp-list"></div>
+          <div class="exp-sel" id="exp-sel-count">0 geselecteerd</div>
         </div>
+        <div class="dz-filename" id="fn-expediting">—</div>
       </div>
     </div>
 
@@ -231,6 +224,8 @@
 <!-- Application modules — load order matters -->
 <script src="js/utils.js"></script>
 <script src="js/state.js"></script>
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
 <script src="js/file-loader.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/matcher.js"></script>
