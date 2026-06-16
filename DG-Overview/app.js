@@ -234,7 +234,8 @@ let lastData = null;
 let activeCategoryFilters = {};
 let timelineSortMode = 'eta-asc'; // v2.2
 
-document.getElementById('rulesEditor').value = JSON.stringify(currentRules, null, 2);
+var _rulesEd = document.getElementById('rulesEditor');
+if (_rulesEd) _rulesEd.value = JSON.stringify(currentRules, null, 2);
 
 // ============================================================
 // FILE UPLOAD
@@ -242,13 +243,15 @@ document.getElementById('rulesEditor').value = JSON.stringify(currentRules, null
 var dropZone = document.getElementById('dropZone');
 var fileInput = document.getElementById('fileInput');
 
-dropZone.addEventListener('dragover', function(e){ e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', function(){ dropZone.classList.remove('dragover'); });
-dropZone.addEventListener('drop', function(e){
-  e.preventDefault(); dropZone.classList.remove('dragover');
-  if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', function(e){ if(e.target.files.length) processFile(e.target.files[0]); });
+if (dropZone && fileInput) {
+  dropZone.addEventListener('dragover', function(e){ e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', function(){ dropZone.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', function(e){
+    e.preventDefault(); dropZone.classList.remove('dragover');
+    if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', function(e){ if(e.target.files.length) processFile(e.target.files[0]); });
+}
 
 function processFile(file){
   if(typeof XLSX === 'undefined'){ showLibraryError(); return; }
@@ -720,3 +723,86 @@ function exportCSV(){
   a.click(); URL.revokeObjectURL(url);
   console.log('[HSA] CSV exported');
 }
+
+// ============================================================
+// Bedrijfsbreed Expediten — Sub Project ID-filter (centrale lijst via Admin)
+// Vervangt de losse upload: kies Sub Project ID('s) -> analyseer die regels.
+// ============================================================
+var _dgRaw = null;       // { headers, rows }
+var _dgSubKey = null;    // header-naam van de Sub Project ID-kolom
+var _dgSubs = [];        // [{sub,count}]
+var _dgSelected = {};    // gekozen Sub Project ID's (set)
+
+async function initDgFilter(){
+  var st = document.getElementById('dgStatus');
+  var pick = document.getElementById('dgPick');
+  if(!st) return;
+  console.log('[DG] Sub Project-filter init (v2)…');
+  try {
+    if(!window.ExpeditingData){
+      st.innerHTML = '\u26a0 Centrale data-module niet geladen. Controleer of <code>shared/expediting-core.js</code> en <code>shared/expediting-data.js</code> zijn geüpload en doe een harde refresh (Ctrl/Cmd+Shift+R).';
+      return;
+    }
+    var raw = await ExpeditingData.loadRaw();
+    var m   = await ExpeditingData.meta();
+    if(!raw || !raw.rows || !raw.rows.length){
+      st.innerHTML = '\u26a0 Geen centrale lijst geladen. Upload de bedrijfsbrede Expediten op de <a href="../Admin/" style="color:var(--accent)">Admin-pagina</a>.';
+      if(pick) pick.style.display = 'none';
+      return;
+    }
+    _dgRaw = raw;
+    _dgSubKey = raw.headers.find(function(h){ return /sub\s*project\s*id/i.test(String(h)); })
+             || raw.headers.find(function(h){ return /sub\s*project/i.test(String(h)); })
+             || raw.headers[5];
+    var counts = {};
+    raw.rows.forEach(function(r){ var s = String(r[_dgSubKey]==null?'':r[_dgSubKey]).trim(); if(s) counts[s] = (counts[s]||0)+1; });
+    _dgSubs = Object.keys(counts).map(function(s){ return {sub:s, count:counts[s]}; })
+              .sort(function(a,b){ return String(a.sub).localeCompare(String(b.sub), undefined, {numeric:true}); });
+    st.innerHTML = '\ud83d\udccb <b>' + escapeHtml((m && m.filename) || 'Bedrijfsbreed Expediten') + '</b> — ' + raw.rows.length + ' regels \u00b7 ' + _dgSubs.length + ' Sub Projecten';
+    if(pick) pick.style.display = 'block';
+    dgRenderSubs();
+  } catch(e){
+    console.error('[DG] init-fout:', e);
+    st.innerHTML = '\u26a0 Fout bij laden van de centrale lijst: ' + escapeHtml(e && e.message ? e.message : String(e));
+  }
+}
+
+function dgRenderSubs(){
+  var list = document.getElementById('dgList'); if(!list) return;
+  var q = (document.getElementById('dgSearch').value || '').toLowerCase();
+  var items = _dgSubs.filter(function(o){ return !q || String(o.sub).toLowerCase().indexOf(q) !== -1; });
+  list.innerHTML = items.length ? items.map(function(o){
+    return '<label class="dg-item"><input type="checkbox" class="dg-cb" value="' + escapeHtml(o.sub) + '" '
+      + (_dgSelected[o.sub] ? 'checked' : '') + ' onchange="dgToggle(this)"><span>' + escapeHtml(o.sub)
+      + '</span><span class="dg-n">' + o.count + '</span></label>';
+  }).join('') : '<div class="dg-empty">Geen Sub Project ID gevonden</div>';
+}
+
+function dgToggle(cb){ if(cb.checked) _dgSelected[cb.value] = true; else delete _dgSelected[cb.value]; dgApply(); }
+
+function dgSelectAll(on){
+  var q = (document.getElementById('dgSearch').value || '').toLowerCase();
+  _dgSubs.filter(function(o){ return !q || String(o.sub).toLowerCase().indexOf(q) !== -1; })
+         .forEach(function(o){ if(on) _dgSelected[o.sub] = true; else delete _dgSelected[o.sub]; });
+  dgRenderSubs(); dgApply();
+}
+
+function dgApply(){
+  var sel = document.getElementById('dgSelCount');
+  var subs = Object.keys(_dgSelected);
+  if(sel) sel.textContent = subs.length + ' geselecteerd';
+  if(!_dgRaw) return;
+  if(!subs.length){
+    // niets geselecteerd: verberg resultaten
+    ['statsBar','actionsBar','tabBar'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+    var rc=document.getElementById('resultsContainer'); if(rc) rc.innerHTML='';
+    return;
+  }
+  var set = {}; subs.forEach(function(s){ set[s] = true; });
+  var rows = _dgRaw.rows.filter(function(r){ return set[String(r[_dgSubKey]==null?'':r[_dgSubKey]).trim()]; });
+  lastData = rows;
+  analyzeData(rows);
+}
+
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDgFilter);
+else initDgFilter();
