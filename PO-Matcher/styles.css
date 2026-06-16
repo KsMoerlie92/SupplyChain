@@ -994,3 +994,6 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 .exp-empty{padding:.5rem;color:var(--muted,#8FA3BF);font-size:.74rem;text-align:center}
 .exp-sel{font-size:.72rem;color:var(--teal,#00B4C8);font-family:var(--mono,monospace)}
 .exp-central .dz-filename{margin-top:.4rem;font-size:.7rem;color:var(--muted,#8FA3BF)}
+
+#result-table thead th.res-sortable{cursor:pointer;user-select:none}
+#result-table thead th.res-sortable:hover{color:var(--teal)}
