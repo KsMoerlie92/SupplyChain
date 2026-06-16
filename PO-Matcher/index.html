@@ -46,7 +46,6 @@
         <input type="file" id="file-moeder" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'moeder')">
         <div class="dz-badge b-moeder">Moederlijst</div>
         <div class="dz-title">Moeder&shy;lijst</div>
-        <div class="dz-meta">Blad: Sheet 2 (automatisch)<br>IHC PO = Kol C · Item # = Kol D<br>Kolom AA = uitsluiting filter</div>
         <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
         <div class="dz-filename" id="fn-moeder">—</div>
       </div>
@@ -64,8 +63,8 @@
 
       <div class="exp-central" id="dz-expediting">
         <div class="dz-badge b-expediting">Expediting</div>
-        <div class="dz-title">Expediting Lijst — centraal (Admin)</div>
-        <div class="exp-status" id="exp-status">Centrale lijst laden…</div>
+        <div class="dz-title">Expediting Lijst</div>
+        <div class="exp-status" id="exp-status" style="display:none"></div>
         <div class="exp-pick" id="exp-pick" style="display:none">
           <input class="exp-search" id="exp-search" type="text" placeholder="🔎 Zoek Sub Project ID…" oninput="renderSubList()">
           <label class="exp-all"><input type="checkbox" id="exp-all-cb" onchange="selectAllSubs(this.checked)"> Alle (gefilterde) projecten</label>
@@ -117,7 +116,7 @@
     <!-- Section label -->
     <div class="section-head">
       <span class="red-mark"></span>
-      Resultaten — XLOOKUP Expanded Output Kol C → Expediting Kol A
+      Resultaten
     </div>
 
     <!-- Filters -->
