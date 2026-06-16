@@ -225,6 +225,7 @@ async function initExpeditingFilter() {
   let raw = null, m = null;
   try { raw = await ExpeditingData.loadRaw(); m = await ExpeditingData.meta(); } catch (e) {}
   if (!raw || !raw.rows || !raw.rows.length) {
+    statusEl.style.display = '';   // foutmelding wél tonen
     statusEl.innerHTML = '⚠ Geen centrale lijst geladen. Upload de bedrijfsbrede Expediten op de <a href="../Admin/">Admin-pagina</a>.';
     if (pickEl) pickEl.style.display = 'none';
     return;
