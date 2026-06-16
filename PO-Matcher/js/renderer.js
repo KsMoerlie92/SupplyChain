@@ -128,6 +128,55 @@ function setFilter(filter, el) {
   if (!isVal)  applyFilters();
 }
 
+// ── Kolomsorteerder hoofdtabel ("In beide lijsten" / "Alleen moeder") ───────
+let _resSortCol = null;     // null = originele volgorde
+let _resSortDir = 'asc';    // 'asc' | 'desc'
+
+function setResSort(key) {
+  if (_resSortCol === key) _resSortDir = (_resSortDir === 'asc') ? 'desc' : 'asc';
+  else { _resSortCol = key; _resSortDir = 'asc'; }
+  _updateResArrows();
+  applyFilters();
+}
+
+function _resKey(r) {
+  switch (_resSortCol) {
+    case 'ref':      return ((r.xlookup || r.combined) || '').toLowerCase();
+    case 'supplier': return (r.colSupplier || '').toLowerCase();
+    case 'qty': {
+      const v = String(r.colF || r.expColO || '').replace(',', '.').trim();
+      const n = parseFloat(v);
+      return (v !== '' && !isNaN(n) && /^[\d.\s]+$/.test(v)) ? n : v.toLowerCase();
+    }
+    case 'colE':     return (r.colE || '').toLowerCase();
+    case 'status':   return r.noMatch ? 1 : 0;   // matches eerst bij oplopend
+    default:         return null;
+  }
+}
+
+function _resSortRows(rows) {
+  if (!_resSortCol) return rows;
+  const dir = (_resSortDir === 'desc') ? -1 : 1;
+  return rows.slice().sort((a, b) => {
+    const av = _resKey(a), bv = _resKey(b);
+    const ab = (av === null || av === undefined || av === '');
+    const bb = (bv === null || bv === undefined || bv === '');
+    if (ab && bb) return 0;
+    if (ab) return 1;            // lege waarden onderaan
+    if (bb) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'nl', { numeric: true }) * dir;
+  });
+}
+
+function _updateResArrows() {
+  document.querySelectorAll('#result-table thead th.res-sortable').forEach(th => {
+    const k = th.dataset.sort;
+    const sp = th.querySelector('.res-arrow');
+    if (sp) sp.textContent = (_resSortCol === k) ? (_resSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+  });
+}
+
 function applyFilters() {
   const q       = document.getElementById('search-box').value.toLowerCase();
   const hideNRY = document.getElementById('toggle-mr-nry')?.checked ?? false;
@@ -163,7 +212,7 @@ function applyFilters() {
     document.getElementById('row-count').textContent = '0 rijen';
   } else {
     document.getElementById('empty-state').classList.remove('visible');
-    renderTable(rows);
+    renderTable(_resSortRows(rows));
     updateStats(allRows); // stats altijd totaal
   }
 }
