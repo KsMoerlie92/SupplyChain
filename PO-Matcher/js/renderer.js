@@ -35,7 +35,7 @@ function renderTable(rows) {
         <span class="expand-arrow">▶</span><span class="col-indicator" style="background:${r.xlookup ? '#70AD47' : '#C0392B'};"></span>${
           r.xlookup ? esc(r.xlookup) : esc(r.combined)
         }</td>
-      <td class="cell-supplier">${esc(r.colSupplier || '—')}</td>
+      <td class="cell-supplier" title="${esc(r.colSupplier || '')}">${esc(_capStr(r.colSupplier || '—', 18))}</td>
       <td class="cell-qty">${
         r.colF || r.expColO
           ? (esc(r.colF || '—') + (r.expColO ? ' / ' + esc(r.expColO) : ''))
@@ -386,6 +386,7 @@ function renderLateItems() {
       colA, statusVal, isReleased, isConfirmed, isPast,
       colM:  gs(vals, iM),   // Unified Reference Code
       colJ:  gs(vals, iJ),   // Supplier Name
+      colL:  gs(vals, iL),   // Description
       colH:  gs(vals, iH),   colI:  gs(vals, iI),
       lastExp:  iLastExp  >= 0 ? gs(vals, iLastExp)  : '',
       hdrNote:  iHdrNote  >= 0 ? gs(vals, iHdrNote)  : '',
@@ -401,6 +402,7 @@ function renderLateItems() {
       case 'colA':      return (r.colA || '').toLowerCase();
       case 'colM':      return (r.colM || '').toLowerCase();
       case 'colJ':      return (r.colJ || '').toLowerCase();
+      case 'colL':      return (r.colL || '').toLowerCase();
       case 'wanted':    return r.wantedDate ? r.wantedDate.getTime() : null;
       case 'confirmed': return r.confDate   ? r.confDate.getTime()   : null;
       case 'offset':    return (r.offset === null || r.offset === undefined) ? null : r.offset;
@@ -429,10 +431,10 @@ function renderLateItems() {
   };
   const thead = `<thead><tr>
     <th style="width:22px"></th>
-    <th style="width:26px">#</th>
     ${_sortTh('colA', hn(iA))}
     ${_sortTh('colM', hn(iM))}
     ${_sortTh('colJ', hn(iJ))}
+    ${_sortTh('colL', 'Description')}
     ${_sortTh('wanted', 'Wanted')}
     ${_sortTh('confirmed', 'Confirmed')}
     ${_sortTh('offset', 'Offset (W\u2212C)')}
@@ -467,10 +469,10 @@ function renderLateItems() {
 
     const mainRow = `<tr class="late-row ${rowCls} ${offCls}" onclick="toggleLateDetail(${i})" style="cursor:pointer">
       <td class="late-tog-cell"><button class="late-tog-btn" id="late-tog-${i}" tabindex="-1">▼</button></td>
-      <td class="rc">${i + 1}</td>
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
-      <td>${esc(r.colJ)} ${relBadge}</td>
+      <td title="${esc(r.colJ || '')}">${esc(_capStr(r.colJ, 18))} ${relBadge}</td>
+      <td class="late-desc-cell" title="${esc(r.colL || '')}">${esc(r.colL || '—')}</td>
       <td class="date-cell">${_fmtDate(r.wantedDate)}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.confDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
@@ -515,5 +517,7 @@ function renderLateItems() {
   const relCount  = rows.filter(r => r.isReleased).length;
   const pastCount = pastRows.length;
   const futCount  = futureRows.length;
-  setStatus(`Late Items: ${pastCount} verstreken · ${futCount} komende 30 dagen${relCount ? ` · ⚠ ${relCount} Released` : ''}`);
+  setStatus(`Expediting list: ${pastCount} verstreken · ${futCount} komende 30 dagen${relCount ? ` · ⚠ ${relCount} Released` : ''}`);
 }
+// Helper: kort tekst af op n tekens met ellipsis (hoisted, overal bruikbaar)
+function _capStr(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '\u2026' : s; }
