@@ -5,8 +5,8 @@
 (function () {
   const PAGES = [
     { href: '../',                    icon: '🏠', label: 'Home',                badge: ''           },
-    { href: '../PO-Matcher/',         icon: '🔍', label: 'PO Matcher',          badge: 'Expediting' },
-    { href: '../Legplan/',            icon: '📦', label: 'Legplan & CIPL',       badge: 'Shipment'   },
+    { href: '../PO-Matcher/',         icon: '🔍', label: 'Expediting Tool',          badge: 'Expediting' },
+    { href: '../Legplan/',            icon: '📦', label: 'Logistic Portal',       badge: 'Shipment'   },
     { href: '../Itemlijst-Validator/',icon: '📋', label: 'Itemlijst Validator',  badge: 'Validatie'  },
     { href: '../DG-Overview/',        icon: '⚠️', label: 'DG Overview',          badge: 'Hazardous'  },
     { href: '../Expediting-Mailer/',  icon: '✉️', label: 'Expediting Mailer',    badge: 'Mailer'     },
