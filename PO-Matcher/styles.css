@@ -1002,3 +1002,12 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 .val-cell-fill-ok{box-shadow:inset 3px 0 0 var(--green,#00C853)}
 .val-cell-fill-ok input{color:var(--green,#00C853);font-weight:600}
 .val-cell-fill-nf{box-shadow:inset 3px 0 0 var(--amber,#FFB300)}
+
+/* Hoofdtabel "Nog te verwerken" — vaste kolombreedtes + uitlijning */
+#result-table { table-layout: fixed; width: 100%; }
+#result-table th:nth-child(1), #result-table td:nth-child(1) { width: 208px; }   /* IHC PO + Item */
+#result-table th:nth-child(2), #result-table td:nth-child(2) { width: 150px; }   /* Leverancier */
+#result-table th:nth-child(3), #result-table td:nth-child(3) { width: 75px;  }   /* Qty */
+#result-table th:nth-child(5), #result-table td:nth-child(5) { width: 116px; text-align: right; } /* Status, uiterst rechts */
+/* kolom 4 (Description) krijgt de resterende ruimte; lange tekst → ellipsis */
+#result-table td.cell-location { overflow: hidden; text-overflow: ellipsis; }
