@@ -190,7 +190,30 @@ function isUSD(header) {
 }
 
 // ── Validate a single data row ────────────────────────────────────────────
-async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
+// Waarde voor kolom D wanneer er geen match in de expediten-lijst is (en D leeg was)
+const XLOOKUP_NOT_FOUND = '1-1';
+
+// Bouw opzoek-index uit de bedrijfsbrede expediten:
+//   Sub Project ID (kol F/idx 5) -> { Unified Reference Code (kol M/idx 12) -> "kol C - kol D" }
+function _buildXlookupIndex(rows) {
+  const idx = {};
+  if (!rows || !rows.length) return idx;
+  for (const r of rows) {
+    const v   = Object.values(r);
+    const sub = String(v[5]  == null ? '' : v[5]).trim();   // F: Sub Project ID
+    const m   = String(v[12] == null ? '' : v[12]).trim();  // M: Unified Reference Code
+    if (!sub || !m) continue;
+    if (!idx[sub]) idx[sub] = {};
+    if (!(m in idx[sub])) {
+      const c = String(v[2] == null ? '' : v[2]).trim();    // C
+      const d = String(v[3] == null ? '' : v[3]).trim();    // D
+      idx[sub][m] = c + '-' + d;
+    }
+  }
+  return idx;
+}
+
+async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData, xlookupIndex) {
   const errors   = {};  // col letter → error message
   const warnings = {};  // col letter → warning message
   const computed = {};  // col letter → computed value to write back
@@ -202,32 +225,34 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   // ── C: IHC PO — required, not empty ──────────────────────────────────────
   if (!vs('C')) errors['C'] = 'IHC PO is verplicht';
 
-  // ── D: Item — must contain '-', else look up H in Expediting Kol M ───────
-  const dVal = vs('D');
-  if (dVal && !dVal.includes('-')) {
-    warnings['D'] = `Geen '-' in Item — H-waarden worden opgezocht in Expediting`;
-  } else if (!dVal) {
-    // Check if H can serve as fallback
-    const hVal = vs('H');
-    if (!hVal) {
-      errors['D'] = 'Item # ontbreekt en Mark/Label (H) is ook leeg';
-    } else {
-      const hCodes = parseHColumn(hVal);
-      if (expeditingData && expeditingData.length) {
-        const found = hCodes.filter(code =>
-          expeditingData.some(row => {
-            const mVal = String(Object.values(row)[12] || '').trim();
-            return mVal === code;
-          })
-        );
-        if (!found.length) {
-          warnings['D'] = `Item leeg — H-waarden (${hCodes.join(', ')}) niet gevonden in Expediting Kol M`;
-        } else {
-          warnings['D'] = `Item leeg — gevonden via H: ${found.join(', ')}`;
+  // ── D: Item — XLOOKUP via Sub Project (B) + Mark/Label (H) → Expediting C-D ──
+  // Filtert de bedrijfsbrede expediten op Sub Project ID (kolom B van de itemlijst),
+  // matcht H tegen Unified Reference Code (kolom M) en vult kolom C + "-" + kolom D
+  // terug in Item (kolom D). Draait altijd; overschrijft een bestaande D bij een hit.
+  {
+    const subId  = vs('B');
+    const hVal   = vs('H');
+    const hCodes = hVal ? parseHColumn(hVal) : [];
+    const dWas   = vs('D');
+
+    let xResult = null, xVia = null;
+    if (xlookupIndex && subId && hCodes.length) {
+      const sub = xlookupIndex[subId];
+      if (sub) {
+        for (const code of hCodes) {
+          if (Object.prototype.hasOwnProperty.call(sub, code)) { xResult = sub[code]; xVia = code; break; }
         }
-      } else {
-        warnings['D'] = `Item leeg — H-waarden: ${hCodes.join(', ')} (Expediting niet geladen)`;
       }
+    }
+
+    if (xResult) {
+      cells[COL.D] = xResult;                                  // gevonden → (over)schrijf D
+      computed['_dfill'] = { value: xResult, status: 'found', via: xVia };
+    } else if (!dWas) {
+      cells[COL.D] = XLOOKUP_NOT_FOUND;                        // leeg + niet gevonden → fallback
+      computed['_dfill'] = { value: XLOOKUP_NOT_FOUND, status: 'notfound' };
+    } else {
+      computed['_dfill'] = { value: dWas, status: 'kept' };    // al gevuld + niet gevonden → laten staan
     }
   }
 
@@ -378,14 +403,23 @@ async function runValidation() {
   // Get country codes from file's Master tab (already loaded)
   const coo = _valCOO.size > 0 ? _valCOO : VL_COO_FALLBACK;
 
-  // Get expediting data from fileData (loaded in PO Matcher)
-  const expeditingData = (typeof fileData !== 'undefined' && fileData.expediting)
+  // Bedrijfsbrede expediten (Admin) — voor de Item-opzoeking (kolom D via Sub Project + H → M).
+  // In de validator is er geen Sub Project-picker, dus laad de centrale lijst rechtstreeks.
+  let expeditingData = (typeof fileData !== 'undefined' && fileData.expediting && fileData.expediting.data)
     ? fileData.expediting.data : null;
+  if ((!expeditingData || !expeditingData.length) && typeof ExpeditingData !== 'undefined' && ExpeditingData.loadRaw) {
+    try {
+      const _raw = await ExpeditingData.loadRaw();
+      if (_raw && _raw.rows && _raw.rows.length) expeditingData = _raw.rows;
+    } catch (e) { console.warn('[Validator] centrale expediten laden mislukt:', e); }
+  }
+  const xlookupIndex = _buildXlookupIndex(expeditingData);
+  console.log('[Validator] XLOOKUP-index (v1): ' + Object.keys(xlookupIndex).length + ' Sub Project(en) uit expediten');
 
   // Validate each row
   let totalErrors = 0, totalWarnings = 0;
   for (const row of _valRows) {
-    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData);
+    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData, xlookupIndex);
     row.errors   = result.errors;
     row.warnings = result.warnings;
     row.computed = result.computed;
@@ -506,6 +540,22 @@ function renderValidationTable(usdPrice, usdRate) {
           <input class="val-input" data-row="${ri}" data-col="${ci}"
             value="${esc(disp)}" oninput="valCellEdit(${ri},${ci},this.value)">
           <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
+        </td>`;
+      }
+
+      // Item-cel (D) — markeer wanneer via de expediten opgezocht/aangevuld
+      if (col === 'D' && row.computed && row.computed._dfill) {
+        const df  = row.computed._dfill;
+        const tip = df.status === 'found'
+          ? 'Item opgezocht via expediting (Sub Project ID + H \u2192 kol M): ' + df.value
+          : df.status === 'notfound'
+          ? 'Geen expediting-match \u2014 standaardwaarde ' + df.value
+          : 'Geen expediting-match \u2014 bestaande Item behouden';
+        const mark = df.status === 'found' ? 'val-cell-fill-ok' : df.status === 'notfound' ? 'val-cell-fill-nf' : '';
+        return `<td class="val-cell ${cellCls} ${mark}" title="${esc(tip)}">
+          <input class="val-input" data-row="${ri}" data-col="${ci}"
+            value="${esc(disp)}"
+            oninput="valCellEdit(${ri},${ci},this.value)">
         </td>`;
       }
 
