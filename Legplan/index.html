@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Royal IHC — Legplan & CIPL</title>
+<title>Royal IHC — Logistic Portal</title>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <!-- Application modules — load order matters -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -49,7 +49,7 @@
     <div class="header-divider"></div>
     <div class="header-titles">
       <span class="header-eyebrow">Procurement &amp; Supply Chain</span>
-      <h1 class="header-h1">Legplan &amp; <span class="ihc-red">CIPL</span></h1>
+      <h1 class="header-h1">Logistic <span class="ihc-red">Portal</span></h1>
     </div>
   </div>
 </header>
@@ -108,15 +108,15 @@
 
     <!-- Tabs -->
     <div class="tab-row" id="tab-row" style="display:none">
-      <button class="tab-chip active-legplan" onclick="showTab('legplan',this)">📦 Legplan</button>
-      <button class="tab-chip" onclick="showTab('cipl',this)">📄 CIPL</button>
+      <button class="tab-chip active-legplan" onclick="showTab('legplan',this)">📦 Warehouses (ready to ship)</button>
+      <button class="tab-chip" onclick="showTab('cipl',this)">📄 Shipment information</button>
     </div>
 
     <!-- Legplan panel -->
     <div class="legplan-panel visible" id="legplan-wrap">
       <div class="legplan-header">
         <div>
-          <div class="section-head"><span class="red-mark"></span>Legplan — Collo overzicht voor verzending</div>
+          <div class="section-head"><span class="red-mark"></span>Warehouses (ready to ship) — Collo overzicht voor verzending</div>
           <p style="font-size:.68rem;color:var(--muted);margin-top:.25rem;font-family:var(--mono)">Filter: BL# leeg · MR ID gevuld · Niet "not received yet"</p>
         </div>
         <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
@@ -199,7 +199,7 @@
     <div class="cipl-panel" id="cipl-wrap">
       <div class="cipl-header">
         <div>
-          <div class="section-head"><span class="red-mark"></span>CIPL — Commercial Invoice &amp; Packing List</div>
+          <div class="section-head"><span class="red-mark"></span>Shipment information — Commercial Invoice &amp; Packing List</div>
           <p style="font-size:.68rem;color:var(--muted);margin-top:.25rem;font-family:var(--mono)">Gefilterd op Shipment # uit Moederlijst · Kolom "Shipment"</p>
         </div>
         <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
