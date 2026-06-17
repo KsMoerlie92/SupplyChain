@@ -28,7 +28,7 @@ function renderTable(rows) {
 
     const badge = r.noMatch
       ? '<span class="badge-warn">✗ ALLEEN MOEDER</span>'
-      : '<span class="badge-ok">✓ IN BEIDE LIJSTEN</span>';
+      : '<span class="badge-ok">✓ NOG TE VERWERKEN</span>';
 
     tr.innerHTML = `
       <td class="${r.xlookup ? 'match' : 'no-match'}" style="font-weight:700">
@@ -41,7 +41,7 @@ function renderTable(rows) {
           ? (esc(r.colF || '—') + (r.expColO ? ' / ' + esc(r.expColO) : ''))
           : '—'
       }</td>
-      <td class="cell-location" title="${esc(r.colE || '')}">${esc((r.colE || '—').length > 15 ? r.colE.slice(0, 15) + '…' : (r.colE || '—'))}</td>
+      <td class="cell-location" title="${esc(r.colE || '')}">${esc(r.colE || '—')}</td>
       <td>${badge}</td>`;
 
     // Detail dropdown row
