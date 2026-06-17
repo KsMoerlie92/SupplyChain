@@ -997,3 +997,8 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 
 #result-table thead th.res-sortable{cursor:pointer;user-select:none}
 #result-table thead th.res-sortable:hover{color:var(--teal)}
+
+/* Itemlijst-Validator: kolom D opgezocht via expediting (XLOOKUP) */
+.val-cell-fill-ok{box-shadow:inset 3px 0 0 var(--green,#00C853)}
+.val-cell-fill-ok input{color:var(--green,#00C853);font-weight:600}
+.val-cell-fill-nf{box-shadow:inset 3px 0 0 var(--amber,#FFB300)}
