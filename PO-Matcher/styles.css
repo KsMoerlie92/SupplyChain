@@ -1011,3 +1011,14 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 #result-table th:nth-child(5), #result-table td:nth-child(5) { width: 116px; text-align: right; } /* Status, uiterst rechts */
 /* kolom 4 (Description) krijgt de resterende ruimte; lange tekst → ellipsis */
 #result-table td.cell-location { overflow: hidden; text-overflow: ellipsis; }
+
+/* Expediting list — kolommen incl. Description, zonder #-kolom */
+#late-items-table { table-layout: fixed; width: 100%; }
+#late-items-table th:nth-child(2), #late-items-table td:nth-child(2) { width: 150px; }  /* IHC PO */
+#late-items-table th:nth-child(3), #late-items-table td:nth-child(3) { width: 120px; }  /* Unified Reference */
+#late-items-table th:nth-child(4), #late-items-table td:nth-child(4) { width: 150px; }  /* Supplier (max 18) */
+/* kolom 5 = Description → resterende ruimte */
+#late-items-table th:nth-child(6), #late-items-table td:nth-child(6) { width: 95px;  }  /* Wanted */
+#late-items-table th:nth-child(7), #late-items-table td:nth-child(7) { width: 95px;  }  /* Confirmed */
+#late-items-table th:nth-child(8), #late-items-table td:nth-child(8) { width: 92px; text-align: right; } /* Offset */
+#late-items-table td:nth-child(2), #late-items-table td:nth-child(3), #late-items-table td:nth-child(4), #late-items-table td.late-desc-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
