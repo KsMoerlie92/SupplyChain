@@ -98,7 +98,7 @@
         <span class="stat-val sv-green" id="st-match">—</span>
         <span class="stat-lbl">Nog te verwerken</span>
       </div>
-      <div class="stat-cell">
+      <div class="stat-cell nmd-clickable" onclick="window.NoMatchDiag && NoMatchDiag.open()" title="Klik voor diagnose: welke regels niet in expediting staan">
         <span class="stat-val sv-red" id="st-nomatch">—</span>
         <span class="stat-lbl">Niet in Expediting</span>
       </div>
@@ -231,6 +231,7 @@
 <script src="js/renderer.js"></script>
 <script src="js/export.js"></script>
 <script src="js/validator.js"></script>
+<script src="js/diag-nomatch.js"></script>
 <script src="../shared/shared.js"></script>
 </body>
 </html>
