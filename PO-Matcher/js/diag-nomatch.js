@@ -14,6 +14,11 @@
   function _cap(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '\u2026' : s; }
   const _strip = s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
+  // allRows / fileData zijn lexicale globals (let/const), géén window-properties.
+  // Lees ze daarom via hun kale naam, met typeof-vangnet voor laadvolgorde.
+  function _getAll() { try { if (typeof allRows !== 'undefined' && Array.isArray(allRows)) return allRows; } catch (e) {} return (window.allRows || []); }
+  function _getFd()  { try { if (typeof fileData !== 'undefined' && fileData) return fileData; } catch (e) {} return (window.fileData || {}); }
+
   let _injected = false;
   function _injectStyle() {
     if (_injected) return; _injected = true;
@@ -56,8 +61,8 @@
 
   let _rows = [];
   function _build() {
-    const all = (window.allRows || []);
-    const fd  = (window.fileData || {});
+    const all = _getAll();
+    const fd  = _getFd();
     const exp = (fd.expediting && fd.expediting.data) || [];
     const colAKey = (fd.expediting && fd.expediting.headers && fd.expediting.headers[0])
                  || (exp[0] && Object.keys(exp[0])[0]);
@@ -129,7 +134,7 @@
   function open() {
     _injectStyle();
     _build();
-    const total = (window.allRows || []).length;
+    const total = _getAll().length;
     const nearCount = _rows.filter(r => r.near).length;
     close();
     const ov = document.createElement('div');
