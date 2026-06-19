@@ -269,9 +269,14 @@ function _toDate(v) {
       return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }
   }
-  // ISO YYYY-MM-DD (ook volledige ISO-tijdstempels, bv. centrale JSON-data)
+  // ISO YYYY-MM-DD; bij een volledig tijdstempel (bevat 'T', bv. centrale JSON
+  // als 2026-06-15T22:00:00.000Z = 16/06 lokaal) de datum in LOKALE tijd nemen,
+  // zodat een als UTC weggeschreven lokale middernacht niet één dag terugvalt.
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) return new Date(+iso[1], +iso[2]-1, +iso[3]);
+  if (iso) {
+    if (s.indexOf('T') > -1) { const dt = new Date(s); if (!isNaN(dt.getTime())) return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
+    return new Date(+iso[1], +iso[2]-1, +iso[3]);
+  }
   // European DD-MM-YYYY or DD/MM/YYYY
   const eu = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
   if (eu) return new Date(+eu[3], +eu[2]-1, +eu[1]);
@@ -344,7 +349,7 @@ function renderLateItems() {
   const iM  = col('Unified Reference Code', 12);
   const iLwr     = col('Latest Wanted Receipt Date', 19);  // Wanted
   const iPlanned = col('Planned Delivery Date', 20);        // tijdlijn-anker (verleden/toekomst)
-  const iConf    = colN('Last Confirmed');                  // Confirmed (echte bevestigde datum)
+  const iConf    = col('Planned Delivery Date', 20);        // Confirmed = geplande (bevestigde) leverdatum
   // optionele detailvelden — alleen tonen als de kolom écht bestaat
   const iLastExp = colN('Last Expedited');
   const iHdrNote = colN('PO Header Note');
@@ -359,6 +364,7 @@ function renderLateItems() {
     const vals = Object.values(row);
     const colA = gs(vals, iA);
     if (!colA) return null;
+    if (!String(gs(vals, iM) || '').trim()) return null;   // blanco Unified Reference Code overslaan
 
     const wantedDate  = _toDate(g(vals, iLwr));                 // Latest Wanted Receipt Date
     const confDate    = iConf >= 0 ? _toDate(g(vals, iConf)) : null; // Last Confirmed
@@ -389,6 +395,7 @@ function renderLateItems() {
       colL:  gs(vals, iL),   // Description
       colH:  gs(vals, iH),   colI:  gs(vals, iI),
       lastExp:  iLastExp  >= 0 ? gs(vals, iLastExp)  : '',
+      lastExpDate: iLastExp >= 0 ? _toDate(g(vals, iLastExp)) : null,
       hdrNote:  iHdrNote  >= 0 ? gs(vals, iHdrNote)  : '',
       lineNote: iLineNote >= 0 ? gs(vals, iLineNote) : '',
       fatProt:  iFatProt  >= 0 ? gs(vals, iFatProt)  : '',
@@ -403,6 +410,7 @@ function renderLateItems() {
       case 'colM':      return (r.colM || '').toLowerCase();
       case 'colJ':      return (r.colJ || '').toLowerCase();
       case 'colL':      return (r.colL || '').toLowerCase();
+      case 'lastExp':   return r.lastExpDate ? r.lastExpDate.getTime() : null;
       case 'wanted':    return r.wantedDate ? r.wantedDate.getTime() : null;
       case 'confirmed': return r.confDate   ? r.confDate.getTime()   : null;
       case 'offset':    return (r.offset === null || r.offset === undefined) ? null : r.offset;
@@ -431,10 +439,12 @@ function renderLateItems() {
   };
   const thead = `<thead><tr>
     <th style="width:22px"></th>
+    <th style="width:104px"></th>
     ${_sortTh('colA', hn(iA))}
     ${_sortTh('colM', hn(iM))}
     ${_sortTh('colJ', hn(iJ))}
     ${_sortTh('colL', 'Description')}
+    ${_sortTh('lastExp', 'Last Expedited')}
     ${_sortTh('wanted', 'Wanted')}
     ${_sortTh('confirmed', 'Confirmed')}
     ${_sortTh('offset', 'Offset (W\u2212C)')}
@@ -451,8 +461,9 @@ function renderLateItems() {
       ? `late-released ${r.isPast ? 'late-past' : 'late-future'}`
       : `${r.isPast ? 'late-past' : 'late-future'} ${r.isConfirmed ? 'late-confirmed' : ''}`;
 
-    const relBadge = r.isReleased
-      ? `<span class="released-badge" title="Orderbevestiging ophalen/opvragen">OB ophalen</span>` : '';
+    const relBtn = r.isReleased
+      ? `<button class="ob-btn" onclick="event.stopPropagation(); if (window.ExpeditingMailer && ExpeditingMailer.openForPO) { ExpeditingMailer.openForPO('${esc(r.colA)}'); }" title="Orderbevestiging ophalen / open template">OB ophalen</button>`
+      : '';
 
     // Detail: H and I always; others if filled
     const detFields = [
@@ -469,17 +480,19 @@ function renderLateItems() {
 
     const mainRow = `<tr class="late-row ${rowCls} ${offCls}" onclick="toggleLateDetail(${i})" style="cursor:pointer">
       <td class="late-tog-cell"><button class="late-tog-btn" id="late-tog-${i}" tabindex="-1">▼</button></td>
+      <td class="ob-cell">${relBtn}</td>
       <td>${esc(r.colA)}</td>
       <td class="status-cell">${esc(r.colM)}</td>
-      <td title="${esc(r.colJ || '')}">${esc(_capStr(r.colJ, 18))} ${relBadge}</td>
+      <td title="${esc(r.colJ || '')}">${esc(_capStr(r.colJ, 18))}</td>
       <td class="late-desc-cell" title="${esc(r.colL || '')}">${esc(r.colL || '—')}</td>
+      <td class="date-cell">${_fmtDate(r.lastExpDate)}</td>
       <td class="date-cell">${_fmtDate(r.wantedDate)}</td>
       <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.confDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
     </tr>`;
 
     const detRow = `<tr id="late-det-${i}" class="late-detail-row" style="display:none">
-      <td colspan="8"><div class="late-detail-inner">
+      <td colspan="10"><div class="late-detail-inner">
         ${detFields.map(([lbl, val]) =>
           `<div class="late-det-field">
             <span class="late-det-lbl">${esc(String(lbl))}</span>
@@ -492,7 +505,7 @@ function renderLateItems() {
   }
 
   const separator = `<tr class="late-separator">
-    <td colspan="8">
+    <td colspan="10">
       <span class="sep-past">▲ Verstreken</span>
       <span class="sep-line"></span>
       <span class="sep-future">▼ Komende 30 dagen</span>
@@ -507,7 +520,7 @@ function renderLateItems() {
   if (pastRows.length)                      tbody += pastHtml;
   if (pastRows.length && futureRows.length) tbody += separator;
   if (futureRows.length)                    tbody += futureHtml;
-  if (!tbody) tbody = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">
+  if (!tbody) tbody = `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:1.5rem">
     Geen items in het venster (verleden + komende 30 dagen).</td></tr>`;
 
   _lateOpenRows.clear();
