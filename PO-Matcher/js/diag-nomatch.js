@@ -1,11 +1,10 @@
-/* PO-Matcher — Diagnose "Niet in Expediting" (modal, IHC-stijl)
-   Klikbare stat-tegel -> overzicht van moederregels die niet in de
-   expediting-lijst (Kolom A) zijn teruggevonden. Per regel wordt de oorzaak
-   geclassificeerd:
-     • PO niet in expediting        — het PO-nummer komt nergens in Kol A voor
-     • regel/release wijkt af       — PO bestaat wel, maar de regel/release-sleutel
-                                       sluit niet aan (toont de wél beschikbare regels)
-     • andere notatie               — zelfde tekens, andere schrijfwijze (formaatverschil)
+/* PO-Matcher — "Ontvangen items" (modal, IHC-stijl)
+   Klikbare stat-tegel -> overzicht van moederregels die niet (meer) in de
+   expediting-lijst (Kolom A) staan en dus al zijn ontvangen/verwerkt in het ERP.
+   Per regel:
+     • volledig ontvangen        — heel PO afgehandeld (komt nergens meer in Kol A voor)
+     • deels ontvangen           — PO heeft nog open regels (die worden getoond)
+     • mogelijk formaatverschil  — staat nog in expediting onder een andere notatie
    Zelfstandige module; leest globals allRows + fileData via hun kale naam. */
 (function () {
   'use strict';
@@ -57,6 +56,8 @@
     .nmd-dim { color: var(--muted, #8FA3BF); }
     .nmd-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
     .nmd-badge.note { background: rgba(255,179,0,.15); color: var(--amber, #FFB300); border: 1px solid rgba(255,179,0,.4); }
+    .nmd-badge.done { background: rgba(0,200,83,.15); color: var(--green, #00C853); border: 1px solid rgba(0,200,83,.4); }
+    .nmd-badge.part { background: rgba(0,180,200,.15); color: var(--teal, #00B4C8); border: 1px solid rgba(0,180,200,.4); }
     .nmd-badge.line { background: rgba(255,138,61,.15); color: #FF8A3D; border: 1px solid rgba(255,138,61,.45); }
     .nmd-badge.miss { background: rgba(217,31,44,.15); color: #f87171; border: 1px solid rgba(217,31,44,.4); }
     .nmd-empty { padding: 28px 20px; text-align: center; color: var(--muted, #8FA3BF); }
@@ -101,11 +102,11 @@
     });
   }
 
-  const _catLabel = c => c === 'notation' ? 'andere notatie' : c === 'lineDiff' ? 'regel/release wijkt af' : 'PO niet in expediting';
+  const _catLabel = c => c === 'notation' ? 'mogelijk formaatverschil' : c === 'lineDiff' ? 'deels ontvangen' : 'volledig ontvangen';
   function _badge(c) {
-    if (c === 'notation') return '<span class="nmd-badge note">andere notatie</span>';
-    if (c === 'lineDiff')  return '<span class="nmd-badge line">regel/release wijkt af</span>';
-    return '<span class="nmd-badge miss">PO niet in expediting</span>';
+    if (c === 'notation') return '<span class="nmd-badge note">mogelijk formaatverschil</span>';
+    if (c === 'lineDiff')  return '<span class="nmd-badge part">deels ontvangen</span>';
+    return '<span class="nmd-badge done">volledig ontvangen</span>';
   }
   function _availCell(r) {
     if (r.cat === 'notation') return r.near ? `<span class="nmd-near">${_esc(r.near)}</span>` : '<span class="nmd-dim">\u2014</span>';
@@ -147,7 +148,7 @@
 
   function _copy() {
     const shown = _filtered();
-    const tsv = ['Leverancier\tVergelijkingssleutel (Kol C)\tDiagnose\tBeschikbaar in expediting (dit PO)']
+    const tsv = ['Leverancier\tVergelijkingssleutel (Kol C)\tStatus\tNog open in expediting (dit PO)']
       .concat(shown.map(r => {
         const av = r.cat === 'lineDiff' ? r.avail.join(' ') : (r.cat === 'notation' ? (r.near || '') : '');
         return `${r.supplier}\t${r.key}\t${_catLabel(r.cat)}\t${av}`;
@@ -174,21 +175,21 @@
     ov.innerHTML = `
       <div class="nmd-modal" role="dialog" aria-modal="true">
         <div class="nmd-head">
-          <div class="nmd-title">Diagnose \u2014 <b>Niet in Expediting</b></div>
+          <div class="nmd-title">Overzicht \u2014 <b>Ontvangen items</b></div>
           <button class="nmd-close" id="nmd-close" title="Sluiten">\u2715</button>
         </div>
         <div class="nmd-sub">
-          <b>${_rows.length}</b> van ${total} moederregels zijn niet teruggevonden in Kolom A van de expediting-lijst. Daarvan:
-          <b>${_counts.poMissing}</b> \u00d7 PO niet in expediting,
-          <b>${_counts.lineDiff}</b> \u00d7 PO wel aanwezig maar regel/release wijkt af${_counts.notation ? `, <b>${_counts.notation}</b> \u00d7 andere notatie` : ''}.
+          <b>${_rows.length}</b> van ${total} moederregels staan niet (meer) in de expediting-lijst en zijn dus al ontvangen/verwerkt in het ERP. Daarvan:
+          <b>${_counts.poMissing}</b> \u00d7 volledig ontvangen (heel PO afgehandeld),
+          <b>${_counts.lineDiff}</b> \u00d7 deels ontvangen (PO heeft nog open regels)${_counts.notation ? `, <b>${_counts.notation}</b> \u00d7 mogelijk formaatverschil (staat nog in expediting onder andere notatie)` : ''}.
         </div>
         <div class="nmd-tools">
           <input type="text" id="nmd-search" placeholder="Filter op leverancier, sleutel of omschrijving\u2026">
-          <select id="nmd-cat" title="Filter op diagnose">
-            <option value="all">Alle diagnoses</option>
-            <option value="poMissing">PO niet in expediting</option>
-            <option value="lineDiff">Regel/release wijkt af</option>
-            <option value="notation">Andere notatie</option>
+          <select id="nmd-cat" title="Filter op status">
+            <option value="all">Alle statussen</option>
+            <option value="poMissing">Volledig ontvangen</option>
+            <option value="lineDiff">Deels ontvangen</option>
+            <option value="notation">Mogelijk formaatverschil</option>
           </select>
           <button class="nmd-btn" id="nmd-copy">\uD83D\uDCCB Kopieer</button>
           <span class="nmd-count" id="nmd-count"></span>
@@ -199,7 +200,7 @@
               <th>Leverancier</th>
               <th>Vergelijkingssleutel (Kol C)</th>
               <th>Diagnose</th>
-              <th>Beschikbaar in expediting (dit PO)</th>
+              <th>Nog open in expediting (dit PO)</th>
             </tr></thead>
             <tbody id="nmd-tbody"></tbody>
           </table>
