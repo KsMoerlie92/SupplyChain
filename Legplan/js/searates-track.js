@@ -54,14 +54,15 @@
   }
   function cleanNum(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
-  function buildUrl(number, type) {
-    var m = number.match(/^[A-Z]{4}/);
-    var sealine = m ? m[0] : '';
-    var t = (type === 'container') ? 'CT' : 'BL';
-    var u = 'https://www.searates.com/container/tracking/?shipment-type=sea' +
-      '&number=' + encodeURIComponent(number) + '&type=' + t;
-    if (sealine) u += '&sealine=' + sealine;
-    return u;
+  // Embeddable tracking-widget: de officiële SeaRates iframe-host (sirius).
+  // Toont direct het resultaat en auto-detecteert de rederij op basis van het nummer.
+  function embedUrl(number) {
+    return 'https://sirius.searates.com/tracking?number=' + encodeURIComponent(number);
+  }
+  // Volledige resultaatpagina op searates.com (voor "openen in nieuw tabblad").
+  function pageUrl(number) {
+    return 'https://www.searates.com/tracking-system/reverse/tracking' +
+      '?route=true&last_successful=false&number=' + encodeURIComponent(number);
   }
 
   var overlay = null;
@@ -79,7 +80,8 @@
     number = cleanNum(number);
     if (!number) return;
 
-    var url = buildUrl(number, type);
+    var ifrUrl = embedUrl(number);
+    var pageU  = pageUrl(number);
     var label = (type === 'container' ? 'Container ' : 'BL ') + number;
 
     injectStyle();
@@ -95,15 +97,15 @@
         '<div class="srt-head">' +
           '<h3>Track &amp; Trace</h3>' +
           '<span class="srt-sub">' + esc(label) + '</span>' +
-          '<a class="srt-ext" href="' + esc(url) + '" target="_blank" rel="noopener">Openen in nieuw tabblad \u2197</a>' +
+          '<a class="srt-ext" href="' + esc(pageU) + '" target="_blank" rel="noopener">Openen in nieuw tabblad \u2197</a>' +
           '<button class="srt-x" title="Sluiten">&times;</button>' +
         '</div>' +
-        '<iframe class="srt-frame" src="' + esc(url) + '" loading="lazy"></iframe>' +
-        '<div class="srt-note">Bron: SeaRates (view-only). Laadt de pagina niet? ' +
-          '<a href="' + esc(url) + '" target="_blank" rel="noopener">Openen in nieuw tabblad</a>.</div>' +
+        '<iframe class="srt-frame" src="' + esc(ifrUrl) + '" loading="lazy"></iframe>' +
+        '<div class="srt-note">Bron: SeaRates (view-only). Laadt de tracker niet? ' +
+          '<a href="' + esc(pageU) + '" target="_blank" rel="noopener">Openen in nieuw tabblad</a>.</div>' +
       '</div>';
     overlay.querySelector('.srt-x').addEventListener('click', close);
   }
 
-  window.SeaRatesTrack = { open: open, close: close, buildUrl: buildUrl };
+  window.SeaRatesTrack = { open: open, close: close, embedUrl: embedUrl, pageUrl: pageUrl };
 })();
