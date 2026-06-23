@@ -25,11 +25,9 @@
   var CARRIERS = {
     maersk:   { name: 'Maersk', deep: true, url: function (n) {
       return 'https://www.maersk.com/tracking/' + encodeURIComponent(n); } },
-    hapag:    { name: 'Hapag-Lloyd', deep: true, url: function (n) {
-      // Rederijformulier verwacht containernr als "AAAU  1234567" (spaties).
-      var c = n.replace(/^([A-Z]{4})(\d{6,7})$/, '$1  $2');
-      return 'https://www.hapag-lloyd.com/en/online-business/track/track-by-booking-solution.html' +
-        '?view=S8510&container=' + encodeURIComponent(c); } },
+    hapag:    { name: 'Hapag-Lloyd', deep: true, url: function (n, t) {
+      var base = 'https://www.hapag-lloyd.com/en/online-business/track/track-by-booking-solution.html';
+      return base + '?' + (t === 'container' ? 'container=' : 'blno=') + encodeURIComponent(n); } },
     msc:      { name: 'MSC', deep: true, url: function (n) {
       return 'https://www.msc.com/en/track-a-shipment?trackingNumber=' + encodeURIComponent(n) + '&trackingMode=01'; } },
     cmacgm:   { name: 'CMA CGM', deep: true, url: function (n, t) {
