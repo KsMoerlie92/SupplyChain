@@ -580,13 +580,12 @@ function _ciplShipInfoHTML(rows, headers){
     + cell(hNcr  || 'NCR',       first(hNcr))
     + '</div>';
   if (pairs.length){
-    // View-only Track & Trace via SeaRates in een popup (geen API/token nodig).
-    // Voorkeur voor BL-nummer; sealine wordt afgeleid uit de eerste 4 letters.
+    // Track & Trace via carrier-router: rederij herkend aan B/L-voorvoegsel.
     const ttCall = (p) => {
       const bl = String(p.bl||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
       const ct = String(p.container||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-      if (bl) return `if(window.SeaRatesTrack)SeaRatesTrack.open('${bl}','bl')`;
-      if (ct) return `if(window.SeaRatesTrack)SeaRatesTrack.open('${ct}','container')`;
+      if (bl) return `if(window.CarrierTrack)CarrierTrack.open('${bl}','bl')`;
+      if (ct) return `if(window.CarrierTrack)CarrierTrack.open('${ct}','container')`;
       return '';
     };
     html += '<div class="ci-containers"><span class="ci-l">Container / BL #</span><div class="ci-pairs">'
