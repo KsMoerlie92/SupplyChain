@@ -580,16 +580,26 @@ function _ciplShipInfoHTML(rows, headers){
     + cell(hNcr  || 'NCR',       first(hNcr))
     + '</div>';
   if (pairs.length){
+    // View-only Track & Trace via SeaRates in een popup (geen API/token nodig).
+    // Voorkeur voor BL-nummer; sealine wordt afgeleid uit de eerste 4 letters.
+    const ttCall = (p) => {
+      const bl = String(p.bl||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      const ct = String(p.container||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if (bl) return `if(window.SeaRatesTrack)SeaRatesTrack.open('${bl}','bl')`;
+      if (ct) return `if(window.SeaRatesTrack)SeaRatesTrack.open('${ct}','container')`;
+      return '';
+    };
     html += '<div class="ci-containers"><span class="ci-l">Container / BL #</span><div class="ci-pairs">'
       + pairs.map(p => {
-          const url     = p.container ? _trackUrl(p.container) : '';
+          const call      = ttCall(p);
+          const trackable = !!call;
           const contTxt = esc(p.container || '—');
-          const cont    = p.container
-            ? `<a href="${url}" target="_blank" rel="noopener" title="Track container ${contTxt} via Pier2Pier">\uD83D\uDCE6 ${contTxt}</a>`
+          const cont    = trackable
+            ? `<a href="#" onclick="event.preventDefault();${call}" title="Track &amp; Trace ${contTxt} in dit portaal">\uD83D\uDCE6 ${contTxt}</a>`
             : `\uD83D\uDCE6 ${contTxt}`;
           const blTxt   = esc(p.bl || '—');
-          const bl      = (p.bl && p.container)
-            ? `<a href="${url}" target="_blank" rel="noopener" title="Track container ${contTxt} via Pier2Pier">${blTxt}</a>`
+          const bl      = (p.bl && trackable)
+            ? `<a href="#" onclick="event.preventDefault();${call}" title="Track &amp; Trace BL ${blTxt} in dit portaal">${blTxt}</a>`
             : blTxt;
           return `<div class="ci-pair"><span class="ci-cont">${cont}</span><span class="ci-bl">BL ${bl}</span></div>`;
         }).join('')
