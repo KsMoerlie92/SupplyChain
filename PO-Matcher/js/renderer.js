@@ -358,7 +358,7 @@ function renderLateItems() {
   const iFatReq  = colN('FAT Date Required');
 
   const today    = new Date(); today.setHours(0,0,0,0);
-  const maxDate  = new Date(today); maxDate.setMonth(today.getMonth() + 1); // 1 month ahead
+  const soonMax  = new Date(today); soonMax.setDate(today.getDate() + 30); // grens "binnen 30 dagen" (kleurband)
 
   const rows = expData.map((row, ri) => {
     const vals = Object.values(row);
@@ -373,7 +373,6 @@ function renderLateItems() {
     // Tijdlijn-anker = geplande leverdatum (valt terug op confirmed/wanted als planned ontbreekt)
     const delivDate = plannedDate || confDate || wantedDate;
     if (!delivDate) return null;                  // geen datum → overslaan
-    if (delivDate > maxDate) return null;         // buiten venster (komende maand) → overslaan
 
     // Offset = Wanted − Confirmed (negatief = bevestigd ná gewenst = te laat); leeg zonder confirmed
     const offset = (wantedDate && confDate)
@@ -387,9 +386,10 @@ function renderLateItems() {
     if (!isReleased && !isConfirmed) return null;
 
     const isPast = delivDate < today;
+    const band   = isPast ? 'past' : (delivDate <= soonMax ? 'soon' : 'far');
 
     return {
-      colA, statusVal, isReleased, isConfirmed, isPast,
+      colA, statusVal, isReleased, isConfirmed, isPast, band,
       colM:  gs(vals, iM),   // Unified Reference Code
       colJ:  gs(vals, iJ),   // Supplier Name
       colL:  gs(vals, iL),   // Description
@@ -429,8 +429,7 @@ function renderLateItems() {
     return String(av).localeCompare(String(bv), 'nl', { numeric: true }) * dir;
   };
 
-  const pastRows   = rows.filter(r =>  r.isPast).sort(sortFn);
-  const futureRows = rows.filter(r => !r.isPast).sort(sortFn);
+  const allRows = rows.slice().sort(sortFn);   // één doorlopende lijst, globaal gesorteerd
 
   const _sortTh = (key, label) => {
     const active = _lateSortCol === key;
@@ -439,7 +438,7 @@ function renderLateItems() {
   };
   const thead = `<thead><tr>
     <th style="width:22px"></th>
-    <th style="width:104px"></th>
+    <th class="ob-th">OB ophalen</th>
     ${_sortTh('colA', hn(iA))}
     ${_sortTh('colM', hn(iM))}
     ${_sortTh('colJ', hn(iJ))}
@@ -456,13 +455,12 @@ function renderLateItems() {
       offDisp = (r.offset > 0 ? '+' : '') + r.offset + 'd';
       offCls  = r.offset < 0 ? 'late-neg' : r.offset === 0 ? 'late-zero' : 'late-pos';
     }
-    // Row class: released takes priority, then past/future
-    const rowCls = r.isReleased
-      ? `late-released ${r.isPast ? 'late-past' : 'late-future'}`
-      : `${r.isPast ? 'late-past' : 'late-future'} ${r.isConfirmed ? 'late-confirmed' : ''}`;
+    // Rij-kleur op datumband: verleden (rood) / binnen 30 dagen (amber) / later (neutraal).
+    // Released items krijgen daarbovenop een amber accent-rand (OB-actie nodig).
+    const rowCls = `late-${r.band}${r.isReleased ? ' late-released' : ''}`;
 
     const relBtn = r.isReleased
-      ? `<button class="ob-btn" onclick="event.stopPropagation(); if (window.ExpeditingMailer && ExpeditingMailer.openForPO) { ExpeditingMailer.openForPO('${esc(r.colA)}'); }" title="Orderbevestiging ophalen / open template">OB ophalen</button>`
+      ? `<button class="ob-btn ob-icon" onclick="event.stopPropagation(); if (window.ExpeditingMailer && ExpeditingMailer.openForPO) { ExpeditingMailer.openForPO('${esc(r.colA)}'); }" title="OB ophalen / open mailtemplate" aria-label="OB ophalen">\u2709</button>`
       : '';
 
     // Detail: H and I always; others if filled
@@ -487,7 +485,7 @@ function renderLateItems() {
       <td class="late-desc-cell" title="${esc(r.colL || '')}">${esc(r.colL || '—')}</td>
       <td class="date-cell">${_fmtDate(r.lastExpDate)}</td>
       <td class="date-cell">${_fmtDate(r.wantedDate)}</td>
-      <td class="date-cell ${r.isPast ? 'date-past' : 'date-future'}">${_fmtDate(r.confDate)}</td>
+      <td class="date-cell date-${r.band}">${_fmtDate(r.confDate)}</td>
       <td class="offset-cell ${offCls}">${offDisp}</td>
     </tr>`;
 
@@ -504,33 +502,20 @@ function renderLateItems() {
     return mainRow + detRow;
   }
 
-  const separator = `<tr class="late-separator">
-    <td colspan="10">
-      <span class="sep-past">▲ Verstreken</span>
-      <span class="sep-line"></span>
-      <span class="sep-future">▼ Komende 30 dagen</span>
-    </td>
-  </tr>`;
-
   let rowNum = 0;
-  const pastHtml   = pastRows.map(r   => buildRow(r, rowNum++)).join('');
-  const futureHtml = futureRows.map(r => buildRow(r, rowNum++)).join('');
-
-  let tbody = '';
-  if (pastRows.length)                      tbody += pastHtml;
-  if (pastRows.length && futureRows.length) tbody += separator;
-  if (futureRows.length)                    tbody += futureHtml;
+  let tbody = allRows.map(r => buildRow(r, rowNum++)).join('');
   if (!tbody) tbody = `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:1.5rem">
-    Geen items in het venster (verleden + komende 30 dagen).</td></tr>`;
+    Geen items om te tonen.</td></tr>`;
 
   _lateOpenRows.clear();
   const ltTable = document.getElementById('late-items-table');
   if (ltTable) ltTable.innerHTML = thead + '<tbody>' + tbody + '</tbody>';
 
   const relCount  = rows.filter(r => r.isReleased).length;
-  const pastCount = pastRows.length;
-  const futCount  = futureRows.length;
-  setStatus(`Expediting list: ${pastCount} verstreken · ${futCount} komende 30 dagen${relCount ? ` · ⚠ ${relCount} Released` : ''}`);
+  const pastCount = rows.filter(r => r.band === 'past').length;
+  const soonCount = rows.filter(r => r.band === 'soon').length;
+  const farCount  = rows.filter(r => r.band === 'far').length;
+  setStatus(`Expediting list: ${rows.length} items · ${pastCount} verstreken · ${soonCount} binnen 30d · ${farCount} later${relCount ? ` · \u26A0 ${relCount} Released` : ''}`);
 }
 // Helper: kort tekst af op n tekens met ellipsis (hoisted, overal bruikbaar)
 function _capStr(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '\u2026' : s; }
