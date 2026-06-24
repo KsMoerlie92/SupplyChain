@@ -805,16 +805,22 @@ td strong { color: var(--white); }
 .late-tog-btn { background: none; border: none; color: var(--muted); font-size: .65rem; cursor: pointer; padding: .1rem .2rem; }
 .late-row:hover .late-tog-btn { color: var(--white); }
 
-/* Past rows — red tint */
-.late-row.late-past td { background: rgba(239,68,68,.06); }
+/* Datumband — verleden: rode tint */
+.late-row.late-past td { background: rgba(239,68,68,.10); }
 .late-row.late-past .rc { background: rgba(239,68,68,.28); color: #fca5a5; font-weight: 700; }
 
-/* Future rows — teal tint */
+/* Datumband — binnen 30 dagen: amber tint */
+.late-row.late-soon td { background: rgba(245,158,11,.12); }
+.late-row.late-soon .rc { background: rgba(245,158,11,.28); color: #fcd34d; font-weight: 700; }
+
+/* Datumband — later dan 30 dagen: neutraal (geen tint) */
+.late-row.late-far td { background: transparent; }
+
+/* Future rows — teal tint (legacy, niet meer toegekend) */
 .late-row.late-future td { background: rgba(0,180,216,.04); }
 .late-row.late-future .rc { background: rgba(0,180,216,.18); color: var(--teal); font-weight: 700; }
 
-/* Released — entire row amber tint + left border */
-.late-row.late-released td { background: rgba(245,158,11,.10) !important; border-left: none !important; }
+/* Released — alleen amber accent-rand (geen eigen achtergrond, zodat de datumband zichtbaar blijft) */
 .late-row.late-released { border-left: 3px solid var(--amber); }
 .late-row.late-released .rc { background: rgba(245,158,11,.35) !important; color: #fcd34d; }
 
@@ -828,6 +834,8 @@ td strong { color: var(--white); }
 /* Date + offset cells */
 .date-cell { font-family: var(--mono); font-size: .68rem; white-space: nowrap; }
 .date-past   { color: #f87171; }
+.date-soon   { color: var(--amber); }
+.date-far    { color: var(--muted); }
 .date-future { color: var(--teal); }
 .offset-cell { font-family: var(--mono); font-weight: 700; text-align: right; white-space: nowrap; }
 .offset-cell.late-neg  { color: #f87171; }
@@ -1027,3 +1035,7 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 .ob-cell { text-align: center; }
 .ob-btn { font-family: var(--mono); font-size: .58rem; font-weight: 700; background: var(--amber); color: #000; border: 0; padding: .2rem .4rem; border-radius: 3px; cursor: pointer; white-space: nowrap; }
 .ob-btn:hover { filter: brightness(1.08); box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset; }
+/* Icoon-variant: alleen het envelop-icoon, compact */
+.ob-btn.ob-icon { font-size: .9rem; line-height: 1; padding: .1rem .3rem; }
+/* Kolomkop boven de OB-knoppen */
+.ob-th { width: 72px; text-align: center; font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
