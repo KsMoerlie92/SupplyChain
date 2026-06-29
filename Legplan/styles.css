@@ -336,3 +336,47 @@ tr.hs-measures-row td { padding:0 !important; border:none !important; }
 }
 .hs-flag-warn  { background: rgba(245,158,11,.2);  color: var(--amber); border: 1px solid rgba(245,158,11,.4); }
 .hs-flag-alert { background: rgba(239,68,68,.15);  color: #f87171;      border: 1px solid rgba(239,68,68,.3); }
+
+/* ── HS-maatregelen: kaart-weergave (overzichtelijker) ─────────────────────── */
+.hs-m-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .45rem;
+  margin-bottom: .55rem; padding-bottom: .45rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.hs-m-card {
+  padding: .5rem .65rem; margin-bottom: .4rem; border-radius: 5px;
+  background: rgba(255,255,255,.03); border-left: 3px solid var(--steel);
+}
+.hs-m-card.hs-m-export { background: rgba(239,68,68,.10); border-left-color: #ef4444; }
+.hs-m-card.hs-m-vn     { background: rgba(245,158,11,.08); border-left-color: var(--amber); }
+.hs-m-card.hs-m-erga   { background: rgba(0,180,216,.07);  border-left-color: var(--teal); }
+.hs-m-card.hs-m-other  { background: rgba(255,255,255,.03); border-left-color: var(--muted); opacity: .85; }
+.hs-m-row1 {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: .6rem; flex-wrap: wrap;
+}
+.hs-m-type { font-weight: 700; font-size: .82rem; color: var(--white); }
+.hs-m-card.hs-m-export .hs-m-type { color: #f87171; }
+.hs-m-duty {
+  font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--teal);
+  white-space: nowrap;
+}
+.hs-m-row2 {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .25rem 1rem;
+  margin-top: .3rem; font-size: .72rem; color: var(--muted);
+}
+.hs-m-origin { color: var(--text); }
+.hs-m-dates  { font-family: var(--mono); font-size: .68rem; }
+.hs-m-row3 { margin-top: .35rem; }
+.hs-m-reg {
+  display: inline-flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  font-family: var(--mono); font-size: .7rem; color: var(--text);
+}
+.hs-m-reglink {
+  font-family: var(--mono); font-size: .64rem; font-weight: 700;
+  color: var(--teal); text-decoration: none;
+  padding: .12rem .45rem; border-radius: 3px;
+  background: rgba(0,180,216,.12); border: 1px solid rgba(0,180,216,.3);
+  transition: background .12s;
+}
+.hs-m-reglink:hover { background: rgba(0,180,216,.24); }
