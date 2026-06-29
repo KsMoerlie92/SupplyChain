@@ -5,7 +5,10 @@
 // ── Master validation lists (from Itemlijst Master tab) ───────────────────
 const VL_UOM  = new Set(['Piece(s)','Bucket(s)','Meter','Set(s)','Kilogram']);
 const VL_PKG  = new Set(['Pallet','Case','Crate','Carton','Skid','Loose','Reel','Bundle','Bag']);
-const VL_INSP = new Set(["Foto's en Steekproef","Foto's","Fysiek Controleren","TBD","Geen controle","Volledige controle"]);
+// Inspectieniveaus — keuzelijst (dropdown) in de validatortabel
+const INSP_OPTIONS = ["Foto's en Steekproef", "Foto's", "Fysiek controleren", "TBD", "Geen Controle", "Volledige Controle"];
+const VL_INSP = new Set(INSP_OPTIONS);
+const VL_INSP_LC = new Set(INSP_OPTIONS.map(s => s.toLowerCase())); // tolerant matchen op casing
 // 250 ISO-2 country codes (abbreviated — full set checked at runtime from file)
 const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
 
@@ -25,70 +28,6 @@ let _usdRate     = null; // cached EUR/USD rate
 let _valWb       = null; // original workbook for write-back
 let _virtualCols = {};   // { Z: true, AA: true } when columns are IHC-added (not in file)
 let _valHdrIdx  = 1;     // row index (0-based) where headers were found
-
-// ── Country of Origin normalisatie: volledige (EN/NL) landnamen → ISO-2 ─────
-const _COO_MAP = {
-  'nederland':'NL','netherlands':'NL','the netherlands':'NL','holland':'NL',
-  'duitsland':'DE','germany':'DE','deutschland':'DE',
-  'belgie':'BE','belgium':'BE','belgique':'BE',
-  'frankrijk':'FR','france':'FR',
-  'italie':'IT','italy':'IT','italia':'IT',
-  'spanje':'ES','spain':'ES','espana':'ES',
-  'portugal':'PT',
-  'oostenrijk':'AT','austria':'AT',
-  'zwitserland':'CH','switzerland':'CH','suisse':'CH',
-  'verenigd koninkrijk':'GB','united kingdom':'GB','great britain':'GB','groot brittannie':'GB','england':'GB','engeland':'GB','uk':'GB',
-  'ierland':'IE','ireland':'IE',
-  'denemarken':'DK','denmark':'DK',
-  'zweden':'SE','sweden':'SE',
-  'noorwegen':'NO','norway':'NO',
-  'finland':'FI',
-  'polen':'PL','poland':'PL',
-  'tsjechie':'CZ','czech republic':'CZ','czechia':'CZ',
-  'slowakije':'SK','slovakia':'SK',
-  'hongarije':'HU','hungary':'HU',
-  'roemenie':'RO','romania':'RO',
-  'bulgarije':'BG','bulgaria':'BG',
-  'griekenland':'GR','greece':'GR',
-  'luxemburg':'LU','luxembourg':'LU',
-  'slovenie':'SI','slovenia':'SI',
-  'kroatie':'HR','croatia':'HR',
-  'estland':'EE','estonia':'EE',
-  'letland':'LV','latvia':'LV',
-  'litouwen':'LT','lithuania':'LT',
-  'turkije':'TR','turkey':'TR','turkiye':'TR',
-  'verenigde staten':'US','united states':'US','united states of america':'US','usa':'US','u s a':'US','america':'US',
-  'china':'CN','volksrepubliek china':'CN','prc':'CN',
-  'japan':'JP',
-  'zuid korea':'KR','south korea':'KR','korea':'KR','republic of korea':'KR',
-  'india':'IN',
-  'taiwan':'TW',
-  'vietnam':'VN',
-  'indonesie':'ID','indonesia':'ID',
-  'thailand':'TH',
-  'maleisie':'MY','malaysia':'MY',
-  'singapore':'SG',
-  'brazilie':'BR','brazil':'BR',
-  'canada':'CA',
-  'mexico':'MX',
-  'australie':'AU','australia':'AU',
-  'rusland':'RU','russia':'RU',
-  'oekraine':'UA','ukraine':'UA',
-  'verenigde arabische emiraten':'AE','united arab emirates':'AE','uae':'AE',
-  'zuid afrika':'ZA','south africa':'ZA'
-};
-
-// ISO-2 blijft ISO-2; bekende landnaam → ISO-2; onbekend → null (origineel laten staan)
-function _normalizeCOO(val){
-  if (val === null || val === undefined) return null;
-  const s = String(val).trim();
-  if (!s) return null;
-  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
-  const key = s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // accenten weg (Italië → italie)
-    .replace(/[.\-_,/]/g,' ').replace(/\s+/g,' ').trim();
-  return _COO_MAP[key] || null;
-}
 
 // ── Remap COL indices from actual header names ──────────────────────────────
 // Columns found by name keep their real index.
@@ -190,30 +129,7 @@ function isUSD(header) {
 }
 
 // ── Validate a single data row ────────────────────────────────────────────
-// Waarde voor kolom D wanneer er geen match in de expediten-lijst is (en D leeg was)
-const XLOOKUP_NOT_FOUND = '1-1';
-
-// Bouw opzoek-index uit de bedrijfsbrede expediten:
-//   Sub Project ID (kol F/idx 5) -> { Unified Reference Code (kol M/idx 12) -> "kol C - kol D" }
-function _buildXlookupIndex(rows) {
-  const idx = {};
-  if (!rows || !rows.length) return idx;
-  for (const r of rows) {
-    const v   = Object.values(r);
-    const sub = String(v[5]  == null ? '' : v[5]).trim();   // F: Sub Project ID
-    const m   = String(v[12] == null ? '' : v[12]).trim();  // M: Unified Reference Code
-    if (!sub || !m) continue;
-    if (!idx[sub]) idx[sub] = {};
-    if (!(m in idx[sub])) {
-      const c = String(v[2] == null ? '' : v[2]).trim();    // C
-      const d = String(v[3] == null ? '' : v[3]).trim();    // D
-      idx[sub][m] = c + '-' + d;
-    }
-  }
-  return idx;
-}
-
-async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData, xlookupIndex) {
+async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   const errors   = {};  // col letter → error message
   const warnings = {};  // col letter → warning message
   const computed = {};  // col letter → computed value to write back
@@ -225,34 +141,32 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData, xloo
   // ── C: IHC PO — required, not empty ──────────────────────────────────────
   if (!vs('C')) errors['C'] = 'IHC PO is verplicht';
 
-  // ── D: Item — XLOOKUP via Sub Project (B) + Mark/Label (H) → Expediting C-D ──
-  // Filtert de bedrijfsbrede expediten op Sub Project ID (kolom B van de itemlijst),
-  // matcht H tegen Unified Reference Code (kolom M) en vult kolom C + "-" + kolom D
-  // terug in Item (kolom D). Draait altijd; overschrijft een bestaande D bij een hit.
-  {
-    const subId  = vs('B');
-    const hVal   = vs('H');
-    const hCodes = hVal ? parseHColumn(hVal) : [];
-    const dWas   = vs('D');
-
-    let xResult = null, xVia = null;
-    if (xlookupIndex && subId && hCodes.length) {
-      const sub = xlookupIndex[subId];
-      if (sub) {
-        for (const code of hCodes) {
-          if (Object.prototype.hasOwnProperty.call(sub, code)) { xResult = sub[code]; xVia = code; break; }
-        }
-      }
-    }
-
-    if (xResult) {
-      cells[COL.D] = xResult;                                  // gevonden → (over)schrijf D
-      computed['_dfill'] = { value: xResult, status: 'found', via: xVia };
-    } else if (!dWas) {
-      cells[COL.D] = XLOOKUP_NOT_FOUND;                        // leeg + niet gevonden → fallback
-      computed['_dfill'] = { value: XLOOKUP_NOT_FOUND, status: 'notfound' };
+  // ── D: Item — must contain '-', else look up H in Expediting Kol M ───────
+  const dVal = vs('D');
+  if (dVal && !dVal.includes('-')) {
+    warnings['D'] = `Geen '-' in Item — H-waarden worden opgezocht in Expediting`;
+  } else if (!dVal) {
+    // Check if H can serve as fallback
+    const hVal = vs('H');
+    if (!hVal) {
+      errors['D'] = 'Item # ontbreekt en Mark/Label (H) is ook leeg';
     } else {
-      computed['_dfill'] = { value: dWas, status: 'kept' };    // al gevuld + niet gevonden → laten staan
+      const hCodes = parseHColumn(hVal);
+      if (expeditingData && expeditingData.length) {
+        const found = hCodes.filter(code =>
+          expeditingData.some(row => {
+            const mVal = String(Object.values(row)[12] || '').trim();
+            return mVal === code;
+          })
+        );
+        if (!found.length) {
+          warnings['D'] = `Item leeg — H-waarden (${hCodes.join(', ')}) niet gevonden in Expediting Kol M`;
+        } else {
+          warnings['D'] = `Item leeg — gevonden via H: ${found.join(', ')}`;
+        }
+      } else {
+        warnings['D'] = `Item leeg — H-waarden: ${hCodes.join(', ')} (Expediting niet geladen)`;
+      }
     }
   }
 
@@ -347,18 +261,9 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData, xloo
   if (xVal !== null && yVal !== null && yVal > xVal)
     errors['Y'] = `Nett weight (${yVal}) mag niet groter zijn dan Gross weight (${xVal})`;
 
-  // ── Maatvoering & gewicht → voormelding AFS (≥2 maten > 3 m OF bruto > 10.000 kg) ──
-  const dimsOver = [t, u, h2].filter(d => d !== null && d > 300).length; // maten in cm; 3 m = 300
-  if (dimsOver >= 2 || (xVal !== null && xVal > 10000)) {
-    const why = [];
-    if (dimsOver >= 2)                 why.push('\u22652 maten > 3 m');
-    if (xVal !== null && xVal > 10000) why.push('bruto > 10.000 kg');
-    computed['_afs'] = why.join(' + ');
-  }
-
   // ── AA: Inspection Level — optional but must be valid if filled ───────────
   const aaVal = vs('AA');
-  if (aaVal && !VL_INSP.has(aaVal)) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
+  if (aaVal && !VL_INSP_LC.has(String(aaVal).toLowerCase())) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
 
   return { errors, warnings, computed };
 }
@@ -394,7 +299,6 @@ async function runValidation() {
   const btn = document.getElementById('btn-val-run');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Valideren…'; }
 
-  try {
   // Get USD rate if needed
   const pHeader  = _valHeaders[COL.P] || '';
   const usdPrice = isUSD(pHeader);
@@ -403,23 +307,14 @@ async function runValidation() {
   // Get country codes from file's Master tab (already loaded)
   const coo = _valCOO.size > 0 ? _valCOO : VL_COO_FALLBACK;
 
-  // Bedrijfsbrede expediten (Admin) — voor de Item-opzoeking (kolom D via Sub Project + H → M).
-  // In de validator is er geen Sub Project-picker, dus laad de centrale lijst rechtstreeks.
-  let expeditingData = (typeof fileData !== 'undefined' && fileData.expediting && fileData.expediting.data)
+  // Get expediting data from fileData (loaded in PO Matcher)
+  const expeditingData = (typeof fileData !== 'undefined' && fileData.expediting)
     ? fileData.expediting.data : null;
-  if ((!expeditingData || !expeditingData.length) && typeof ExpeditingData !== 'undefined' && ExpeditingData.loadRaw) {
-    try {
-      const _raw = await ExpeditingData.loadRaw();
-      if (_raw && _raw.rows && _raw.rows.length) expeditingData = _raw.rows;
-    } catch (e) { console.warn('[Validator] centrale expediten laden mislukt:', e); }
-  }
-  const xlookupIndex = _buildXlookupIndex(expeditingData);
-  console.log('[Validator] XLOOKUP-index (v1): ' + Object.keys(xlookupIndex).length + ' Sub Project(en) uit expediten');
 
   // Validate each row
   let totalErrors = 0, totalWarnings = 0;
   for (const row of _valRows) {
-    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData, xlookupIndex);
+    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData);
     row.errors   = result.errors;
     row.warnings = result.warnings;
     row.computed = result.computed;
@@ -441,9 +336,6 @@ async function runValidation() {
       `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>`;
   }
 
-  // ── AFS voormelding-banner ──
-  _renderAfsBanner();
-
   // Sheet warnings
   if (shWEl) {
     shWEl.innerHTML = sheetWarnings.map(w =>
@@ -458,13 +350,6 @@ async function runValidation() {
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
-  } catch (err) {
-    console.error('Validatie mislukt:', err);
-    if (sumEl) sumEl.innerHTML = '<span style="color:#ef4444">❌ Validatie mislukt: ' + esc(String((err && err.message) || err)) + '</span>';
-  } finally {
-    // Knop altijd herstellen — kan nooit blijven hangen op "Valideren…"
-    if (btn) { btn.disabled = false; btn.textContent = '▶ Valideer'; }
-  }
 }
 
 // ── Render validation table ────────────────────────────────────────────────
@@ -490,8 +375,7 @@ function renderValidationTable(usdPrice, usdRate) {
     const hasDG  = row.cells[COL.Z] === true || String(row.cells[COL.Z]||'').toLowerCase() === 'true';
     const anyErr = Object.keys(row.errors).length > 0;
     const anyWrn = Object.keys(row.warnings).length > 0;
-    const rowCls = (hasDG ? 'val-row-dg' : anyErr ? 'val-row-err' : anyWrn ? 'val-row-warn' : 'val-row-ok')
-      + (row.computed && row.computed._afs ? ' val-row-afs' : '');
+    const rowCls = hasDG ? 'val-row-dg' : anyErr ? 'val-row-err' : anyWrn ? 'val-row-warn' : 'val-row-ok';
 
     const cells = COLS_SHOW.map(col => {
       const ci  = COL[col];
@@ -501,10 +385,17 @@ function renderValidationTable(usdPrice, usdRate) {
       const cmp = row.computed?.[col] ?? row.computed?.[col+'_EUR'];
       const disp = val !== null && val !== undefined ? String(val) : '';
 
+      // Kolombreedte op inhoud: de input schaalt mee via het `size`-attribuut.
+      // Omschrijving (E) krijgt een vaste breedte en schuift intern (zoals bij
+      // eerdere kolommen toegepast); de overige kolommen worden zo smal als nodig.
+      const isDesc = (col === 'E');
+      const inSize = isDesc ? 30 : Math.min(Math.max(disp.length, 4), 48);
+
       let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
       if (VIRT_COLS.has(col)) cellCls += ' val-cell-virtual';
       if (err) cellCls += ' val-cell-err';
       else if (wrn) cellCls += ' val-cell-warn';
+      if (isDesc) cellCls += ' val-cell-desc';
 
       const tooltip = err || wrn || (cmp ? `Berekend: ${cmp}` : '');
       const tAttr   = tooltip ? `title="${esc(tooltip)}"` : '';
@@ -519,7 +410,7 @@ function renderValidationTable(usdPrice, usdRate) {
           <div style="display:flex;align-items:center;gap:.2rem">
             ${fmtIcon}
             <input class="val-input" data-row="${ri}" data-col="${ci}"
-              value="${esc(disp)}"
+              value="${esc(disp)}" size="${Math.max(disp.length, 10)}"
               oninput="valCellEdit(${ri},${ci},this.value)">
           </div>
         </td>`;
@@ -538,31 +429,34 @@ function renderValidationTable(usdPrice, usdRate) {
       if (col === 'P' && usdPrice && cmp) {
         return `<td class="val-cell ${cellCls}" ${tAttr}>
           <input class="val-input" data-row="${ri}" data-col="${ci}"
-            value="${esc(disp)}" oninput="valCellEdit(${ri},${ci},this.value)">
+            value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
           <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
         </td>`;
       }
 
-      // Item-cel (D) — markeer wanneer via de expediten opgezocht/aangevuld
-      if (col === 'D' && row.computed && row.computed._dfill) {
-        const df  = row.computed._dfill;
-        const tip = df.status === 'found'
-          ? 'Item opgezocht via expediting (Sub Project ID + H \u2192 kol M): ' + df.value
-          : df.status === 'notfound'
-          ? 'Geen expediting-match \u2014 standaardwaarde ' + df.value
-          : 'Geen expediting-match \u2014 bestaande Item behouden';
-        const mark = df.status === 'found' ? 'val-cell-fill-ok' : df.status === 'notfound' ? 'val-cell-fill-nf' : '';
-        return `<td class="val-cell ${cellCls} ${mark}" title="${esc(tip)}">
-          <input class="val-input" data-row="${ri}" data-col="${ci}"
-            value="${esc(disp)}"
-            oninput="valCellEdit(${ri},${ci},this.value)">
+      // Inspection Level (AA) — keuzelijst (dropdown) met de 6 vaste opties
+      if (col === 'AA') {
+        const cur = disp;
+        const matched = INSP_OPTIONS.find(o => o.toLowerCase() === cur.toLowerCase());
+        const optsHtml = INSP_OPTIONS.map(o =>
+          `<option value="${esc(o)}" ${matched === o ? 'selected' : ''}>${esc(o)}</option>`
+        ).join('');
+        // Onbekende bestaande waarde tóch tonen zodat niets stil verdwijnt
+        const strayOpt = (cur && !matched)
+          ? `<option value="${esc(cur)}" selected>${esc(cur)} (onbekend)</option>` : '';
+        return `<td class="val-cell ${cellCls}" ${tAttr}>
+          <select class="val-input val-select" data-row="${ri}" data-col="${ci}"
+            onchange="valCellEdit(${ri},${ci},this.value)">
+            <option value="" ${!cur ? 'selected' : ''}>—</option>
+            ${strayOpt}${optsHtml}
+          </select>
         </td>`;
       }
 
       // All other cells — editable input, pre-filled with current value
       return `<td class="val-cell ${cellCls}" ${tAttr}>
         <input class="val-input" data-row="${ri}" data-col="${ci}"
-          value="${esc(disp)}"
+          value="${esc(disp)}" size="${inSize}"
           placeholder="${esc(_valHeaders[ci]||col)}"
           oninput="valCellEdit(${ri},${ci},this.value)">
       </td>`;
@@ -571,7 +465,7 @@ function renderValidationTable(usdPrice, usdRate) {
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
     return `<tr class="val-row ${rowCls}">
       <td class="val-cell val-cell-num">${ri+1}</td>
-      <td class="val-cell" style="text-align:center;white-space:nowrap">${rowStatus} <button type="button" class="exm-mailbtn sm" title="Mail leverancier over deze regel" onclick="valMail(${ri})">✉</button></td>
+      <td class="val-cell" style="text-align:center">${rowStatus}</td>
       ${cells}
     </tr>`;
   }).join('');
@@ -585,16 +479,6 @@ function valCellEdit(rowIdx, colIdx, value) {
     _valRows[rowIdx].cells[colIdx] = value;
     _valRows[rowIdx]._edited = true;
   }
-}
-
-// ── Expediting Mailer hook: mail de leverancier over deze Itemlijst-regel ───
-function valMail(ri) {
-  const r = _valRows[ri];
-  if (!r) return;
-  if (!window.ExpeditingMailer) { alert('Expediting Mailer niet geladen.'); return; }
-  const po = String(r.cells[COL.C] ?? '').trim();   // C = IHC PO
-  if (!po) { alert('Geen IHC PO op deze regel — vul kolom C in.'); return; }
-  ExpeditingMailer.openForPO(po, { templateId: 'documentatie_verzoek_nl' });
 }
 
 // ── Export corrected Itemlijst ─────────────────────────────────────────────
@@ -674,7 +558,6 @@ function exportValidatedItemlijst() {
 function buildValHeader() {
   const thEl = document.getElementById('val-thead');
   if (!thEl) return;
-  const VIRT_COLS = new Set(Object.keys(_virtualCols));  // virtuele (door IHC toegevoegde) kolommen
   const COLS_SHOW = [
     'A','B',
     'C','D','E','F','G','H',
@@ -755,12 +638,6 @@ function handleValFile(fileOrEvent) {
     _valRows = (raw.slice(hdrIdx + 1) || [])
       .filter(r => hasVal(r[0]) && hasVal(r[2]))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
-
-    // Normaliseer Country of Origin (kolom N) bij inlezen → ISO-2 (Nederland→NL, Duitsland→DE, …)
-    _valRows.forEach(r => {
-      const n = _normalizeCOO(r.cells[COL.N]);
-      if (n !== null) r.cells[COL.N] = n;
-    });
 
     // Load country codes from Master tab
     _valCOO = new Set();
@@ -1290,59 +1167,4 @@ function _setHSCellState(rowIdx, stateClass, badgeHtml) {
   td.className = `val-cell ${stateClass}`;
   const iconEl = td.querySelector('.hs-icon');
   if (iconEl) iconEl.innerHTML = badgeHtml || '';
-}
-
-// ── AFS voormelding: open e-mail naar AFS met de gemarkeerde regels ─────────
-function _afsMailtoUrl(){
-  const flagged = _valRows.filter(r => r.computed && r.computed._afs);
-  if (!flagged.length) return '';
-  const cons = (document.getElementById('val-consignee')?.value || '').trim();
-  const fn   = (document.getElementById('val-filename')?.textContent || '').trim();
-  const lines = flagged.map(r => {
-    const c = r.cells;
-    const ref  = String(c[COL.A] || '').trim() || '(geen ref)';
-    const desc = String(c[COL.E] || c[COL.D] || '').trim();
-    const L = c[COL.T], W = c[COL.U], H = c[COL.V], G = c[COL.X];
-    return `- ${ref} | ${desc} | L\u00d7B\u00d7H: ${L||'?'}\u00d7${W||'?'}\u00d7${H||'?'} cm | bruto: ${G||'?'} kg [${r.computed._afs}]`;
-  }).join('\n');
-  const subject = `Voormelding AFS \u2014 oversized/zware items${cons ? ' \u2014 ' + cons : ''}`;
-  const body =
-`Beste Mark,
-
-In onderstaande zending zitten ${flagged.length} regel(s) die een voormelding vereisen (oversized en/of > 10.000 kg). Graag rekening houden met een laad- en losplan.
-${fn ? '\nBestand: ' + fn + '\n' : ''}
-${lines}
-
-Met vriendelijke groet,
-Royal IHC`;
-  return 'mailto:Mark.Kruisbeek@afsfreightsolutions.com'
-    + '?subject=' + encodeURIComponent(subject)
-    + '&body='    + encodeURIComponent(body);
-}
-
-function afsNotify(){
-  const url = _afsMailtoUrl();
-  if (url) window.location.href = url;
-}
-
-
-// ── Render AFS voormelding-banner (maakt element zelf aan indien afwezig) ───
-function _renderAfsBanner(){
-  const flagged = _valRows.filter(r => r.computed && r.computed._afs);
-  console.log('[Validator] AFS-check (v2): ' + flagged.length + ' regel(s) gemarkeerd voor voormelding');
-  let afsEl = document.getElementById('val-afs-banner');
-  if (!afsEl) {
-    afsEl = document.createElement('div');
-    afsEl.id = 'val-afs-banner';
-    const anchor = document.getElementById('val-summary') || document.getElementById('val-sheet-warnings');
-    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(afsEl, anchor.nextSibling);
-    else (document.getElementById('validator-wrap') || document.body).appendChild(afsEl);
-  }
-  afsEl.innerHTML = flagged.length
-    ? '<div class="val-afs-banner" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:.5rem 0;padding:.55rem .8rem;background:rgba(255,179,0,.12);border:1px solid #FFB300;border-radius:4px;font-size:.8rem">'
-      + '<span style="font-size:1.1rem">\ud83d\udce3</span>'
-      + '<span><b>' + flagged.length + ' regel(s)</b> vereisen een voormelding bij AFS (\u22652 maten &gt; 3 m of bruto &gt; 10.000 kg).</span>'
-      + '<button class="val-afs-btn" onclick="afsNotify()" style="margin-left:auto;font-family:var(--mono,monospace);font-size:.72rem;padding:.35rem .7rem;background:#FFB300;color:#1a1200;border:none;border-radius:3px;cursor:pointer;font-weight:700">\u2709 Voormelding AFS opstellen</button>'
-      + '</div>'
-    : '';
 }
