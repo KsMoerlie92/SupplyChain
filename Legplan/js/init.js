@@ -34,13 +34,17 @@ const TARIC_INVALID_MSG =
   'Please try entering the first 6 digits and browse the nomenclature ' +
   'until you find a proper description corresponding to your product.';
 
-// Maatregeltypes relevant voor export (Royal IHC verscheept goederen VANUIT de EU)
-const EXPORT_TYPES = new Set([
-  'Export authorization (Dual use)',
-  'Export control on restricted goods and technologies',
-  'Export control',
-  'Restriction on export',
-]);
+// Maatregeltypes relevant voor export (Royal IHC verscheept goederen VANUIT de EU).
+// Brede herkenning: vangt o.a. "Export authorization (Dual use)", "Export control - Waste",
+// "Export control on restricted goods and technologies", "Restriction on export", embargo's, sancties.
+const EXPORT_RE = /(dual.?use|export|restrict|prohibit|embargo|sanction)/i;
+function _isExportMeasure(d) { return EXPORT_RE.test(d.measure_type || ''); }
+
+// "All third countries" / ERGA OMNES (codes 1008 & 1011) — altijd tonen
+function _isAllThird(d) {
+  return ['1008', '1011'].includes(String(d.origin_code || '')) ||
+         /all third countries|erga omnes/i.test(d.origin || '');
+}
 
 const _hsCache = new Map(); // taric10 → { valid, desc, measures }
 
@@ -53,6 +57,26 @@ function _toTaric10(input) {
 
 function _tariffPageLink(t10) {
   return `https://www.tariffnumber.com/2026/${t10.replace(/0+$/, '')}`;
+}
+
+// Goederennomenclatuur raadplegen op douane.nl (gebruikt bij een niet-gevonden HS-code)
+function _douaneNomenclatuurLink(rawDigits) {
+  const sd = new Date().toISOString().slice(0, 10); // peildatum = vandaag
+  return `https://tarief.douane.nl/ite-tariff-public/#/taric/nomenclature/sbn`
+       + `?sd=${sd}&d=I&cc=${encodeURIComponent(rawDigits)}&l=nl&ql=nl`;
+}
+
+// Suggestieve opzoeklink voor een regulation/decision (EUR-Lex via Google)
+function _regLookupLink(legalBase) {
+  return `https://www.google.com/search?q=${encodeURIComponent('EUR-Lex ' + legalBase)}`;
+}
+
+// TARIC-datum (YYYY-MM-DD) → DD-MM-YYYY; leeg/placeholder → '—'
+function _fmtTaricDate(d) {
+  if (!d) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d).trim());
+  if (!m) return esc(String(d));
+  return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
 // Handelsmaatregelen ophalen van tariffnumber.com (gratis, geen CORS)
@@ -103,15 +127,18 @@ function toggleHSMeasures(hsCode, trEl) {
   const expTd = document.createElement('td');
   expTd.colSpan = 99;
 
+  const rawDigits = String(hsCode || '').replace(/\s|\./g, '');
+  const douaneLink = _douaneNomenclatuurLink(rawDigits);
+
   const renderPanel = (c) => {
     if (!t10 || !c || !c.valid) {
       return `<div class="hs-measures-inner hs-restricted">
         <div style="color:#ef4444;font-weight:700;margin-bottom:.5rem">
-          ✗ Ongeldige GN-code: <code>${esc(String(hsCode || ''))}</code>
+          ✗ HS-code niet gevonden in EU CN 2026: <code>${esc(String(hsCode || ''))}</code>
         </div>
         <div style="font-size:.78rem;color:var(--muted);line-height:1.55">${esc(TARIC_INVALID_MSG)}</div>
-        <div style="margin-top:.6rem">
-          <a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">🔍 Zoek in nomenclatuur ↗</a>
+        <div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap">
+          <a href="${esc(douaneLink)}" target="_blank" class="hs-taric-btn">🔍 Goederennomenclatuur raadplegen (douane.nl) ↗</a>
         </div>
       </div>`;
     }
@@ -136,45 +163,71 @@ function toggleHSMeasures(hsCode, trEl) {
       </div>`;
     }
 
-    const exportMeasures   = duties.filter(d => EXPORT_TYPES.has(d.measure_type));
+    const exportMeasures   = duties.filter(_isExportMeasure);
     const vnMeasures       = duties.filter(d => d.origin_code === 'VN');
-    const allThirdMeasures = duties.filter(d => ['1008', '1011'].includes(d.origin_code));
+    const allThirdMeasures = duties.filter(_isAllThird);
 
-    const hasDualUse  = exportMeasures.some(d => /dual.use/i.test(d.measure_type));
-    const hasRestrict = exportMeasures.some(d => /restriction|control/i.test(d.measure_type));
+    const hasDualUse  = exportMeasures.some(d => /dual.?use/i.test(d.measure_type));
+    const hasRestrict = exportMeasures.some(d => /export|restrict|prohibit|embargo|sanction/i.test(d.measure_type));
+    const dualReg     = exportMeasures.find(d => /dual.?use/i.test(d.measure_type))?.legal_base || '';
     const flagHtml = [
-      hasDualUse  ? `<span class="hs-flag hs-flag-warn">⚠️ DUAL USE — Reg. ${esc(exportMeasures.find(d => /dual.use/i.test(d.measure_type))?.legal_base || '')}</span>` : '',
+      hasDualUse  ? `<span class="hs-flag hs-flag-warn">⚠️ DUAL USE${dualReg ? ' — Reg. ' + esc(dualReg) : ''}</span>` : '',
       hasRestrict ? `<span class="hs-flag hs-flag-alert">⛔ EXPORT CONTROL</span>` : '',
     ].filter(Boolean).join(' ');
 
-    const renderDutyRow = (d) => {
-      const isExport = EXPORT_TYPES.has(d.measure_type);
+    // Eén maatregel als overzichtelijke kaart
+    const renderCard = (d) => {
+      const isExport = _isExportMeasure(d);
       const isVN     = d.origin_code === 'VN';
-      const isErga   = ['1008', '1011'].includes(d.origin_code);
-      const cls = isExport ? 'hs-duty-export' : isVN ? 'hs-duty-vn' : isErga ? 'hs-duty-erga' : 'hs-duty-other';
-      return `<div class="hs-duty-row ${cls}">
-        <span class="hs-duty-origin">${esc(d.origin || '—')}</span>
-        <span class="hs-duty-type">${esc(d.measure_type || '')}</span>
-        <span class="hs-duty-reg">${esc(d.legal_base || '')}</span>
-        ${d.duty ? `<span class="hs-duty-val">${esc(String(d.duty).trim())}</span>` : ''}
+      const isThird  = _isAllThird(d);
+      const cls = isExport ? 'export' : isVN ? 'vn' : isThird ? 'erga' : 'other';
+      const originTxt = `${esc(d.origin || '—')}${d.origin_code ? ` (${esc(String(d.origin_code))})` : ''}`;
+      const start = _fmtTaricDate(d.start_date);
+      const end   = d.end_date ? _fmtTaricDate(d.end_date) : 'doorlopend';
+      const dates = start ? `${start} → ${end}` : '';
+      const reg   = d.legal_base
+        ? `<span class="hs-m-reg">⚖ ${esc(d.legal_base)}
+             <a href="${esc(_regLookupLink(d.legal_base))}" target="_blank" class="hs-m-reglink" title="Zoek deze regelgeving op">🔍 opzoeken ↗</a>
+           </span>` : '';
+      return `<div class="hs-m-card hs-m-${cls}">
+        <div class="hs-m-row1">
+          <span class="hs-m-type">${esc(d.measure_type || '—')}</span>
+          ${d.duty && String(d.duty).trim() ? `<span class="hs-m-duty">${esc(String(d.duty).trim())}</span>` : ''}
+        </div>
+        <div class="hs-m-row2">
+          <span class="hs-m-origin">🌍 ${originTxt}</span>
+          ${dates ? `<span class="hs-m-dates">📅 ${dates}</span>` : ''}
+        </div>
+        ${reg ? `<div class="hs-m-row3">${reg}</div>` : ''}
       </div>`;
     };
 
-    const shown  = [...new Map([...exportMeasures, ...vnMeasures, ...allThirdMeasures].map(d => [d.legal_base + d.origin_code, d])).values()];
-    const others = duties.filter(d => !shown.includes(d));
-    const shownHtml  = shown.map(renderDutyRow).join('');
+    // Belangrijke maatregelen vooraan: export-controle → All third countries → Vietnam.
+    // Dedup op type+regulation+oorsprong+recht zodat distincte maatregelen niet wegvallen.
+    const key = d => [d.measure_type, d.legal_base, d.origin_code, d.duty].join('|');
+    const importantRaw = [...exportMeasures, ...allThirdMeasures, ...vnMeasures];
+    const seen = new Set();
+    const shown = [];
+    importantRaw.forEach(d => { const k = key(d); if (!seen.has(k)) { seen.add(k); shown.push(d); } });
+    // Sorteer: export-controle eerst
+    shown.sort((a, b) => (_isExportMeasure(b) ? 1 : 0) - (_isExportMeasure(a) ? 1 : 0));
+
+    const others = duties.filter(d => !seen.has(key(d)));
+    const shownHtml  = shown.length
+      ? shown.map(renderCard).join('')
+      : `<div style="color:var(--muted);font-size:.72rem;padding:.3rem 0">Geen export-/landgebonden maatregelen — alleen algemene tarieven.</div>`;
     const othersHtml = others.length
-      ? `<details style="margin-top:.4rem">
-          <summary style="cursor:pointer;font-size:.65rem;color:var(--muted);padding:.2rem 0">
-            + ${others.length} andere maatregel(en) (tariefpreferenties)
+      ? `<details style="margin-top:.5rem">
+          <summary style="cursor:pointer;font-size:.68rem;color:var(--muted);padding:.25rem 0">
+            + ${others.length} overige maatregel(en) (tariefpreferenties per land)
           </summary>
-          ${others.map(renderDutyRow).join('')}
+          <div style="margin-top:.35rem">${others.map(renderCard).join('')}</div>
         </details>` : '';
 
     return `<div class="hs-measures-inner ${exportMeasures.length ? 'hs-restricted' : 'hs-clean'}">
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin-bottom:.35rem">
+      <div class="hs-m-head">
         <span style="font-weight:700">✓ <code>${esc(t10)}</code></span>
-        <span style="color:var(--muted);font-size:.65rem">— ${duties.length} maatregel(en)</span>
+        <span style="color:var(--muted);font-size:.66rem">— ${duties.length} maatregel(en)</span>
         ${flagHtml}
         <span style="margin-left:auto">${pageBtn}</span>
       </div>
@@ -230,7 +283,8 @@ function checkHSCodes() {
       invalid++;
       if (row) row.classList.add('hs-invalid');
       if (sc) sc.innerHTML =
-        `<span style="color:#ef4444" title="Geen geldige 8/10-cijferige code">✗</span>`;
+        `<a class="hs-link" href="${_douaneNomenclatuurLink(raw)}" target="_blank"
+           style="color:#ef4444" title="Geen geldige 8/10-cijferige code — klik om de goederennomenclatuur te raadplegen (douane.nl)">✗</a>`;
       return;
     }
 
@@ -248,8 +302,8 @@ function checkHSCodes() {
       invalid++;
       if (row) row.classList.add('hs-invalid');
       if (sc) sc.innerHTML =
-        `<a class="hs-link" href="${pageUrl}" target="_blank"
-           style="color:#ef4444" title="NIET geldig in EU CN 2026 — klik voor tariffnumber.com">✗</a>`;
+        `<a class="hs-link" href="${_douaneNomenclatuurLink(raw)}" target="_blank"
+           style="color:#ef4444" title="NIET gevonden in EU CN 2026 — klik om de goederennomenclatuur te raadplegen (douane.nl)">✗</a>`;
     }
   });
 
