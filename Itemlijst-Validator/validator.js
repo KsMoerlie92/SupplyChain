@@ -5,7 +5,10 @@
 // ── Master validation lists (from Itemlijst Master tab) ───────────────────
 const VL_UOM  = new Set(['Piece(s)','Bucket(s)','Meter','Set(s)','Kilogram']);
 const VL_PKG  = new Set(['Pallet','Case','Crate','Carton','Skid','Loose','Reel','Bundle','Bag']);
-const VL_INSP = new Set(["Foto's en Steekproef","Foto's","Fysiek Controleren","TBD","Geen controle","Volledige controle"]);
+// Inspectieniveaus — keuzelijst (dropdown) in de validatortabel
+const INSP_OPTIONS = ["Foto's en Steekproef", "Foto's", "Fysiek controleren", "TBD", "Geen Controle", "Volledige Controle"];
+const VL_INSP = new Set(INSP_OPTIONS);
+const VL_INSP_LC = new Set(INSP_OPTIONS.map(s => s.toLowerCase())); // tolerant matchen op casing
 // 250 ISO-2 country codes (abbreviated — full set checked at runtime from file)
 const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
 
@@ -260,7 +263,7 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
 
   // ── AA: Inspection Level — optional but must be valid if filled ───────────
   const aaVal = vs('AA');
-  if (aaVal && !VL_INSP.has(aaVal)) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
+  if (aaVal && !VL_INSP_LC.has(String(aaVal).toLowerCase())) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
 
   return { errors, warnings, computed };
 }
@@ -382,10 +385,17 @@ function renderValidationTable(usdPrice, usdRate) {
       const cmp = row.computed?.[col] ?? row.computed?.[col+'_EUR'];
       const disp = val !== null && val !== undefined ? String(val) : '';
 
+      // Kolombreedte op inhoud: de input schaalt mee via het `size`-attribuut.
+      // Omschrijving (E) krijgt een vaste breedte en schuift intern (zoals bij
+      // eerdere kolommen toegepast); de overige kolommen worden zo smal als nodig.
+      const isDesc = (col === 'E');
+      const inSize = isDesc ? 30 : Math.min(Math.max(disp.length, 4), 48);
+
       let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
       if (VIRT_COLS.has(col)) cellCls += ' val-cell-virtual';
       if (err) cellCls += ' val-cell-err';
       else if (wrn) cellCls += ' val-cell-warn';
+      if (isDesc) cellCls += ' val-cell-desc';
 
       const tooltip = err || wrn || (cmp ? `Berekend: ${cmp}` : '');
       const tAttr   = tooltip ? `title="${esc(tooltip)}"` : '';
@@ -400,7 +410,7 @@ function renderValidationTable(usdPrice, usdRate) {
           <div style="display:flex;align-items:center;gap:.2rem">
             ${fmtIcon}
             <input class="val-input" data-row="${ri}" data-col="${ci}"
-              value="${esc(disp)}"
+              value="${esc(disp)}" size="${Math.max(disp.length, 10)}"
               oninput="valCellEdit(${ri},${ci},this.value)">
           </div>
         </td>`;
@@ -419,15 +429,34 @@ function renderValidationTable(usdPrice, usdRate) {
       if (col === 'P' && usdPrice && cmp) {
         return `<td class="val-cell ${cellCls}" ${tAttr}>
           <input class="val-input" data-row="${ri}" data-col="${ci}"
-            value="${esc(disp)}" oninput="valCellEdit(${ri},${ci},this.value)">
+            value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
           <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
+        </td>`;
+      }
+
+      // Inspection Level (AA) — keuzelijst (dropdown) met de 6 vaste opties
+      if (col === 'AA') {
+        const cur = disp;
+        const matched = INSP_OPTIONS.find(o => o.toLowerCase() === cur.toLowerCase());
+        const optsHtml = INSP_OPTIONS.map(o =>
+          `<option value="${esc(o)}" ${matched === o ? 'selected' : ''}>${esc(o)}</option>`
+        ).join('');
+        // Onbekende bestaande waarde tóch tonen zodat niets stil verdwijnt
+        const strayOpt = (cur && !matched)
+          ? `<option value="${esc(cur)}" selected>${esc(cur)} (onbekend)</option>` : '';
+        return `<td class="val-cell ${cellCls}" ${tAttr}>
+          <select class="val-input val-select" data-row="${ri}" data-col="${ci}"
+            onchange="valCellEdit(${ri},${ci},this.value)">
+            <option value="" ${!cur ? 'selected' : ''}>—</option>
+            ${strayOpt}${optsHtml}
+          </select>
         </td>`;
       }
 
       // All other cells — editable input, pre-filled with current value
       return `<td class="val-cell ${cellCls}" ${tAttr}>
         <input class="val-input" data-row="${ri}" data-col="${ci}"
-          value="${esc(disp)}"
+          value="${esc(disp)}" size="${inSize}"
           placeholder="${esc(_valHeaders[ci]||col)}"
           oninput="valCellEdit(${ri},${ci},this.value)">
       </td>`;
