@@ -1,140 +1,282 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Royal IHC — Logistics Tools</title>
-  <style>
-    :root {
-      --red:   #D91F2C;
-      --navy:  #0A1628;
-      --teal:  #00B4D8;
-      --white: #F0F4FA;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: var(--navy);
-      color: var(--white);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    .logo { font-size: 2rem; font-weight: 900; letter-spacing: .04em; margin-bottom: 2rem; }
-    .logo span { background: var(--red); color: #fff; padding: .1em .35em; border-radius: 4px; margin-left: .25em; }
-    h1 { font-size: 1.1rem; font-weight: 400; color: rgba(240,244,250,.6); margin-bottom: 3rem; letter-spacing: .06em; text-transform: uppercase; }
-    .cards { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
-    .card {
-      background: #0F2040;
-      border: 1px solid #1e3a6e;
-      border-radius: 8px;
-      padding: 2rem 2.5rem;
-      width: 280px;
-      text-decoration: none;
-      color: var(--white);
-      transition: border-color .2s, transform .15s;
-      text-align: center;
-    }
-    .card:hover { border-color: var(--teal); transform: translateY(-3px); }
-    .card-icon { font-size: 2.5rem; margin-bottom: 1rem; }
-    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
-    .card-desc { font-size: .8rem; color: rgba(240,244,250,.55); line-height: 1.6; }
-    .card-badge {
-      display: inline-block;
-      margin-top: .8rem;
-      font-size: .65rem;
-      font-weight: 700;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      color: var(--teal);
-      border: 1px solid var(--teal);
-      border-radius: 3px;
-      padding: .2em .6em;
-    }
-    footer { margin-top: 4rem; font-size: .7rem; color: rgba(240,244,250,.3); letter-spacing: .06em; }
-  </style>
-  <link rel="stylesheet" href="shared/nav.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IHC Expedite 2.0 — Expediting &amp; Logistics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F7FB; --surface:#FFFFFF; --ink:#0A1628; --body:#5A6B85;
+  --line:#E2E8F2; --line-soft:#EEF2F8;
+  --red:#D91F2C; --red-dark:#B0161F; --teal:#00A8C8; --navy:#0A1628;
+  --cond:'Barlow Condensed',sans-serif; --sans:'Barlow',sans-serif; --mono:'JetBrains Mono',monospace;
+  --shadow:0 1px 2px rgba(10,22,40,.04), 0 8px 24px rgba(10,22,40,.06);
+  --shadow-lift:0 4px 10px rgba(10,22,40,.08), 0 18px 40px rgba(10,22,40,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+
+/* ── Top navigation ─────────────────────────────────────────────── */
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(8px);
+  border-bottom:1px solid var(--line);display:flex;align-items:stretch;height:64px;padding:0 clamp(1rem,4vw,3rem)}
+.brand{display:flex;align-items:center;gap:.6rem;font-family:var(--cond);font-weight:700;font-size:1.25rem;
+  letter-spacing:.02em;color:var(--ink);text-transform:uppercase;margin-right:2.5rem}
+.brand .mark{background:var(--red);color:#fff;padding:.05em .4em;border-radius:4px;font-weight:700}
+.brand small{font-family:var(--mono);font-size:.6rem;font-weight:500;color:var(--body);letter-spacing:.18em;
+  text-transform:uppercase;align-self:flex-end;margin-bottom:.35rem}
+
+.nav-menu{display:flex;align-items:stretch;gap:.25rem}
+.nav-item{position:relative;display:flex;align-items:center}
+.nav-trigger{display:inline-flex;align-items:center;gap:.4rem;height:100%;padding:0 1rem;border:none;background:none;cursor:pointer;
+  font-family:var(--cond);font-weight:600;font-size:1.02rem;letter-spacing:.03em;text-transform:uppercase;color:var(--ink);
+  border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.nav-trigger .caret{width:14px;height:14px;fill:var(--body);transform:rotate(90deg);transition:transform .2s,fill .2s}
+.nav-item:hover .nav-trigger,.nav-item.open .nav-trigger,.nav-item:focus-within .nav-trigger{color:var(--red);border-color:var(--red)}
+.nav-item:hover .nav-trigger .caret,.nav-item.open .nav-trigger .caret,.nav-item:focus-within .nav-trigger .caret{transform:rotate(-90deg);fill:var(--red)}
+
+/* dropdown panel — ERIKS-style hover-down */
+.dropdown{position:absolute;top:100%;left:0;min-width:320px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow-lift);padding:.5rem;opacity:0;visibility:hidden;transform:translateY(6px);
+  transition:opacity .16s ease,transform .16s ease,visibility .16s;pointer-events:none}
+.nav-item:hover .dropdown,.nav-item.open .dropdown,.nav-item:focus-within .dropdown{opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto}
+.dd-link{display:flex;align-items:center;gap:.85rem;padding:.7rem .8rem;border-radius:8px;transition:background .14s}
+.dd-link:hover{background:var(--line-soft)}
+.dd-ico{flex:0 0 38px;height:38px;display:grid;place-items:center;font-size:1.15rem;border-radius:8px;
+  background:linear-gradient(135deg,#0F2040,#1e3a6e);color:#fff}
+.dd-txt{flex:1;min-width:0}
+.dd-title{font-family:var(--cond);font-weight:600;font-size:1rem;color:var(--ink);text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
+.dd-sub{font-size:.74rem;color:var(--body);margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-chev{flex:0 0 auto;width:18px;height:18px;fill:var(--line);transition:fill .14s,transform .14s}
+.dd-link:hover .dd-chev{fill:var(--red);transform:translateX(2px)}
+
+.nav-spacer{flex:1}
+.nav-tag{display:flex;align-items:center;font-family:var(--mono);font-size:.62rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--body)}
+.nav-burger{display:none}
+
+/* ── Hero ──────────────────────────────────────────────────────── */
+.hero{position:relative;overflow:hidden;background:linear-gradient(120deg,#0A1628 0%,#0F2040 55%,#13294f 100%);color:#fff}
+.hero::after{content:"";position:absolute;inset:0;background:url('img/hero.png') right center/cover no-repeat;
+  opacity:.28;mix-blend-mode:luminosity;mask-image:linear-gradient(90deg,transparent 12%,#000 70%)}
+.hero-inner{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:clamp(2.5rem,7vw,5rem) clamp(1rem,4vw,3rem)}
+.hero-eyebrow{font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--teal);display:flex;align-items:center;gap:.6rem}
+.hero-eyebrow::before{content:"";width:28px;height:2px;background:var(--red)}
+.hero h1{font-family:var(--cond);font-weight:700;font-size:clamp(2.2rem,5.5vw,3.6rem);line-height:1.02;
+  letter-spacing:.01em;margin:.9rem 0 .8rem;max-width:16ch}
+.hero h1 em{font-style:normal;color:var(--red);background:#fff;padding:0 .15em;border-radius:3px}
+.hero p{max-width:48ch;color:rgba(240,244,250,.78);font-size:1.02rem}
+
+/* ── Sections ──────────────────────────────────────────────────── */
+.wrap{max-width:1180px;margin:0 auto;padding:clamp(2.5rem,6vw,4.5rem) clamp(1rem,4vw,3rem)}
+.section + .section{padding-top:0}
+.sec-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.5rem}
+.sec-eyebrow{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--red)}
+.sec-head h2{font-family:var(--cond);font-weight:700;font-size:clamp(1.6rem,3.5vw,2.2rem);text-transform:uppercase;letter-spacing:.02em;color:var(--ink)}
+.sec-rule{flex:1;height:1px;background:var(--line);align-self:center}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1.4rem}
+
+.card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;box-shadow:var(--shadow);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift);border-color:#cdd9ec}
+.card-img{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#0F2040,#1e3a6e)}
+.card-img img{width:100%;height:100%;object-fit:cover;display:block}
+.card-img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(10,22,40,.35))}
+.card-badge{position:absolute;top:.7rem;left:.7rem;z-index:1;font-family:var(--mono);font-size:.58rem;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:#fff;background:rgba(10,22,40,.55);backdrop-filter:blur(4px);
+  border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:.25em .55em}
+.card-badge.dg{background:rgba(217,31,44,.85);border-color:rgba(255,255,255,.35)}
+.card-body{padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column;flex:1}
+.card-title{font-family:var(--cond);font-weight:700;font-size:1.3rem;text-transform:uppercase;letter-spacing:.01em;color:var(--ink);line-height:1.05}
+.card-desc{font-size:.85rem;color:var(--body);margin-top:.4rem;flex:1}
+.card-cta{display:inline-flex;align-items:center;gap:.35rem;margin-top:1rem;font-family:var(--mono);font-size:.7rem;
+  font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
+.card-cta svg{width:16px;height:16px;fill:var(--red);transition:transform .16s}
+.card:hover .card-cta svg{transform:translateX(3px)}
+
+footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text-align:center;
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;color:#9fb0c8;text-transform:uppercase}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width:760px){
+  .nav-burger{display:inline-flex;align-items:center;margin-left:auto;border:none;background:none;cursor:pointer;padding:.5rem;font-size:1.4rem;color:var(--ink)}
+  .nav-spacer,.nav-tag{display:none}
+  .nav-menu{position:fixed;top:64px;left:0;right:0;flex-direction:column;align-items:stretch;gap:0;background:var(--surface);
+    border-bottom:1px solid var(--line);padding:.5rem;box-shadow:var(--shadow);
+    max-height:0;overflow:hidden;transition:max-height .25s ease;z-index:49}
+  .nav-menu.show{max-height:80vh;overflow:auto}
+  .nav-item{flex-direction:column;align-items:stretch}
+  .nav-trigger{height:auto;padding:.9rem 1rem;justify-content:space-between;border-bottom:1px solid var(--line-soft)}
+  .dropdown{position:static;min-width:0;border:none;box-shadow:none;border-radius:0;padding:.25rem .25rem .75rem;
+    opacity:1;visibility:visible;transform:none;pointer-events:auto;display:none}
+  .nav-item.open .dropdown{display:block}
+  .nav-item:hover .dropdown,.nav-item:focus-within .dropdown{opacity:1}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto}}
+</style>
 </head>
 <body>
-  <div class="logo">Royal <span>IHC</span></div>
-  <h1>Logistics Tools — Expediting &amp; Shipment</h1>
 
-  <div class="cards">
-    <a class="card" href="PO-Matcher/index.html">
-      <div class="card-icon">🔍</div>
-      <div class="card-title">Expediting Tool</div>
-      <div class="card-desc">
-        Koppel Expediting lijst aan Moederlijst via XLOOKUP op PO + Item #.
-        Export naar Excel, legplan en container advies.
-      </div>
-      <span class="card-badge">Expediting</span>
-    </a>
+<!-- chevron sprite (provided icon) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></symbol>
+</svg>
 
-    <a class="card" href="Legplan/index.html">
-      <div class="card-icon">📦</div>
-      <div class="card-title">Logistic Portal</div>
-      <div class="card-desc">
-        3D container packing visualisatie, CIPL document generatie met
-        handtekening en AI-advies voor laadvolgorde.
-      </div>
-      <span class="card-badge">Shipment</span>
-    </a>
+<nav class="nav">
+  <a class="brand" href="./">Royal <span class="mark">IHC</span> <small>Expedite&nbsp;2.0</small></a>
 
-    <a class="card" href="DG-Overview/index.html">
-      <div class="card-icon">&#9888;&#65039;</div>
-      <div class="card-title">Dangerous Goods Overview</div>
-      <div class="card-desc">
-        Analyseer de Expediting lijst automatisch op gevaarlijke stoffen
-        volgens IHM, IMDG, EU SRR en CLP/REACH classificaties.
-      </div>
-      <span class="card-badge" style="color:#f87171;border-color:#f87171">Hazardous</span>
-    </a>
+  <button class="nav-burger" aria-label="Menu" onclick="document.getElementById('navMenu').classList.toggle('show')">☰</button>
 
-    <a class="card" href="Itemlijst-Validator/index.html">
-      <div class="card-icon">📋</div>
-      <div class="card-title">Itemlijst Validator</div>
-      <div class="card-desc">
-        Controleer de itemlijst op HS-codes, gevaarlijke stoffen en
-        inspectieniveau. Corrigeer inline en exporteer direct.
+  <div class="nav-menu" id="navMenu">
+    <!-- EXPEDITING -->
+    <div class="nav-item">
+      <button class="nav-trigger" onclick="toggleDD(this)">Expediting <svg class="caret"><use href="#chev"/></svg></button>
+      <div class="dropdown">
+        <a class="dd-link" href="PO-Matcher/">
+          <span class="dd-ico">🔍</span>
+          <span class="dd-txt"><span class="dd-title">Expediting Tool</span><span class="dd-sub">Expediting- vs. moederlijst &amp; late items</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
+        <a class="dd-link" href="Expediting-Mailer/">
+          <span class="dd-ico">✉️</span>
+          <span class="dd-txt"><span class="dd-title">Expediting Mailer</span><span class="dd-sub">Stel expediting-mails op per order</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
+        <a class="dd-link" href="FAT-Overview/">
+          <span class="dd-ico">🧪</span>
+          <span class="dd-txt"><span class="dd-title">FAT Overview</span><span class="dd-sub">Factory Acceptance Tests in beeld</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
       </div>
-      <span class="card-badge">Validatie</span>
-    </a>
-
-    <a class="card" href="Expediting-Mailer/index.html">
-      <div class="card-icon">✉️</div>
-      <div class="card-title">Expediting Mailer</div>
-      <div class="card-desc">
-        Stel gebundelde documentatie-verzoeken per leverancier op en
-        open ze direct als concept-e-mail.
+    </div>
+    <!-- LOGISTICS -->
+    <div class="nav-item">
+      <button class="nav-trigger" onclick="toggleDD(this)">Logistics <svg class="caret"><use href="#chev"/></svg></button>
+      <div class="dropdown">
+        <a class="dd-link" href="Legplan/">
+          <span class="dd-ico">📦</span>
+          <span class="dd-txt"><span class="dd-title">Logistic Portal</span><span class="dd-sub">Legplan, CIPL &amp; shipment-informatie</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
+        <a class="dd-link" href="DG-Overview/">
+          <span class="dd-ico">⚠️</span>
+          <span class="dd-txt"><span class="dd-title">DG Overview</span><span class="dd-sub">Gevaarlijke stoffen in de lijst</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
+        <a class="dd-link" href="Itemlijst-Validator/">
+          <span class="dd-ico">📋</span>
+          <span class="dd-txt"><span class="dd-title">Itemlijst Validator</span><span class="dd-sub">Valideer &amp; corrigeer itemlijsten</span></span>
+          <svg class="dd-chev"><use href="#chev"/></svg>
+        </a>
       </div>
-      <span class="card-badge">Mailer</span>
-    </a>
-
-    <a class="card" href="FAT-Overview/index.html">
-      <div class="card-icon">🏭</div>
-      <div class="card-title">FAT Overview</div>
-      <div class="card-desc">
-        Overzicht en status van Factory Acceptance Tests (FAT) per
-        project en leverancier.
-      </div>
-      <span class="card-badge">FAT</span>
-    </a>
-
-    <a class="card" href="Admin/index.html">
-      <div class="card-icon">⚙️</div>
-      <div class="card-title">Admin</div>
-      <div class="card-desc">
-        Upload en beheer de bedrijfsbrede expediting-lijst die de
-        Mailer en andere tools gebruiken.
-      </div>
-      <span class="card-badge">Beheer</span>
-    </a>
+    </div>
   </div>
 
-  <footer>Royal IHC — Intern gebruik · Logistics &amp; Expediting</footer>
-<script src="shared/shared-root.js"></script>
+  <div class="nav-spacer"></div>
+  <div class="nav-tag">Royal IHC · Intern</div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Logistics &amp; Expediting</div>
+    <h1>Eén werkruimte voor <em>expediting</em> &amp; logistiek</h1>
+    <p>Kies hieronder een tool, of gebruik de menubalk. Van expediting-matching en mailing tot legplannen, gevaarlijke stoffen en itemlijst-validatie.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- EXPEDITING SECTION -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-eyebrow">01</span>
+      <h2>Expediting</h2>
+      <span class="sec-rule"></span>
+    </div>
+    <div class="grid">
+      <a class="card" href="PO-Matcher/">
+        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/expediting-tool.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">Expediting Tool</div>
+          <p class="card-desc">Koppel de expeditinglijst aan de moederlijst en beheer late items, banden en OB-ophalen.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+      <a class="card" href="Expediting-Mailer/">
+        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/expediting-mailer.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">Expediting Mailer</div>
+          <p class="card-desc">Stel expediting-mails op per order of per regel — straks met slimme template-generatie.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+      <a class="card" href="FAT-Overview/">
+        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/fat-overview.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">FAT Overview</div>
+          <p class="card-desc">Overzicht van Factory Acceptance Tests: locaties, data en status in één blik.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- LOGISTICS SECTION -->
+  <section class="section" style="padding-top:clamp(2rem,4vw,3rem)">
+    <div class="sec-head">
+      <span class="sec-eyebrow">02</span>
+      <h2>Logistics</h2>
+      <span class="sec-rule"></span>
+    </div>
+    <div class="grid">
+      <a class="card" href="Legplan/">
+        <div class="card-img"><span class="card-badge">Shipment</span><img src="img/logistic-portal.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">Logistic Portal</div>
+          <p class="card-desc">Legplan &amp; CIPL: containerindeling, documentgeneratie en shipment-informatie met HS-controle.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+      <a class="card" href="DG-Overview/">
+        <div class="card-img"><span class="card-badge dg">Hazardous</span><img src="img/dg-overview.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">DG Overview</div>
+          <p class="card-desc">Analyseer de expeditinglijst op gevaarlijke stoffen volgens IHM, IMDG, EU SRR en CLP/REACH.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+      <a class="card" href="Itemlijst-Validator/">
+        <div class="card-img"><span class="card-badge">Validatie</span><img src="img/itemlijst-validator.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
+        <div class="card-body">
+          <div class="card-title">Itemlijst Validator</div>
+          <p class="card-desc">Valideer en corrigeer itemlijsten, vul aan vanuit expediting en controleer HS-codes.</p>
+          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
+        </div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>Royal IHC — Intern gebruik · Logistics &amp; Expediting</footer>
+
+<script>
+// Mobiel/touch: klik opent de dropdown; buiten klikken sluit alles
+function toggleDD(btn){
+  if (window.matchMedia('(min-width:761px)').matches) return; // desktop = hover
+  const item = btn.closest('.nav-item');
+  const open = item.classList.contains('open');
+  document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));
+  if(!open) item.classList.add('open');
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.nav-item')) document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));
+});
+</script>
 </body>
 </html>
