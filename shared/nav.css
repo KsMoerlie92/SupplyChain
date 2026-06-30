@@ -49,48 +49,71 @@ html[data-theme="light"] .ihc-logo-light { display: block; }
   text-transform: uppercase; white-space: nowrap;
 }
 
-/* Nav links */
-.ihc-nav-links {
-  display: flex; align-items: stretch; flex: 1;
-  padding: 0 .3rem; overflow-x: auto; gap: 1px;
-  scrollbar-width: none;
-}
-.ihc-nav-links::-webkit-scrollbar { display: none; }
-
-.ihc-nav-link {
-  display: flex; align-items: center; gap: .3rem;
-  padding: 0 .75rem;
-  text-decoration: none; color: var(--ihc-muted);
-  font-size: .64rem; font-weight: 700; white-space: nowrap;
-  letter-spacing: .04em; border-bottom: 2px solid transparent;
+/* ── Dropdown-menu (Expediting / Logistics) ─────────────────────────────── */
+.ihc-nav-menu { display: flex; align-items: stretch; gap: .1rem; padding-left: .4rem; }
+.ihc-nav-item { position: relative; display: flex; align-items: stretch; }
+.ihc-nav-trigger {
+  display: inline-flex; align-items: center; gap: .4rem; height: 100%;
+  padding: 0 .9rem; border: none; background: none; cursor: pointer;
+  font-family: var(--ihc-mono); font-size: .68rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ihc-muted);
+  border-bottom: 2px solid transparent;
   transition: color .12s, background .12s, border-color .12s;
 }
-.ihc-nav-link:hover {
-  color: var(--ihc-white); background: rgba(255,255,255,.05);
+.ihc-caret { width: 11px; height: 11px; fill: var(--ihc-muted); transform: rotate(90deg); transition: transform .18s, fill .18s; }
+.ihc-nav-item:hover .ihc-nav-trigger,
+.ihc-nav-item.open .ihc-nav-trigger,
+.ihc-nav-item:focus-within .ihc-nav-trigger { color: var(--ihc-white); background: rgba(127,150,190,.10); }
+.ihc-nav-item:hover .ihc-caret,
+.ihc-nav-item.open .ihc-caret,
+.ihc-nav-item:focus-within .ihc-caret { transform: rotate(-90deg); fill: var(--ihc-white); }
+.ihc-nav-trigger.active { color: var(--ihc-teal); border-bottom-color: var(--ihc-teal); }
+.ihc-nav-trigger.active .ihc-caret { fill: var(--ihc-teal); }
+
+.ihc-dropdown {
+  position: absolute; top: 100%; left: 0; min-width: 300px; margin-top: 2px;
+  background: var(--ihc-mid); border: 1px solid var(--ihc-steel); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45); padding: .4rem;
+  opacity: 0; visibility: hidden; transform: translateY(6px); pointer-events: none;
+  transition: opacity .15s, transform .15s, visibility .15s; z-index: 10000;
 }
-.ihc-nav-link.active {
-  color: var(--ihc-teal); border-bottom-color: var(--ihc-teal);
-  background: rgba(0,180,216,.07);
-}
-.ihc-nav-icon { font-size: .9rem; line-height: 1; }
-.ihc-nav-badge {
-  font-size: .5rem; font-weight: 700;
-  background: rgba(255,255,255,.07); color: var(--ihc-muted);
-  padding: .08rem .3rem; border-radius: 2px;
-  text-transform: uppercase; letter-spacing: .07em;
-}
-.ihc-nav-link.active .ihc-nav-badge {
-  background: rgba(0,180,216,.18); color: var(--ihc-teal);
-}
+.ihc-nav-item:hover .ihc-dropdown,
+.ihc-nav-item.open .ihc-dropdown,
+.ihc-nav-item:focus-within .ihc-dropdown { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+html[data-theme="light"] .ihc-dropdown { box-shadow: 0 12px 32px rgba(10,22,40,.14); }
+
+.ihc-dd-link { display: flex; align-items: center; gap: .7rem; padding: .55rem .6rem; border-radius: 7px; text-decoration: none; transition: background .12s; }
+.ihc-dd-link:hover { background: rgba(127,150,190,.12); }
+.ihc-dd-link.active { background: rgba(0,180,216,.12); }
+.ihc-dd-ico { flex: 0 0 34px; height: 34px; display: grid; place-items: center; font-size: 1.05rem; border-radius: 7px; background: var(--ihc-navy); border: 1px solid var(--ihc-steel); }
+.ihc-dd-txt { flex: 1; min-width: 0; }
+.ihc-dd-title { display: block; font-family: var(--ihc-mono); font-weight: 700; font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ihc-white); }
+.ihc-dd-sub { display: block; font-family: 'Barlow', sans-serif; font-size: .68rem; color: var(--ihc-muted); margin-top: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ihc-chev { flex: 0 0 auto; width: 15px; height: 15px; fill: var(--ihc-steel); transition: fill .12s, transform .12s; }
+.ihc-dd-link:hover .ihc-chev { fill: var(--ihc-red); transform: translateX(2px); }
+.ihc-dd-link.active .ihc-chev { fill: var(--ihc-teal); }
+
+.ihc-burger { display: none; align-items: center; background: none; border: none; color: var(--ihc-white); font-size: 1.2rem; cursor: pointer; padding: 0 .5rem; }
 
 /* Responsive */
 @media (max-width: 860px) {
-  .ihc-nav-badge, .ihc-nav-title { display: none; }
+  .ihc-nav-title { display: none; }
+  .ihc-burger { display: inline-flex; }
+  .ihc-nav-menu {
+    position: fixed; top: var(--ihc-nav-h); left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 0;
+    background: var(--ihc-mid); border-bottom: 2px solid var(--ihc-red); box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    max-height: 0; overflow: hidden; transition: max-height .25s ease; z-index: 9998;
+  }
+  .ihc-nav-menu.show { max-height: 80vh; overflow: auto; }
+  .ihc-nav-item { flex-direction: column; align-items: stretch; }
+  .ihc-nav-trigger { height: auto; padding: .85rem 1rem; justify-content: space-between; border-bottom: 1px solid var(--ihc-steel); width: 100%; }
+  .ihc-dropdown {
+    position: static; min-width: 0; border: none; box-shadow: none; border-radius: 0; margin: 0; padding: .2rem .2rem .6rem;
+    opacity: 1; visibility: visible; transform: none; pointer-events: auto; display: none;
+  }
+  .ihc-nav-item.open .ihc-dropdown { display: block; }
 }
-@media (max-width: 560px) {
-  .ihc-nav-link .ihc-nav-label { display: none; }
-  .ihc-nav-link { padding: 0 .55rem; }
-}
+@media (prefers-reduced-motion: reduce) { .ihc-nav *, .ihc-dropdown { transition: none !important; } }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Thema-schakelaar (donker ⇄ licht) — knop rechtsboven in de bovenbalk

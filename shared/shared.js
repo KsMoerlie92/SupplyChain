@@ -10,30 +10,38 @@
   } catch (e) {}
   const isLight = () => document.documentElement.getAttribute('data-theme') === 'light';
 
-  const PAGES = [
-    { href: '../',                    icon: '🏠', label: 'Home',                badge: ''           },
-    { href: '../PO-Matcher/',         icon: '🔍', label: 'PO Matcher',          badge: 'Expediting' },
-    { href: '../Legplan/',            icon: '📦', label: 'Legplan & CIPL',       badge: 'Shipment'   },
-    { href: '../Itemlijst-Validator/',icon: '📋', label: 'Itemlijst Validator',  badge: 'Validatie'  },
-    { href: '../DG-Overview/',        icon: '⚠️', label: 'DG Overview',          badge: 'Hazardous'  },
+  // Twee menu's met dropdowns — gelijk aan de hoofdpagina
+  const MENUS = [
+    { label: 'Expediting', items: [
+      { href: '../PO-Matcher/',          icon: '🔍', title: 'Expediting Tool',    sub: 'Expediting- vs. moederlijst & late items' },
+      { href: '../Expediting-Mailer/',   icon: '✉️', title: 'Expediting Mailer',  sub: 'Stel expediting-mails op per order' },
+      { href: '../FAT-Overview/',        icon: '🧪', title: 'FAT Overview',       sub: 'Factory Acceptance Tests in beeld' },
+    ]},
+    { label: 'Logistics', items: [
+      { href: '../Legplan/',             icon: '📦', title: 'Logistic Portal',    sub: 'Legplan, CIPL & shipment-informatie' },
+      { href: '../DG-Overview/',         icon: '⚠️', title: 'DG Overview',        sub: 'Gevaarlijke stoffen in de lijst' },
+      { href: '../Itemlijst-Validator/', icon: '📋', title: 'Itemlijst Validator', sub: 'Valideer & corrigeer itemlijsten' },
+    ]},
   ];
 
   const path = window.location.pathname.toLowerCase();
+  const seg = href => href.replace('../', '').replace(/\/$/, '').toLowerCase();
+  const isActive = href => { const s = seg(href); return !!s && path.includes(s); };
+  const CHEV = '<svg viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>';
 
-  function isActive(href) {
-    if (href === '../') return false; // never highlight Home on subpages
-    const seg = href.replace('../', '').replace('/', '').toLowerCase();
-    return seg && path.includes(seg);
-  }
-
-  const links = PAGES.map(p => {
-    const active = isActive(p.href) ? 'active' : '';
-    const badge  = p.badge ? `<span class="ihc-nav-badge">${p.badge}</span>` : '';
-    return `<a href="${p.href}" class="ihc-nav-link ${active}">
-      <span class="ihc-nav-icon">${p.icon}</span>
-      <span class="ihc-nav-label">${p.label}</span>
-      ${badge}
-    </a>`;
+  const menusHtml = MENUS.map(m => {
+    const groupActive = m.items.some(it => isActive(it.href));
+    const items = m.items.map(it => `
+      <a class="ihc-dd-link${isActive(it.href) ? ' active' : ''}" href="${it.href}">
+        <span class="ihc-dd-ico">${it.icon}</span>
+        <span class="ihc-dd-txt"><span class="ihc-dd-title">${it.title}</span><span class="ihc-dd-sub">${it.sub}</span></span>
+        <svg class="ihc-chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>
+      </a>`).join('');
+    return `
+      <div class="ihc-nav-item">
+        <button class="ihc-nav-trigger${groupActive ? ' active' : ''}" type="button">${m.label} <svg class="ihc-caret" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button>
+        <div class="ihc-dropdown">${items}</div>
+      </div>`;
   }).join('');
 
   const nav = document.createElement('nav');
@@ -45,7 +53,8 @@
       <img class="ihc-logo ihc-logo-light" src="../shared/logo.png"      alt="Royal IHC">
       <span class="ihc-nav-title">Expedite 2.0</span>
     </a>
-    <div class="ihc-nav-links">${links}</div>
+    <button class="ihc-burger" type="button" aria-label="Menu" aria-expanded="false">☰</button>
+    <div class="ihc-nav-menu" id="ihc-nav-menu">${menusHtml}</div>
     <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
       title="${isLight() ? 'Donker thema' : 'Licht thema'}"
       aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>`;
@@ -56,6 +65,27 @@
   // Insert at very top of body
   document.body.insertBefore(spacer, document.body.firstChild);
   document.body.insertBefore(nav, spacer);
+
+  // ── Mobiel: burger + tik-om-uit-te-klappen ───────────────────────────────
+  const burger = nav.querySelector('.ihc-burger');
+  if (burger) burger.addEventListener('click', () => {
+    const menu = document.getElementById('ihc-nav-menu');
+    const show = menu.classList.toggle('show');
+    burger.setAttribute('aria-expanded', show ? 'true' : 'false');
+  });
+  nav.querySelectorAll('.ihc-nav-trigger').forEach(t => {
+    t.addEventListener('click', () => {
+      if (window.matchMedia('(min-width:861px)').matches) return; // desktop = hover
+      const item = t.closest('.ihc-nav-item');
+      const open = item.classList.contains('open');
+      nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
+      if (!open) item.classList.add('open');
+    });
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ihc-nav-item'))
+      nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
+  });
 
   // ── Thema wisselen + onthouden ──────────────────────────────────────────
   const btn = document.getElementById('ihc-theme-toggle');
