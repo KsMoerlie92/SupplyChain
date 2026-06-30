@@ -55,9 +55,12 @@
     </a>
     <button class="ihc-burger" type="button" aria-label="Menu" aria-expanded="false">☰</button>
     <div class="ihc-nav-menu" id="ihc-nav-menu">${menusHtml}</div>
-    <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
-      title="${isLight() ? 'Donker thema' : 'Licht thema'}"
-      aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>`;
+    <div class="ihc-nav-actions">
+      <a class="ihc-nav-btn" id="ihc-admin-btn" href="../Admin/" title="Admin — centrale expediting-upload" aria-label="Admin">⚙️</a>
+      <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
+        title="${isLight() ? 'Donker thema' : 'Licht thema'}"
+        aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>
+    </div>`;
 
   const spacer = document.createElement('div');
   spacer.className = 'ihc-nav-spacer';

@@ -118,8 +118,18 @@ html[data-theme="light"] .ihc-dropdown { box-shadow: 0 12px 32px rgba(10,22,40,.
 /* ══════════════════════════════════════════════════════════════════════════
    Thema-schakelaar (donker ⇄ licht) — knop rechtsboven in de bovenbalk
    ══════════════════════════════════════════════════════════════════════════ */
+.ihc-nav-actions { margin-left: auto; align-self: center; display: flex; align-items: center; gap: .45rem; }
+.ihc-nav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer; text-decoration: none;
+  background: transparent; border: 1px solid var(--ihc-steel);
+  font-size: 1rem; line-height: 1;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.ihc-nav-btn:hover { border-color: var(--ihc-red); background: rgba(217,31,44,.12); }
+.ihc-nav-btn:active { transform: scale(.92); }
 .ihc-theme-toggle {
-  margin-left: auto; align-self: center;
+  align-self: center;
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
   background: transparent; border: 1px solid var(--ihc-steel);
