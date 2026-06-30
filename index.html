@@ -24,8 +24,8 @@ a{text-decoration:none;color:inherit}
 /* ── Top navigation ─────────────────────────────────────────────── */
 .nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(8px);
   border-bottom:1px solid var(--line);display:flex;align-items:stretch;height:64px;padding:0 clamp(1rem,4vw,3rem)}
-.brand{display:flex;align-items:center;gap:.6rem;font-family:var(--cond);font-weight:700;font-size:1.25rem;
-  letter-spacing:.02em;color:var(--ink);text-transform:uppercase;margin-right:2.5rem}
+.brand{display:flex;align-items:center;gap:.6rem;margin-right:2.5rem}
+.brand-logo{height:28px;width:auto;display:block}
 .brand .mark{background:var(--red);color:#fff;padding:.05em .4em;border-radius:4px;font-weight:700}
 .brand small{font-family:var(--mono);font-size:.6rem;font-weight:500;color:var(--body);letter-spacing:.18em;
   text-transform:uppercase;align-self:flex-end;margin-bottom:.35rem}
@@ -129,7 +129,7 @@ footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text
 </svg>
 
 <nav class="nav">
-  <a class="brand" href="./">Royal <span class="mark">IHC</span> <small>Expedite&nbsp;2.0</small></a>
+  <a class="brand" href="./"><img class="brand-logo" src="shared/logo.png" alt="Royal IHC"><small>Expedite&nbsp;2.0</small></a>
 
   <button class="nav-burger" aria-label="Menu" onclick="document.getElementById('navMenu').classList.toggle('show')">☰</button>
 
