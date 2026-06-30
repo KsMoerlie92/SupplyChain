@@ -634,6 +634,7 @@ function buildValHeader() {
   const IHC_OWN   = new Set(['A','B','I','J','W','AA']);
   const ownerRow  = _valOwners;
   const headerRow = _valHeaders;
+  const VIRT_COLS = new Set(Object.keys(_virtualCols));  // IHC-toegevoegde kolommen (Z/AA)
 
   const ownerMap  = {};
   COLS_SHOW.forEach(col => {
@@ -668,6 +669,7 @@ function handleValFile(fileOrEvent) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
+   try {
     const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
     _valWb = wb;
     const wsName = wb.SheetNames[0];
@@ -723,8 +725,15 @@ function handleValFile(fileOrEvent) {
     buildValHeader();
     document.getElementById('btn-val-run')?.removeAttribute('disabled');
     document.getElementById('btn-val-labels')?.removeAttribute('disabled');
-    document.getElementById('val-summary').innerHTML =
+    const sumEl0 = document.getElementById('val-summary');
+    if (sumEl0) sumEl0.innerHTML =
       `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
+   } catch (err) {
+     console.error('Itemlijst inlezen mislukt:', err);
+     const sumErr = document.getElementById('val-summary');
+     if (sumErr) sumErr.innerHTML =
+       `<span style="color:#ef4444">❌ Inlezen mislukt: ${esc(err.message)}</span>`;
+   }
   };
   reader.readAsArrayBuffer(file);
 }
