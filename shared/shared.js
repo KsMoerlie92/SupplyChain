@@ -41,7 +41,8 @@
   nav.id = 'ihc-nav';
   nav.innerHTML = `
     <a class="ihc-nav-brand" href="../">
-      <span class="ihc-nav-logo">IHC</span>
+      <img class="ihc-logo ihc-logo-dark"  src="../shared/logo-dark.png" alt="Royal IHC">
+      <img class="ihc-logo ihc-logo-light" src="../shared/logo.png"      alt="Royal IHC">
       <span class="ihc-nav-title">Expedite 2.0</span>
     </a>
     <div class="ihc-nav-links">${links}</div>

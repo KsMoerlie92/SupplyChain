@@ -37,6 +37,12 @@
   font-size: .65rem; font-weight: 900;
   padding: .15rem .4rem; border-radius: 2px; letter-spacing: .08em;
 }
+/* Echt Royal IHC-logo — donkere variant (witte 'Royal') op de donkere balk,
+   normale variant (zwarte 'Royal') in licht thema. Wisselt mee met het thema. */
+.ihc-logo { height: 24px; width: auto; display: block; }
+.ihc-logo-light { display: none; }
+html[data-theme="light"] .ihc-logo-dark  { display: none; }
+html[data-theme="light"] .ihc-logo-light { display: block; }
 .ihc-nav-title {
   font-size: .65rem; font-weight: 700;
   color: var(--ihc-white); letter-spacing: .1em;
