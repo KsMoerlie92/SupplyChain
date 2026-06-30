@@ -3,15 +3,19 @@
 // For the root index.html use shared-root.js (different href prefix).
 
 (function () {
+  // ── Thema (donker/licht) — toepassen vóór de nav wordt opgebouwd ─────────
+  try {
+    if (localStorage.getItem('ihc-theme') === 'light')
+      document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {}
+  const isLight = () => document.documentElement.getAttribute('data-theme') === 'light';
+
   const PAGES = [
-    { href: '../index.html',                    icon: '🏠', label: 'Home',                badge: ''           },
-    { href: '../PO-Matcher/index.html',         icon: '🔍', label: 'Expediting Tool',          badge: 'Expediting' },
-    { href: '../Legplan/index.html',            icon: '📦', label: 'Logistic Portal',       badge: 'Shipment'   },
-    { href: '../Itemlijst-Validator/index.html',icon: '📋', label: 'Itemlijst Validator',  badge: 'Validatie'  },
-    { href: '../DG-Overview/index.html',        icon: '⚠️', label: 'DG Overview',          badge: 'Hazardous'  },
-    { href: '../Expediting-Mailer/index.html',  icon: '✉️', label: 'Expediting Mailer',    badge: 'Mailer'     },
-    { href: '../FAT-Overview/index.html',       icon: '🏭', label: 'FAT Overview',         badge: 'FAT'        },
-    { href: '../Admin/index.html',              icon: '⚙️', label: 'Admin',                badge: 'Beheer'     },
+    { href: '../',                    icon: '🏠', label: 'Home',                badge: ''           },
+    { href: '../PO-Matcher/',         icon: '🔍', label: 'PO Matcher',          badge: 'Expediting' },
+    { href: '../Legplan/',            icon: '📦', label: 'Legplan & CIPL',       badge: 'Shipment'   },
+    { href: '../Itemlijst-Validator/',icon: '📋', label: 'Itemlijst Validator',  badge: 'Validatie'  },
+    { href: '../DG-Overview/',        icon: '⚠️', label: 'DG Overview',          badge: 'Hazardous'  },
   ];
 
   const path = window.location.pathname.toLowerCase();
@@ -40,7 +44,10 @@
       <span class="ihc-nav-logo">IHC</span>
       <span class="ihc-nav-title">Expedite 2.0</span>
     </a>
-    <div class="ihc-nav-links">${links}</div>`;
+    <div class="ihc-nav-links">${links}</div>
+    <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
+      title="${isLight() ? 'Donker thema' : 'Licht thema'}"
+      aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>`;
 
   const spacer = document.createElement('div');
   spacer.className = 'ihc-nav-spacer';
@@ -48,4 +55,15 @@
   // Insert at very top of body
   document.body.insertBefore(spacer, document.body.firstChild);
   document.body.insertBefore(nav, spacer);
+
+  // ── Thema wisselen + onthouden ──────────────────────────────────────────
+  const btn = document.getElementById('ihc-theme-toggle');
+  if (btn) btn.addEventListener('click', () => {
+    const toLight = !isLight();
+    if (toLight) document.documentElement.setAttribute('data-theme', 'light');
+    else         document.documentElement.removeAttribute('data-theme');
+    try { localStorage.setItem('ihc-theme', toLight ? 'light' : 'dark'); } catch (e) {}
+    btn.textContent = toLight ? '🌙' : '☀️';
+    btn.title = toLight ? 'Donker thema' : 'Licht thema';
+  });
 })();

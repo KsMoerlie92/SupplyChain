@@ -85,3 +85,54 @@
   .ihc-nav-link .ihc-nav-label { display: none; }
   .ihc-nav-link { padding: 0 .55rem; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Thema-schakelaar (donker ⇄ licht) — knop rechtsboven in de bovenbalk
+   ══════════════════════════════════════════════════════════════════════════ */
+.ihc-theme-toggle {
+  margin-left: auto; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--ihc-steel);
+  font-size: 1rem; line-height: 1; padding: 0;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.ihc-theme-toggle:hover { border-color: var(--ihc-red); background: rgba(217,31,44,.12); }
+.ihc-theme-toggle:active { transform: scale(.92); }
+
+/* ── LICHT THEMA ────────────────────────────────────────────────────────────
+   Eén attribuut op <html> herkleurt zowel de nav als de pagina-inhoud.
+   html[data-theme="light"] heeft hogere specificiteit dan :root, dus dit wint
+   van de donkere standaardwaarden per pagina. Accenten (rood/teal/groen/amber)
+   blijven staan. */
+html[data-theme="light"] {
+  color-scheme: light;
+  /* Nav-palet (--ihc-*) */
+  --ihc-navy:  #EEF2F8;
+  --ihc-mid:   #FFFFFF;
+  --ihc-steel: #D4DEEC;
+  --ihc-white: #0A1628;
+  --ihc-muted: #5A6B85;
+  /* Pagina-palet (PO-Matcher / Legplan / Itemlijst-Validator) */
+  --navy:       #EEF2F8;
+  --navy-mid:   #FFFFFF;
+  --navy-light: #F4F7FB;
+  --steel:      #D4DEEC;
+  --text:       #16263F;
+  --white:      #0A1628;
+  --off-white:  #16263F;
+  --grey:       #5A6B85;
+  --muted:      #5A6B85;
+  --border:     rgba(30,58,95,.18);
+  --ice:        #33506e;
+  --teal-dim:   rgba(0,180,200,.12);
+  --grey-dim:   rgba(143,163,191,.12);
+  /* DG-Overview-palet */
+  --bg:        #EEF2F8;
+  --card:      #FFFFFF;
+  --card-hover:#F4F7FB;
+  --text-dim:  #5A6B85;
+  --input-bg:  #FFFFFF;
+}
+/* Lichtere nav-schaduw in licht thema */
+html[data-theme="light"] .ihc-nav { box-shadow: 0 1px 8px rgba(10,22,40,.10); }
