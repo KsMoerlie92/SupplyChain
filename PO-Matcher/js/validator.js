@@ -284,6 +284,62 @@ function validateSheet(rows) {
   return sheetWarnings;
 }
 
+// ── Slim aanvullen vanuit Expediting ────────────────────────────────────────
+// Blauwe Boekje nummer = Unified Reference Code. Match: itemlijst-kolom H
+// (Mark/Label, kan meerdere codes bevatten) ↔ Expediting "Unified Reference Code".
+// Bij een match worden LEGE itemcellen aangevuld vanuit de Expediting-rij.
+let _expIndex = null;       // Map: urefCode(lowercase) → eerste Expediting-rij
+let _expIndexFor = null;    // databron waarvoor de index is opgebouwd
+
+function _buildExpIndex(expeditingData) {
+  if (_expIndex && _expIndexFor === expeditingData) return _expIndex;
+  const m = new Map();
+  if (Array.isArray(expeditingData)) {
+    for (const row of expeditingData) {
+      const uref = String(row['Unified Reference Code'] ?? '').trim();
+      if (uref && !m.has(uref.toLowerCase())) m.set(uref.toLowerCase(), row);
+    }
+  }
+  _expIndex = m; _expIndexFor = expeditingData;
+  return m;
+}
+
+// Expediting-veldnaam → itemlijst-kolomletter. Alleen LEGE cellen worden gevuld.
+const _EXP_FILL_MAP = [
+  ['Order No',          'C'],  // IHC PO (basis-PO)
+  ['Purchase Order No', 'D'],  // Item # = PO + line/release  (bevat '-')
+  ['Description',       'E'],  // Omschrijving
+  ['Supplier Name',     'K'],  // Supplier
+  ['Country of Origin', 'N'],  // Land van oorsprong
+  ['Customs Stat No',   'O'],  // HS-code
+];
+
+function _fillRowFromExpediting(cells, expeditingData) {
+  if (!expeditingData || !expeditingData.length) return 0;
+  const idx = _buildExpIndex(expeditingData);
+  const hCodes = parseHColumn(String(cells[COL.H] ?? '').trim());
+  if (!hCodes.length) return 0;
+
+  let match = null;
+  for (const code of hCodes) {
+    const hit = idx.get(String(code).trim().toLowerCase());
+    if (hit) { match = hit; break; }
+  }
+  if (!match) return 0;
+
+  let filled = 0;
+  for (const [field, colLetter] of _EXP_FILL_MAP) {
+    const ci = COL[colLetter];
+    if (ci === undefined) continue;
+    if (String(cells[ci] ?? '').trim()) continue;        // niet overschrijven
+    const val = match[field];
+    if (val === null || val === undefined || String(val).trim() === '') continue;
+    cells[ci] = String(val).trim();
+    filled++;
+  }
+  return filled;
+}
+
 // ── Run full validation ────────────────────────────────────────────────────
 async function runValidation() {
   const dzEl  = document.getElementById('val-dz');
@@ -311,6 +367,15 @@ async function runValidation() {
   const expeditingData = (typeof fileData !== 'undefined' && fileData.expediting)
     ? fileData.expediting.data : null;
 
+  // Slim aanvullen vanuit Expediting (H ↔ Unified Reference Code) — alleen lege cellen
+  let filledFields = 0, filledRows = 0;
+  if (expeditingData && expeditingData.length) {
+    for (const row of _valRows) {
+      const n = _fillRowFromExpediting(row.cells, expeditingData);
+      if (n) { filledFields += n; filledRows++; }
+    }
+  }
+
   // Validate each row
   let totalErrors = 0, totalWarnings = 0;
   for (const row of _valRows) {
@@ -333,7 +398,8 @@ async function runValidation() {
     sumEl.innerHTML =
       `<span style="color:${cls};font-weight:700">${totalErrors === 0 ? '✅' : '❌'} ${totalErrors} fout(en)</span>` +
       `<span style="color:var(--amber)">  ⚠️ ${totalWarnings} waarschuwing(en)</span>` +
-      `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>`;
+      `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>` +
+      (filledFields ? `<span style="color:var(--teal)">  🔗 ${filledFields} veld(en) aangevuld vanuit Expediting (${filledRows} rij(en))</span>` : '');
   }
 
   // Sheet warnings
