@@ -118,6 +118,23 @@ footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text
   .nav-item.open .dropdown{display:block}
   .nav-item:hover .dropdown,.nav-item:focus-within .dropdown{opacity:1}
 }
+.brand-logo-dark{display:none}
+.nav-actions{display:flex;align-items:center;gap:.5rem;margin-left:.5rem}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:7px;
+  border:1px solid var(--line);background:transparent;cursor:pointer;text-decoration:none;font-size:1.05rem;line-height:1;
+  color:var(--ink);transition:background .15s,border-color .15s,transform .1s}
+.icon-btn:hover{border-color:var(--red);background:rgba(217,31,44,.10)}
+.icon-btn:active{transform:scale(.92)}
+
+/* ── Donker thema (hoofdpagina) — schakelt mee met de subpagina's ──────────── */
+html[data-theme="dark"]{
+  --bg:#0A1628; --surface:#0F2040; --ink:#F0F4FA; --body:#9FB0C8;
+  --line:#1e3a6e; --line-soft:#16263F; color-scheme:dark;
+}
+html[data-theme="dark"] .nav{background:rgba(10,22,40,.9)}
+html[data-theme="dark"] .brand-logo-light{display:none}
+html[data-theme="dark"] .brand-logo-dark{display:block}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto}}
 </style>
 </head>
@@ -129,7 +146,7 @@ footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text
 </svg>
 
 <nav class="nav">
-  <a class="brand" href="./"><img class="brand-logo" src="shared/logo.png" alt="Royal IHC"><small>Expedite&nbsp;2.0</small></a>
+  <a class="brand" href="./"><img class="brand-logo brand-logo-light" src="shared/logo.png" alt="Royal IHC"><img class="brand-logo brand-logo-dark" src="shared/logo-dark.png" alt="Royal IHC"><small>Expedite&nbsp;2.0</small></a>
 
   <button class="nav-burger" aria-label="Menu" onclick="document.getElementById('navMenu').classList.toggle('show')">☰</button>
 
@@ -179,7 +196,10 @@ footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text
   </div>
 
   <div class="nav-spacer"></div>
-  <div class="nav-tag">Royal IHC · Intern</div>
+  <div class="nav-actions">
+    <a class="icon-btn" href="Admin/" title="Admin — centrale expediting-upload" aria-label="Admin">⚙️</a>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Wissel thema" title="Donker thema">🌙</button>
+  </div>
 </nav>
 
 <!-- HERO -->
@@ -266,6 +286,23 @@ footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text
 <footer>Royal IHC — Intern gebruik · Logistics &amp; Expediting</footer>
 
 <script>
+// ── Thema (gedeeld met de subpagina's via 'ihc-theme') ────────────────────
+(function(){
+  try { const t = localStorage.getItem('ihc-theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch(e){}
+  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+  const tb = document.getElementById('theme-toggle');
+  const sync = () => { if(tb){ tb.textContent = isDark() ? '☀️' : '🌙'; tb.title = isDark() ? 'Licht thema' : 'Donker thema'; } };
+  sync();
+  if (tb) tb.addEventListener('click', () => {
+    const toDark = !isDark();
+    document.documentElement.setAttribute('data-theme', toDark ? 'dark' : 'light');
+    try { localStorage.setItem('ihc-theme', toDark ? 'dark' : 'light'); } catch(e){}
+    sync();
+  });
+})();
+
 // Mobiel/touch: klik opent de dropdown; buiten klikken sluit alles
 function toggleDD(btn){
   if (window.matchMedia('(min-width:761px)').matches) return; // desktop = hover
