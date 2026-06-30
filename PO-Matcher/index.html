@@ -46,6 +46,7 @@
         <input type="file" id="file-moeder" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'moeder')">
         <div class="dz-badge b-moeder">Moederlijst</div>
         <div class="dz-title">Moeder&shy;lijst</div>
+        <div class="dz-meta">Blad: Sheet 2 (automatisch)<br>IHC PO = Kol C · Item # = Kol D<br>Kolom AA = uitsluiting filter</div>
         <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
         <div class="dz-filename" id="fn-moeder">—</div>
       </div>
@@ -61,17 +62,24 @@
         </div>
       </div>
 
-      <div class="exp-central" id="dz-expediting">
+      <div class="drop-zone" id="dz-expediting">
+        <input type="file" id="file-expediting" accept=".xlsx,.xls,.xlsm" onchange="handleFile(event,'expediting')">
         <div class="dz-badge b-expediting">Expediting</div>
         <div class="dz-title">Expediting Lijst</div>
-        <div class="exp-status" id="exp-status" style="display:none"></div>
-        <div class="exp-pick" id="exp-pick" style="display:none">
-          <input class="exp-search" id="exp-search" type="text" placeholder="🔎 Zoek Sub Project ID…" oninput="renderSubList()">
-          <label class="exp-all"><input type="checkbox" id="exp-all-cb" onchange="selectAllSubs(this.checked)"> Alle (gefilterde) projecten</label>
-          <div class="exp-list" id="exp-list"></div>
-          <div class="exp-sel" id="exp-sel-count">0 geselecteerd</div>
-        </div>
+        <div class="dz-meta">Blad: Sheet 1 (automatisch)<br>Kolom A = lookup &amp; return array</div>
+        <div class="dz-hint">Sleep of klik — .xlsx / .xls</div>
         <div class="dz-filename" id="fn-expediting">—</div>
+      </div>
+      <div class="sp-toggle-wrap">
+        <label class="sp-toggle">
+          <input type="checkbox" id="sp-toggle-expediting" onchange="toggleSP('expediting')">
+          <span>🔗 Laden via SharePoint URL</span>
+        </label>
+        <div class="sp-url-wrap" id="sp-wrap-expediting">
+          <input class="sp-url-input" id="sp-url-expediting"
+            placeholder="https://ihcmerwede.sharepoint.com/…/Expediting.xlsx">
+          <button class="btn-sp-load" onclick="loadFromSP('expediting')">⬇ Laden</button>
+        </div>
       </div>
     </div>
 
@@ -96,19 +104,19 @@
     <div class="stats-strip" id="stats-bar">
       <div class="stat-cell">
         <span class="stat-val sv-green" id="st-match">—</span>
-        <span class="stat-lbl">Nog te verwerken</span>
+        <span class="stat-lbl">In beide lijsten</span>
       </div>
-      <div class="stat-cell nmd-clickable" onclick="window.NoMatchDiag && NoMatchDiag.open()" title="Klik voor overzicht van ontvangen items (verwerkt in ERP)">
-        <span class="stat-val sv-green" id="st-nomatch">—</span>
-        <span class="stat-lbl">Ontvangen items</span>
+      <div class="stat-cell">
+        <span class="stat-val sv-red" id="st-nomatch">—</span>
+        <span class="stat-lbl">Niet in Expediting</span>
       </div>
       <div class="stat-cell">
         <span class="stat-val sv-teal" id="st-exp">—</span>
-        <span class="stat-lbl">PO-regels in moederlijst</span>
+        <span class="stat-lbl">Expanded Output rijen</span>
       </div>
       <div class="stat-cell">
         <span class="stat-val sv-amber" id="st-explist">—</span>
-        <span class="stat-lbl">PO-regels in Expediting lijst</span>
+        <span class="stat-lbl">Expediting Kol A waarden</span>
       </div>
 
     </div>
@@ -116,14 +124,20 @@
     <!-- Section label -->
     <div class="section-head">
       <span class="red-mark"></span>
-      Resultaten
+      Resultaten — XLOOKUP Expanded Output Kol C → Expediting Kol A
     </div>
 
     <!-- Filters -->
     <div class="filter-row" id="filter-row">
-      <button class="filter-chip match-chip active" data-filter="match"   onclick="setFilter('match',this)">✓ Nog te verwerken</button>
-      <button class="filter-chip late-chip"         data-filter="lateitems" onclick="setFilter('lateitems',this)">⚠ Expediting list</button>
-      <button class="filter-chip val-chip"          data-filter="validator" onclick="setFilter('validator',this)">📋 Itemlijst Validator</button>
+      <button class="filter-chip match-chip active" data-filter="match"   onclick="setFilter('match',this)">✓ In beide lijsten</button>
+      <button class="filter-chip late-chip"         data-filter="lateitems" onclick="setFilter('lateitems',this)">⚠ Late Items</button>
+      <!-- Late Items sort controls -->
+      <div class="late-sort-wrap" id="late-sort-wrap" style="display:none">
+        <span class="late-sort-label">Sorteer offset:</span>
+        <button class="late-sort-btn active" id="late-sort-asc"  onclick="setLateSort('asc')">▲ Offset laag→hoog</button>
+        <button class="late-sort-btn"        id="late-sort-desc" onclick="setLateSort('desc')">▼ Offset hoog→laag</button>
+        <button class="late-sort-btn"        id="late-sort-date" onclick="setLateSort('date')">📅 Datum confirmed</button>
+      </div>
       <label class="mr-toggle-wrap" id="mr-toggle-wrap" title="Verberg rijen waarbij MR ID 'not received yet' is">
         <span class="mr-toggle-label">🚫 Verberg Not Received Yet</span>
         <span class="lp-toggle-switch">
@@ -141,11 +155,11 @@
         <table id="result-table">
           <thead>
             <tr>
-              <th class="res-sortable" data-sort="ref" onclick="setResSort('ref')">IHC PO + Item <small>Expediting referentie</small><span class="res-arrow"></span></th>
-              <th class="res-sortable" data-sort="supplier" onclick="setResSort('supplier')">Leverancier <small>Moeder · Kol K</small><span class="res-arrow"></span></th>
-              <th class="res-sortable" data-sort="qty" onclick="setResSort('qty')">Qty <small>Moeder F / Exp O</small><span class="res-arrow"></span></th>
-              <th class="res-sortable" data-sort="colE" onclick="setResSort('colE')">Description<span class="res-arrow"></span></th>
-              <th class="res-sortable" data-sort="status" onclick="setResSort('status')">Status<span class="res-arrow"></span></th>
+              <th>IHC PO + Item <small>Expediting referentie</small></th>
+              <th>Leverancier <small>Moeder · Kol K</small></th>
+              <th>Qty <small>Moeder F / Exp O</small></th>
+              <th>Moeder Kol E</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="result-tbody"></tbody>
@@ -166,54 +180,6 @@
     <div class="empty-state" id="empty-state">Geen resultaten voor dit filter.</div>
 
 
-    <!-- VALIDATOR PANEL -->
-    <div id="validator-wrap" style="display:none">
-      <div class="section-head"><span class="red-mark"></span>Itemlijst Validator</div>
-
-      <!-- Upload -->
-      <div class="val-dz" id="val-dz"
-        ondragover="valDragOver(event)" ondragleave="valDragLeave()" ondrop="valDrop(event)"
-        onclick="document.getElementById('val-file-input').click()">
-        <label class="val-dz-label">📋 Sleep een Itemlijst (.xlsx) hierheen of klik om te uploaden</label>
-        <div class="val-filename" id="val-filename"></div>
-        <input type="file" id="val-file-input" accept=".xlsx,.xls,.xlsm" onchange="handleValFile(event)">
-      </div>
-
-      <!-- Toolbar -->
-      <div class="val-toolbar">
-        <button class="btn-val btn-val-run" id="btn-val-run" disabled onclick="runValidation()">▶ Valideer</button>
-        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
-        <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Genereer Merken/Labels</button>
-        <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
-          <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
-          <input type="text" id="val-consignee" class="val-consignee-input"
-            value="PACIFIC SHIPBUILDING JSC"
-            placeholder="Consignee naam"
-            title="Verschijnt als Shipping Marks op de labels">
-        </div>
-        <div id="val-sheet-warnings"></div>
-      </div>
-
-      <!-- Summary -->
-      <div id="val-summary"></div>
-
-      <!-- Legend -->
-      <div class="val-legend">
-        <span><span class="lsq" style="background:rgba(34,197,94,.25)"></span> Correct</span>
-        <span><span class="lsq" style="background:rgba(239,68,68,.35)"></span> Fout (verplicht veld / ongeldige waarde)</span>
-        <span><span class="lsq" style="background:rgba(245,158,11,.25)"></span> Waarschuwing</span>
-        <span><span class="lsq" style="background:rgba(0,180,216,.2)"></span> IHC invullen (klik om te bewerken)</span>
-        <span>🔴 DG = Dangerous Goods</span>
-      </div>
-
-      <!-- Table -->
-      <div class="val-table-wrap">
-        <table class="val-table">
-          <thead id="val-thead"></thead>
-          <tbody id="val-tbody"></tbody>
-        </table>
-      </div>
-    </div>
 
 
   </section>
@@ -223,15 +189,12 @@
 <!-- Application modules — load order matters -->
 <script src="js/utils.js"></script>
 <script src="js/state.js"></script>
-<script src="../shared/expediting-core.js"></script>
-<script src="../shared/expediting-data.js"></script>
 <script src="js/file-loader.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/matcher.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/export.js"></script>
 <script src="js/validator.js"></script>
-<script src="js/diag-nomatch.js"></script>
 <script src="../shared/shared.js"></script>
 </body>
 </html>
