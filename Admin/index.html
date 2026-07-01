@@ -31,10 +31,54 @@ h1 .r{color:var(--ihc-red)}
 .kpi b{display:block;font-size:1.4rem;font-family:'Barlow Condensed',sans-serif;color:var(--ihc-teal)}
 .kpi small{color:var(--ihc-muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em}
 code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(--ihc-mono);font-size:.78rem}
+/* ── Code-gate (lichte afscherming) ──────────────────────────────────────── */
+#admin-main{display:none}
+.gate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:rgba(5,12,26,.92);backdrop-filter:blur(6px)}
+.gate-card{width:min(360px,92vw);background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-top:3px solid var(--ihc-red);border-radius:12px;padding:1.6rem;text-align:center}
+.gate-card h2{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.04em;margin:.2rem 0;color:var(--ihc-white)}
+.gate-card p{color:var(--ihc-muted);font-size:.8rem;margin:0 0 1rem}
+.gate-card input{width:100%;box-sizing:border-box;text-align:center;letter-spacing:.5em;font-family:var(--ihc-mono);font-size:1.2rem;padding:.6rem;border-radius:8px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);outline:none}
+.gate-card input:focus{border-color:var(--ihc-red)}
+.gate-btn{margin-top:.9rem;width:100%;padding:.65rem;border:none;border-radius:8px;cursor:pointer;background:var(--ihc-red);color:#fff;font-family:var(--ihc-mono);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.78rem}
+.gate-err{color:#ef4444;font-size:.74rem;min-height:1.1em;margin-top:.5rem}
 </style>
 </head>
 <body>
-<div class="wrap">
+<!-- Code-gate -->
+<div class="gate" id="admin-gate">
+  <div class="gate-card">
+    <div style="font-size:1.6rem">🔒</div>
+    <h2>Admin</h2>
+    <p>Voer de toegangscode in.</p>
+    <input id="gate-input" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+    <button class="gate-btn" id="gate-btn">Ontgrendelen</button>
+    <div class="gate-err" id="gate-err"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var CODE = '2708';
+  var gate = document.getElementById('admin-gate');
+  var main = document.getElementById('admin-main');
+  var input = document.getElementById('gate-input');
+  var errEl = document.getElementById('gate-err');
+  function unlock() {
+    gate.style.display = 'none';
+    if (main) main.style.display = '';
+    try { sessionStorage.setItem('ihc-admin-ok', '1'); } catch (e) {}
+  }
+  function tryCode() {
+    if (input.value.trim() === CODE) { errEl.textContent = ''; unlock(); }
+    else { errEl.textContent = 'Onjuiste code.'; input.value = ''; input.focus(); }
+  }
+  try { if (sessionStorage.getItem('ihc-admin-ok') === '1') { unlock(); return; } } catch (e) {}
+  document.getElementById('gate-btn').addEventListener('click', tryCode);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryCode(); });
+  setTimeout(function () { input.focus(); }, 50);
+})();
+</script>
+
+<div class="wrap" id="admin-main">
   <h1>Bedrijfsbrede Expedite<span class="r">lijst</span></h1>
   <p class="lead">Upload de bedrijfsbrede Expediten (totaaloverzicht) hier één keer. Hij wordt centraal in de browser opgeslagen en is daarna
     beschikbaar op PO Matcher (selectie op Sub Project ID), Itemlijst Validator en de Expediting Mailer — zonder opnieuw uploaden.</p>
