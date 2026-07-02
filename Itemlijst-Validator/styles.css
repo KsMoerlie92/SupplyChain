@@ -761,7 +761,7 @@ td strong { color: var(--white); }
 .val-cell-ihc { background: rgba(0,180,216,.05) !important; border-left: 2px solid rgba(0,180,216,.25) !important; }
 .val-cell-ihc .val-input { color: var(--teal); }
 .val-cell-ihc .val-input::placeholder { color: rgba(0,180,216,.45); }
-.val-cell { padding: .3rem .5rem; border-bottom: 1px solid var(--steel); border-right: 1px solid rgba(255,255,255,.04); vertical-align: top; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.val-cell { padding: .3rem .5rem; border-bottom: 1px solid var(--steel); border-right: 1px solid rgba(255,255,255,.04); vertical-align: top; white-space: nowrap; max-width: none; overflow: visible; }
 .val-cell-num { color: var(--muted); font-family: var(--mono); font-size: .65rem; }
 .val-cell-ok   { }
 .val-cell-err  { color: #fca5a5; }
@@ -769,12 +769,22 @@ td strong { color: var(--white); }
 .val-cell-ihc  { background: rgba(0,180,216,.07);  }
 .val-cell-dg   { background: rgba(239,68,68,.18); color: #f87171; font-weight: 700; }
 .val-row-dg td { border-left: 3px solid #ef4444 !important; }
-.val-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,.15); color: var(--white); font-family: var(--mono); font-size: .65rem; padding: .1rem .2rem; border-radius: 0; width: 100%; outline: none; min-width: 50px; transition: border-color .15s; }
+.val-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,.15); color: var(--white); font-family: var(--mono); font-size: .65rem; padding: .1rem .2rem; border-radius: 0; width: auto; outline: none; min-width: 2.5ch; transition: border-color .15s; }
 .val-input:focus { border-bottom-color: var(--teal); background: rgba(0,180,216,.07); border-radius: 2px; }
 .val-input:not(:placeholder-shown) { border-bottom-color: rgba(255,255,255,.1); }
 .val-cell-err  .val-input { border-bottom-color: rgba(239,68,68,.5); }
 .val-cell-err  .val-input:focus { border-bottom-color: #ef4444; }
 .val-cell-warn .val-input { border-bottom-color: rgba(245,158,11,.5); }
+
+/* ── Kolombreedtes: inhoud-gebaseerd; omschrijving vast + intern schuifbaar ── */
+/* Omschrijving (kolom E): vaste breedte, tekst schuift binnen het veld */
+.val-cell-desc .val-input { width: 240px; max-width: 240px; }
+/* Inspectieniveau (kolom AA): keuzelijst — zoals data-validatie in Excel */
+.val-select {
+  width: auto; cursor: pointer; padding-right: .6rem;
+  appearance: auto; -webkit-appearance: menulist;
+}
+.val-select option { background: var(--navy); color: var(--white); }
 .val-legend { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .6rem; font-size: .67rem; font-family: var(--mono); }
 .val-legend span { display: flex; align-items: center; gap: .3rem; }
 .val-legend .lsq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -958,3 +968,10 @@ td.hs-unknown { background: rgba(255,255,255,.03) !important; }
 }
 .hs-flag-warn  { background: rgba(245,158,11,.2); color: var(--amber); border: 1px solid rgba(245,158,11,.4); }
 .hs-flag-alert { background: rgba(239,68,68,.15); color: #f87171;  border: 1px solid rgba(239,68,68,.3); }
+
+/* ── Sub Project ID-selectie (centrale expediting-koppeling) ──────────────── */
+.val-sp-wrap { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin:0 0 .8rem; }
+.val-sp-label { display:flex; align-items:center; gap:.5rem; font-family:var(--mono); font-size:.72rem;
+  font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--white); }
+.val-sp-label .val-select { text-transform:none; letter-spacing:0; }
+.val-sp-status { font-family:var(--mono); font-size:.7rem; color:var(--teal); }
