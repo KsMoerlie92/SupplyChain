@@ -340,6 +340,68 @@ function _fillRowFromExpediting(cells, expeditingData) {
   return filled;
 }
 
+// ── Centrale expediting-koppeling + Sub Project ID-selectie (Itemlijst-Validator) ──
+// Draait alleen op de validatorpagina (herkenbaar aan de .val-toolbar). Vult
+// fileData.expediting vanuit de gedeelde datalaag en bouwt een Sub Project ID-keuze.
+let _valSubProject = ''; // '' = alle projecten
+
+function _valExpRows() {
+  const all = (typeof fileData !== 'undefined' && fileData.expediting && Array.isArray(fileData.expediting.data))
+    ? fileData.expediting.data : [];
+  if (!_valSubProject) return all;
+  return all.filter(r => String(r['Sub Project ID'] ?? '').trim() === _valSubProject);
+}
+
+function _buildSubProjectSelector(rows) {
+  const bar = document.querySelector('.val-toolbar');
+  if (!bar || document.getElementById('val-subproject')) return;
+  const ids = [...new Set(rows.map(r => String(r['Sub Project ID'] ?? '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+  const wrap = document.createElement('div');
+  wrap.className = 'val-sp-wrap';
+  wrap.innerHTML =
+    `<label class="val-sp-label">🔗 Sub Project ID
+      <select id="val-subproject" class="val-select">
+        <option value="">Alle projecten (${rows.length} regels)</option>
+        ${ids.map(id => {
+          const n = rows.filter(r => String(r['Sub Project ID'] ?? '').trim() === id).length;
+          return `<option value="${esc(id)}">${esc(id)} (${n})</option>`;
+        }).join('')}
+      </select>
+    </label>
+    <span class="val-sp-status" id="val-sp-status">🔗 Bedrijfsbrede lijst gekoppeld — ${rows.length} regels</span>`;
+  bar.parentNode.insertBefore(wrap, bar);
+  wrap.querySelector('#val-subproject').addEventListener('change', function () {
+    _valSubProject = this.value;
+    const n = _valExpRows().length;
+    const st = document.getElementById('val-sp-status');
+    if (st) st.textContent = _valSubProject ? `Project ${_valSubProject}: ${n} regels` : `Alle projecten: ${n} regels`;
+  });
+}
+
+async function _valConnectExpediting() {
+  if (!document.querySelector('.val-toolbar')) return;      // alleen op de validatorpagina
+  if (typeof fileData === 'undefined' || !window.ExpeditingData) return;
+  let raw = null, meta = null;
+  try { raw = await window.ExpeditingData.loadRaw(); meta = await window.ExpeditingData.meta(); }
+  catch (e) { console.error('Centrale expediting-lijst lezen mislukt:', e); }
+
+  const sh = document.getElementById('val-sheet-warnings');
+  if (raw && Array.isArray(raw.rows) && raw.rows.length) {
+    fileData.expediting = { data: raw.rows, headers: raw.headers,
+      name: (meta && meta.filename) || 'Bedrijfsbreed', source: meta && meta.source };
+    _buildSubProjectSelector(raw.rows);
+  } else if (sh) {
+    sh.innerHTML = '<span style="color:#f59e0b">⚠ Geen centrale expeditinglijst gevonden — stel in via Admin. ' +
+      'De lookups/aanvullingen bij het valideren werken pas als de lijst gekoppeld is.</span>';
+  }
+}
+
+if (document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', _valConnectExpediting);
+else
+  _valConnectExpediting();
+
 // ── Run full validation ────────────────────────────────────────────────────
 async function runValidation() {
   const dzEl  = document.getElementById('val-dz');
@@ -363,9 +425,10 @@ async function runValidation() {
   // Get country codes from file's Master tab (already loaded)
   const coo = _valCOO.size > 0 ? _valCOO : VL_COO_FALLBACK;
 
-  // Get expediting data from fileData (loaded in PO Matcher)
-  const expeditingData = (typeof fileData !== 'undefined' && fileData.expediting)
-    ? fileData.expediting.data : null;
+  // Expediting-data uit de centrale koppeling, gefilterd op de gekozen Sub Project ID
+  const expeditingData = (typeof _valExpRows === 'function')
+    ? _valExpRows()
+    : ((typeof fileData !== 'undefined' && fileData.expediting) ? fileData.expediting.data : null);
 
   // Slim aanvullen vanuit Expediting (H ↔ Unified Reference Code) — alleen lege cellen
   let filledFields = 0, filledRows = 0;
