@@ -125,7 +125,10 @@ function _buildPOSubProjectSelector(rows) {
 
   const counts = new Map();
   rows.forEach(r => { const id = String(r[_poSubKey] ?? '').trim(); if (id) counts.set(id, (counts.get(id) || 0) + 1); });
-  const ids = [...counts.keys()].sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+  const MIN_ROWS = 11;   // projecten met 10 of minder regels weglaten uit de lijst
+  const ids = [...counts.keys()]
+    .filter(id => counts.get(id) >= MIN_ROWS)
+    .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
 
   _injectPOSubStyle();
   const fname = (fileData.expediting && fileData.expediting.name) || 'Bedrijfsbrede lijst';
@@ -135,7 +138,7 @@ function _buildPOSubProjectSelector(rows) {
   panel.id = 'po-sp-panel';
   panel.innerHTML =
     `<div class="po-sp-head">📋 Bedrijfsbreed Expediten — selecteer Sub Project ID</div>` +
-    `<div class="po-sp-sub">📄 <b>${fname}</b> — ${rows.length} regels · ${ids.length} Sub Projecten</div>` +
+    `<div class="po-sp-sub">📄 <b>${fname}</b> — ${rows.length} regels · ${ids.length} van ${counts.size} Sub Projecten (≥ ${MIN_ROWS} regels)</div>` +
     `<input class="po-sp-search" id="po-sp-search" placeholder="🔍 Zoek Sub Project ID…" autocomplete="off">` +
     `<div class="po-sp-actions">` +
     `<button class="po-sp-btn" id="po-sp-all" type="button">Alles</button>` +
@@ -168,20 +171,14 @@ function _buildPOSubProjectSelector(rows) {
   });
 }
 
-// Vervang de handmatige upload-UI door de automatische koppeling
+// Verbergt het (overbodige) expediting-vak; de projectkeuze bevestigt de koppeling
 function _setupExpeditingAutoConnect() {
   const dz = document.getElementById('dz-expediting');
-  if (dz) {
-    const fileInput = dz.querySelector('input[type=file]');
-    if (fileInput) { fileInput.style.display = 'none'; fileInput.removeAttribute('onchange'); }
-    const spWrap = document.getElementById('sp-wrap-expediting');
-    if (spWrap) spWrap.style.display = 'none';
-    const spToggle = document.getElementById('sp-toggle-expediting');
-    if (spToggle && spToggle.closest('label')) spToggle.closest('label').style.display = 'none';
-    const title = dz.querySelector('.dz-title');
-    if (title) title.textContent = 'Expediting Lijst (bedrijfsbreed)';
-    dz.style.cursor = 'default';
-  }
+  if (dz) dz.style.display = 'none';
+  const spWrap = document.getElementById('sp-wrap-expediting');
+  if (spWrap) spWrap.style.display = 'none';
+  const spToggle = document.getElementById('sp-toggle-expediting');
+  if (spToggle && spToggle.closest('label')) spToggle.closest('label').style.display = 'none';
   autoloadExpediting();
 }
 
