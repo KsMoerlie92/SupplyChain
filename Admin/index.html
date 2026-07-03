@@ -59,19 +59,17 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 (function () {
   var CODE = '2708';
   var gate = document.getElementById('admin-gate');
-  var main = document.getElementById('admin-main');
   var input = document.getElementById('gate-input');
   var errEl = document.getElementById('gate-err');
   function unlock() {
     gate.style.display = 'none';
-    if (main) main.style.display = '';
-    try { sessionStorage.setItem('ihc-admin-ok', '1'); } catch (e) {}
+    var main = document.getElementById('admin-main');
+    if (main) main.style.display = 'block';
   }
   function tryCode() {
     if (input.value.trim() === CODE) { errEl.textContent = ''; unlock(); }
     else { errEl.textContent = 'Onjuiste code.'; input.value = ''; input.focus(); }
   }
-  try { if (sessionStorage.getItem('ihc-admin-ok') === '1') { unlock(); return; } } catch (e) {}
   document.getElementById('gate-btn').addEventListener('click', tryCode);
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryCode(); });
   setTimeout(function () { input.focus(); }, 50);
