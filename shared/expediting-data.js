@@ -72,9 +72,18 @@
   async function loadRaw(){ const c=await _ensureCommitted(); return c ? c.raw   : ((await get('raw'))||null); }
   async function meta(){    const c=await _ensureCommitted(); return c ? c.meta  : ((await get('meta'))||null); }
 
+  // Kolommen die de tools + datalaag nodig hebben. Overige kolommen worden
+  // uit het commit-bestand gelaten om het klein en snel te houden.
+  const KEEP_COLS = [
+    'Purchase Order No','Order No','Line No','Release No','PO Line Status',
+    'Sub Project ID','Sub Project Description','Technical Coordinator Name','Buyer Name','Supplier Name',
+    'Part No','Description','Unified Reference Code','Qty','Purchase Qty to Receive','Purch UoM',
+    'Delivery Status','Latest Wanted Receipt Date','Planned Delivery Date','Last Expedited','Last Confirmed',
+    'Total/Currency','Delivery Terms','FAT Date Required','Country of Origin','Customs Stat No'
+  ];
   // Bouw het commit-bestand (compacte arrays) uit een rauwe tabel { headers, rows(objecten) }
   function buildCommitJSON(rawTable, metaObj){
-    const headers = rawTable.headers;
+    const headers = rawTable.headers.filter(h => KEEP_COLS.includes(h));
     const rows = rawTable.rows.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
     return JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length }, metaObj||{}), headers, rows });
   }
