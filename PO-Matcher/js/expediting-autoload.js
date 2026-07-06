@@ -3,6 +3,34 @@
 // datalaag (shared/expediting-data.js): eerst het gecommitte expediting-data.json,
 // anders de lokaal (via Admin) opgeslagen lijst. Beheer via /Admin/.
 
+// Verberg de oude bovenbalk meteen (vervangen door de gedeelde nav) — voorkomt flikker
+(function () {
+  var s = document.createElement('style');
+  s.textContent = '.site-header{display:none!important}';
+  (document.head || document.documentElement).appendChild(s);
+})();
+
+// Ruimt overbodige/dubbele UI-elementen op (draait zodra de DOM klaar is)
+function _cleanupUI() {
+  // Oude bovenbalk weg (dubbel met de gedeelde nav)
+  document.querySelectorAll('.site-header').forEach(function (el) { el.style.display = 'none'; });
+  // Moederlijst: dubbele "Moederlijst"-badge + technische regel weg (houd titel + "sleep of klik")
+  var m = document.getElementById('dz-moeder');
+  if (m) {
+    var badge = m.querySelector('.dz-badge'); if (badge) badge.remove();
+    var meta = m.querySelector('.dz-meta'); if (meta) meta.remove();
+  }
+  // Resultaten-kop: XLOOKUP-jargon weg → alleen "Resultaten"
+  document.querySelectorAll('.section-head').forEach(function (el) {
+    if (el.textContent.indexOf('XLOOKUP') !== -1) {
+      var mark = el.querySelector('.red-mark');
+      el.textContent = '';
+      if (mark) el.appendChild(mark);
+      el.appendChild(document.createTextNode(' Resultaten'));
+    }
+  });
+}
+
 // Laadt een script en wacht tot het klaar is
 function _loadScript(src) {
   return new Promise((res, rej) => {
@@ -131,14 +159,12 @@ function _buildPOSubProjectSelector(rows) {
     .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
 
   _injectPOSubStyle();
-  const fname = (fileData.expediting && fileData.expediting.name) || 'Bedrijfsbrede lijst';
 
   const panel = document.createElement('div');
   panel.className = 'po-sp-panel';
   panel.id = 'po-sp-panel';
   panel.innerHTML =
     `<div class="po-sp-head">📋 Bedrijfsbreed Expediten — selecteer Sub Project ID</div>` +
-    `<div class="po-sp-sub">📄 <b>${fname}</b> — ${rows.length} regels · ${ids.length} van ${counts.size} Sub Projecten (≥ ${MIN_ROWS} regels)</div>` +
     `<input class="po-sp-search" id="po-sp-search" placeholder="🔍 Zoek Sub Project ID…" autocomplete="off">` +
     `<div class="po-sp-actions">` +
     `<button class="po-sp-btn" id="po-sp-all" type="button">Alles</button>` +
@@ -173,6 +199,7 @@ function _buildPOSubProjectSelector(rows) {
 
 // Verbergt het (overbodige) expediting-vak; de projectkeuze bevestigt de koppeling
 function _setupExpeditingAutoConnect() {
+  _cleanupUI();
   const dz = document.getElementById('dz-expediting');
   if (dz) dz.style.display = 'none';
   const spWrap = document.getElementById('sp-wrap-expediting');
