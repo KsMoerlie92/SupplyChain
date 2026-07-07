@@ -18,6 +18,20 @@
   function _colIdx(letter) { try { return (typeof COL !== 'undefined') ? COL[letter] : null; } catch (e) { return null; } }
   function _colLabel(letter) { const i = _colIdx(letter); try { return (typeof _valHeaders !== 'undefined' && _valHeaders[i]) ? String(_valHeaders[i]) : letter; } catch (e) { return letter; } }
   function _cell(c, letter) { const i = _colIdx(letter); try { const v = (c && i != null) ? c[i] : ''; return v == null ? '' : String(v).trim(); } catch (e) { return ''; } }
+  function _colloLetter() {
+    try {
+      if (typeof COL === 'undefined' || typeof _valHeaders === 'undefined') return null;
+      const hdr = L => String(_valHeaders[COL[L]] || '').toLowerCase();
+      const letters = Object.keys(COL);
+      const isCollo = h => /coll[io]/.test(h) || /(package|pakket|pkg)/.test(h);
+      const isCount = h => /(aantal|qty|pcs|stuks|count)/.test(h);
+      const hasNr   = h => /(nr|no|nummer|number|#)/.test(h);
+      let L = letters.find(l => { const h = hdr(l); return isCollo(h) && hasNr(h) && !isCount(h); });
+      if (L) return L;
+      L = letters.find(l => { const h = hdr(l); return isCollo(h) && !isCount(h); });
+      return L || null;
+    } catch (e) { return null; }
+  }
   function _consignee() { return (document.getElementById('val-consignee')?.value || '').trim(); }
   function _filename() { return (document.getElementById('val-filename')?.textContent || '').trim(); }
 
@@ -78,6 +92,39 @@ Met vriendelijke groet,
 Royal IHC`;
   }
 
+  // Groepeert per uniek collonummer; alleen relevant bij méér dan 20 colli.
+  function palletItems() {
+    const cL = _colloLetter();
+    if (!cL) return [];
+    const map = new Map();
+    _rows().forEach(r => {
+      const c = r.cells || [];
+      const collo = _cell(c, cL);
+      if (!collo) return;
+      if (!map.has(collo)) map.set(collo, { collo: collo, L: _cell(c, 'T'), W: _cell(c, 'U'), H: _cell(c, 'V'), G: _cell(c, 'X'), rows: 0 });
+      map.get(collo).rows++;
+    });
+    const list = [...map.values()].sort((a, b) => String(a.collo).localeCompare(String(b.collo), 'nl', { numeric: true }));
+    return list.length > 20 ? list : [];
+  }
+  function palletBody(items) {
+    const cons = _consignee(), fn = _filename();
+    const lines = items.map(it =>
+      `- Collo ${it.collo} | L×B×H: ${it.L || '?'}×${it.W || '?'}×${it.H || '?'} cm | bruto: ${it.G || '?'} kg | ${it.rows} regel(s)`
+    ).join('\n');
+    return `Beste Mark,
+
+Ter voormelding: de komende zending${cons ? ' voor ' + cons : ''} omvat ${items.length} unieke collo's/pallets. Vanwege deze omvang melden wij dit vooraf, zodat er tijdig capaciteit gereserveerd kan worden (transport, laad- en losplan, eventueel meerdere trailers).
+${fn ? '\nBestand: ' + fn + '\n' : ''}
+Overzicht van de colli:
+${lines}
+
+Graag ontvangen wij een bevestiging dat dit aantal ingepland kan worden. Zijn er beperkingen qua afmeting of gewicht per collo, dan horen wij dat graag.
+
+Met vriendelijke groet,
+Royal IHC`;
+  }
+
   const TEMPLATES = {
     leverancier: {
       naam: 'Leverancier \u2014 ontbrekende/afwijkende info',
@@ -94,6 +141,14 @@ Royal IHC`;
       itemsFn: afsItems, bodyFn: afsBody,
       label: it => `${it.ref}${it.desc ? ' \u2014 ' + it.desc : ''} \u00b7 ${it.L || '?'}\u00d7${it.W || '?'}\u00d7${it.H || '?'} cm \u00b7 ${it.G || '?'} kg [${it.reason}]`,
       empty: 'Geen oversized/zware regels gevonden \u2014 geen voormelding bij AFS nodig.'
+    },
+    omvang: {
+      naam: 'AFS — voormelding omvang (>20 colli)',
+      to: AFS_EMAIL,
+      subject: () => { const c = _consignee(); return 'Voormelding AFS — grote zending (>20 colli)' + (c ? ' — ' + c : ''); },
+      itemsFn: palletItems, bodyFn: palletBody,
+      label: it => `Collo ${it.collo} · ${it.L || '?'}×${it.W || '?'}×${it.H || '?'} cm · ${it.rows} regel(s)`,
+      empty: '20 of minder unieke collonummers (of geen collonummer-kolom gevonden) — geen voormelding vanwege omvang nodig.'
     }
   };
 
