@@ -12,6 +12,105 @@ const VL_INSP_LC = new Set(INSP_OPTIONS.map(s => s.toLowerCase())); // tolerant 
 // 250 ISO-2 country codes (abbreviated — full set checked at runtime from file)
 const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
 
+// ── Landnaam / alpha-3 → ISO 3166-1 alpha-2 code ────────────────────────────
+// Zet volledige landnamen (NL + EN) en 3-letter codes om naar de 2-letter code.
+const _COUNTRY_TO_ISO2 = (function () {
+  const m = {};
+  const add = (code, ...names) => { names.forEach(n => { m[n.toLowerCase()] = code; }); m[code.toLowerCase()] = code; };
+  add('NL','nederland','netherlands','the netherlands','holland','nld');
+  add('DE','duitsland','germany','deutschland','deu','ger');
+  add('BE','belgie','belgië','belgium','belgique','bel');
+  add('FR','frankrijk','france','fra');
+  add('GB','verenigd koninkrijk','united kingdom','great britain','groot-brittannie','groot-brittannië','england','engeland','uk','gbr');
+  add('IE','ierland','ireland','irl');
+  add('IT','italie','italië','italy','italia','ita');
+  add('ES','spanje','spain','espana','españa','esp');
+  add('PT','portugal','prt');
+  add('LU','luxemburg','luxembourg','lux');
+  add('CH','zwitserland','switzerland','suisse','schweiz','che');
+  add('AT','oostenrijk','austria','osterreich','österreich','aut');
+  add('DK','denemarken','denmark','dnk');
+  add('SE','zweden','sweden','sverige','swe');
+  add('NO','noorwegen','norway','norge','nor');
+  add('FI','finland','suomi','fin');
+  add('IS','ijsland','iceland','isl');
+  add('PL','polen','poland','polska','pol');
+  add('CZ','tsjechie','tsjechië','czech republic','czechia','czech','cze');
+  add('SK','slowakije','slovakia','svk');
+  add('HU','hongarije','hungary','hun');
+  add('RO','roemenie','roemenië','romania','rou');
+  add('BG','bulgarije','bulgaria','bgr');
+  add('GR','griekenland','greece','grc');
+  add('HR','kroatie','kroatië','croatia','hrv');
+  add('SI','slovenie','slovenië','slovenia','svn');
+  add('RS','servie','servië','serbia','srb');
+  add('EE','estland','estonia','est');
+  add('LV','letland','latvia','lva');
+  add('LT','litouwen','lithuania','ltu');
+  add('UA','oekraine','oekraïne','ukraine','ukr');
+  add('RU','rusland','russia','russian federation','rus');
+  add('BY','belarus','wit-rusland','wit rusland','blr');
+  add('TR','turkije','turkey','turkiye','türkiye','tur');
+  add('US','verenigde staten','united states','united states of america','usa','amerika','america','u.s.a','u.s','united states of america (usa)');
+  add('CA','canada','can');
+  add('MX','mexico','mex');
+  add('BR','brazilie','brazilië','brazil','bra');
+  add('AR','argentinie','argentinië','argentina','arg');
+  add('CL','chili','chile','chl');
+  add('CN','china','volksrepubliek china','p.r. china','prc','chn');
+  add('HK','hongkong','hong kong','hkg');
+  add('TW','taiwan','twn');
+  add('JP','japan','jpn');
+  add('KR','zuid-korea','zuid korea','south korea','korea','republic of korea','korea, republic of','kor');
+  add('KP','noord-korea','north korea','prk');
+  add('IN','india','ind');
+  add('PK','pakistan','pak');
+  add('BD','bangladesh','bgd');
+  add('VN','vietnam','viet nam','vnm');
+  add('TH','thailand','tha');
+  add('MY','maleisie','maleisië','malaysia','mys');
+  add('SG','singapore','sgp');
+  add('ID','indonesie','indonesië','indonesia','idn');
+  add('PH','filipijnen','philippines','phl');
+  add('AE','verenigde arabische emiraten','united arab emirates','uae','emirates','are');
+  add('SA','saoedi-arabie','saoedi-arabië','saudi arabia','saudi-arabia','sau');
+  add('QA','qatar','qat');
+  add('KW','koeweit','kuwait','kwt');
+  add('BH','bahrein','bahrain','bhr');
+  add('OM','oman','omn');
+  add('IL','israel','israël','isr');
+  add('EG','egypte','egypt','egy');
+  add('ZA','zuid-afrika','zuid afrika','south africa','zaf');
+  add('NG','nigeria','nga');
+  add('MA','marokko','morocco','mar');
+  add('AU','australie','australië','australia','aus');
+  add('NZ','nieuw-zeeland','nieuw zeeland','new zealand','nzl');
+  return m;
+})();
+
+// Geeft de ISO 3166-1 alpha-2 code terug, of null als onbekend (dan onveranderd laten).
+function _toCountryCode(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const key = s.toLowerCase().replace(/\.+$/, '').replace(/\s+/g, ' ').trim();
+  if (_COUNTRY_TO_ISO2[key]) return _COUNTRY_TO_ISO2[key];
+  if (/^[a-z]{2}$/.test(key)) return key.toUpperCase();   // al een 2-letter code
+  return null;
+}
+
+// Rood-markering voor lege/onjuiste cellen + markering op slim ingevulde headers
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('val-extra-style')) return;
+  const s = document.createElement('style'); s.id = 'val-extra-style';
+  s.textContent =
+    '.val-cell-err{background:rgba(201,100,66,.30)!important}' +
+    '.val-cell-err,.val-cell-err .val-input{color:#ffe0d4!important}' +
+    '.val-cell-err .val-input{border-bottom-color:rgba(224,122,82,.6)!important}' +
+    '.val-cell-err .val-input:focus{border-bottom-color:#e07a52!important}' +
+    '.val-fill-mark{margin-left:4px;font-size:.72em;opacity:.9;cursor:help;vertical-align:middle}';
+  (document.head || document.documentElement).appendChild(s);
+})();
+
 // ── Column index map (0-based, row 2 = headers) ───────────────────────────
 let COL = {
   A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8, J:9,
@@ -284,6 +383,61 @@ function validateSheet(rows) {
   return sheetWarnings;
 }
 
+// ── Collonummer ↔ maatvoering (L×B×H) consistentie ──────────────────────────
+// Regel: rijen met hetzelfde collonummer moeten dezelfde maatvoering hebben.
+// Staat één collonummer op meerdere regels met afwijkende L×B×H, dan is dat fout
+// (elke unieke maatvoering hoort een eigen collonummer te hebben).
+
+// Vindt de kolomletter van het collonummer op basis van de headernaam.
+function _findColloLetter() {
+  const hdr = L => String(_valHeaders[COL[L]] || '').toLowerCase();
+  const letters = Object.keys(COL);
+  const isCollo = h => /coll[io]/.test(h) || /(package|pakket|pkg)/.test(h);
+  const isCount = h => /(aantal|qty|pcs|stuks|count|#\s*coll)/.test(h);
+  const hasNr   = h => /(nr|no|nummer|number|#)/.test(h);
+  let L = letters.find(l => { const h = hdr(l); return isCollo(h) && hasNr(h) && !isCount(h); });
+  if (L) return L;
+  L = letters.find(l => { const h = hdr(l); return isCollo(h) && !isCount(h); });
+  return L || null;
+}
+
+// Genormaliseerde L×B×H-handtekening van een rij (leeg blijft leeg).
+function _dimSignature(cells) {
+  const num = c => { const n = parseFloat(String(c ?? '').replace(',', '.').trim()); return isNaN(n) ? '' : n; };
+  return num(cells[COL.T]) + '×' + num(cells[COL.U]) + '×' + num(cells[COL.V]);
+}
+
+function _validateColloConsistency(rows) {
+  const cLetter = _findColloLetter();
+  if (!cLetter) return { added: 0, warnings: [], collo: null };   // geen collonummer-kolom gevonden
+  const cIdx = COL[cLetter];
+
+  // Groepeer rijen per collonummer
+  const groups = new Map();
+  rows.forEach(row => {
+    const collo = String(row.cells[cIdx] ?? '').trim();
+    if (!collo) return;
+    if (!groups.has(collo)) groups.set(collo, []);
+    groups.get(collo).push(row);
+  });
+
+  let added = 0; const warnings = [];
+  for (const [collo, members] of groups) {
+    if (members.length < 2) continue;
+    const sigs = new Set(members.map(m => _dimSignature(m.cells)));
+    if (sigs.size > 1) {   // zelfde collonummer, verschillende maatvoering → fout
+      warnings.push(`Collo ${collo}: ${members.length} regels met verschillende maatvoering (L×B×H) — moet gelijk zijn`);
+      for (const row of members) {
+        if (!row.errors[cLetter]) { row.errors[cLetter] = `Collo ${collo} heeft afwijkende maatvoering (L×B×H) op meerdere regels`; added++; }
+        for (const L of ['T','U','V']) {
+          if (!row.errors[L]) { row.errors[L] = `Maatvoering wijkt af binnen collo ${collo}`; added++; }
+        }
+      }
+    }
+  }
+  return { added, warnings, collo: cLetter };
+}
+
 // ── Slim aanvullen vanuit Expediting ────────────────────────────────────────
 // Blauwe Boekje nummer = Unified Reference Code. Match: itemlijst-kolom H
 // (Mark/Label, kan meerdere codes bevatten) ↔ Expediting "Unified Reference Code".
@@ -314,6 +468,9 @@ const _EXP_FILL_MAP = [
   ['Customs Stat No',   'O'],  // HS-code
 ];
 
+// Kolomletters die automatisch aangevuld kunnen worden (voor de header-markering)
+const _FILL_COLS = new Set(_EXP_FILL_MAP.map(x => x[1]));
+
 function _fillRowFromExpediting(cells, expeditingData) {
   if (!expeditingData || !expeditingData.length) return 0;
   const idx = _buildExpIndex(expeditingData);
@@ -340,6 +497,68 @@ function _fillRowFromExpediting(cells, expeditingData) {
   return filled;
 }
 
+// ── Centrale expediting-koppeling + Sub Project ID-selectie (Itemlijst-Validator) ──
+// Draait alleen op de validatorpagina (herkenbaar aan de .val-toolbar). Vult
+// fileData.expediting vanuit de gedeelde datalaag en bouwt een Sub Project ID-keuze.
+let _valSubProject = ''; // '' = alle projecten
+
+function _valExpRows() {
+  const all = (typeof fileData !== 'undefined' && fileData.expediting && Array.isArray(fileData.expediting.data))
+    ? fileData.expediting.data : [];
+  if (!_valSubProject) return all;
+  return all.filter(r => String(r['Sub Project ID'] ?? '').trim() === _valSubProject);
+}
+
+function _buildSubProjectSelector(rows) {
+  const bar = document.querySelector('.val-toolbar');
+  if (!bar || document.getElementById('val-subproject')) return;
+  const ids = [...new Set(rows.map(r => String(r['Sub Project ID'] ?? '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+  const wrap = document.createElement('div');
+  wrap.className = 'val-sp-wrap';
+  wrap.innerHTML =
+    `<label class="val-sp-label">🔗 Sub Project ID
+      <select id="val-subproject" class="val-select">
+        <option value="">Alle projecten (${rows.length} regels)</option>
+        ${ids.map(id => {
+          const n = rows.filter(r => String(r['Sub Project ID'] ?? '').trim() === id).length;
+          return `<option value="${esc(id)}">${esc(id)} (${n})</option>`;
+        }).join('')}
+      </select>
+    </label>
+    <span class="val-sp-status" id="val-sp-status">🔗 Bedrijfsbrede lijst gekoppeld — ${rows.length} regels</span>`;
+  bar.parentNode.insertBefore(wrap, bar);
+  wrap.querySelector('#val-subproject').addEventListener('change', function () {
+    _valSubProject = this.value;
+    const n = _valExpRows().length;
+    const st = document.getElementById('val-sp-status');
+    if (st) st.textContent = _valSubProject ? `Project ${_valSubProject}: ${n} regels` : `Alle projecten: ${n} regels`;
+  });
+}
+
+async function _valConnectExpediting() {
+  if (!document.querySelector('.val-toolbar')) return;      // alleen op de validatorpagina
+  if (typeof fileData === 'undefined' || !window.ExpeditingData) return;
+  let raw = null, meta = null;
+  try { raw = await window.ExpeditingData.loadRaw(); meta = await window.ExpeditingData.meta(); }
+  catch (e) { console.error('Centrale expediting-lijst lezen mislukt:', e); }
+
+  const sh = document.getElementById('val-sheet-warnings');
+  if (raw && Array.isArray(raw.rows) && raw.rows.length) {
+    fileData.expediting = { data: raw.rows, headers: raw.headers,
+      name: (meta && meta.filename) || 'Bedrijfsbreed', source: meta && meta.source };
+    _buildSubProjectSelector(raw.rows);
+  } else if (sh) {
+    sh.innerHTML = '<span style="color:#f59e0b">⚠ Geen centrale expeditinglijst gevonden — stel in via Admin. ' +
+      'De lookups/aanvullingen bij het valideren werken pas als de lijst gekoppeld is.</span>';
+  }
+}
+
+if (document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', _valConnectExpediting);
+else
+  _valConnectExpediting();
+
 // ── Run full validation ────────────────────────────────────────────────────
 async function runValidation() {
   const dzEl  = document.getElementById('val-dz');
@@ -363,9 +582,10 @@ async function runValidation() {
   // Get country codes from file's Master tab (already loaded)
   const coo = _valCOO.size > 0 ? _valCOO : VL_COO_FALLBACK;
 
-  // Get expediting data from fileData (loaded in PO Matcher)
-  const expeditingData = (typeof fileData !== 'undefined' && fileData.expediting)
-    ? fileData.expediting.data : null;
+  // Expediting-data uit de centrale koppeling, gefilterd op de gekozen Sub Project ID
+  const expeditingData = (typeof _valExpRows === 'function')
+    ? _valExpRows()
+    : ((typeof fileData !== 'undefined' && fileData.expediting) ? fileData.expediting.data : null);
 
   // Slim aanvullen vanuit Expediting (H ↔ Unified Reference Code) — alleen lege cellen
   let filledFields = 0, filledRows = 0;
@@ -374,6 +594,12 @@ async function runValidation() {
       const n = _fillRowFromExpediting(row.cells, expeditingData);
       if (n) { filledFields += n; filledRows++; }
     }
+  }
+
+  // Landnaam → ISO 3166-1 alpha-2 code (Country of Origin, kolom N)
+  for (const row of _valRows) {
+    const code = _toCountryCode(row.cells[COL.N]);
+    if (code) row.cells[COL.N] = code;
   }
 
   // Validate each row
@@ -387,8 +613,12 @@ async function runValidation() {
     totalWarnings += Object.keys(result.warnings).length;
   }
 
+  // Collonummer ↔ maatvoering-consistentie (kruis-controle over alle regels)
+  const colloCheck = _validateColloConsistency(_valRows);
+  totalErrors += colloCheck.added;
+
   // Sheet-level checks
-  const sheetWarnings = validateSheet(_valRows);
+  const sheetWarnings = validateSheet(_valRows).concat(colloCheck.warnings);
 
   renderValidationTable(usdPrice, usdRate);
 
@@ -654,7 +884,10 @@ function buildValHeader() {
     ${COLS_SHOW.map(col => {
       const hdr = (headerRow[COL[col]] || col) + (VIRT_COLS.has(col) ? ' ✚' : '');
       const cls = IHC_OWN.has(col) ? 'col-owner-ihc' : VIRT_COLS.has(col) ? 'col-owner-virtual' : '';
-      return `<th class="${cls}" title="${esc(VIRT_COLS.has(col) ? 'Door IHC in te vullen vóór export' : hdr)}">${esc(hdr)}</th>`;
+      const fill = _FILL_COLS.has(col);
+      const mark = fill ? '<span class="val-fill-mark" title="Automatisch aangevuld vanuit de centrale Expediting-lijst">🔗</span>' : '';
+      const tip = fill ? 'Automatisch aangevuld vanuit Expediting' : (VIRT_COLS.has(col) ? 'Door IHC in te vullen vóór export' : hdr);
+      return `<th class="${cls}" title="${esc(tip)}">${esc(hdr)}${mark}</th>`;
     }).join('')}
   </tr>`;
   thEl.innerHTML = th1 + th2;
