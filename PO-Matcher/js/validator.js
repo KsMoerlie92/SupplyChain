@@ -500,39 +500,103 @@ function _fillRowFromExpediting(cells, expeditingData) {
 // ── Centrale expediting-koppeling + Sub Project ID-selectie (Itemlijst-Validator) ──
 // Draait alleen op de validatorpagina (herkenbaar aan de .val-toolbar). Vult
 // fileData.expediting vanuit de gedeelde datalaag en bouwt een Sub Project ID-keuze.
-let _valSubProject = ''; // '' = alle projecten
+let _valSubProjects = new Set();   // meervoudige selectie; leeg = alle projecten
+let _valSubKey = 'Sub Project ID';
+
+// Vindt de Sub Project ID-kolomnaam, ongeacht spaties/hoofdletters/schrijfwijze
+function _valDetectSubKey(rows, headers) {
+  const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const hs = (headers && headers.length) ? headers : (rows[0] ? Object.keys(rows[0]) : []);
+  return hs.find(h => norm(h) === 'subprojectid')
+      || hs.find(h => norm(h).includes('subproject'))
+      || hs.find(h => norm(h).includes('project') && norm(h).includes('id'))
+      || 'Sub Project ID';
+}
 
 function _valExpRows() {
   const all = (typeof fileData !== 'undefined' && fileData.expediting && Array.isArray(fileData.expediting.data))
     ? fileData.expediting.data : [];
-  if (!_valSubProject) return all;
-  return all.filter(r => String(r['Sub Project ID'] ?? '').trim() === _valSubProject);
+  if (_valSubProjects.size === 0) return all;   // geen selectie = alle projecten
+  return all.filter(r => _valSubProjects.has(String(r[_valSubKey] ?? '').trim()));
+}
+
+// Injecteert dezelfde opmaak als de PO-Matcher Sub Project ID-selector
+function _valInjectSPStyle() {
+  if (document.getElementById('val-sp-style')) return;
+  const s = document.createElement('style'); s.id = 'val-sp-style';
+  s.textContent =
+    '.val-sp-panel{margin:.6rem 0 0;padding:1rem 1.1rem;background:var(--navy-mid,#0F2040);border:1px solid var(--steel,#1e3a6e);border-radius:12px;font-family:var(--mono,monospace)}' +
+    '.val-sp-head{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.8rem;letter-spacing:.03em;color:var(--white,#F0F4FA)}' +
+    '.val-sp-search{width:100%;box-sizing:border-box;padding:.55rem .8rem;border-radius:8px;border:1px solid var(--steel,#1e3a6e);background:var(--navy,#0A1628);color:var(--white,#F0F4FA);font-family:inherit;font-size:.8rem;outline:none;margin-top:.8rem}' +
+    '.val-sp-search:focus{border-color:var(--teal,#00B4D8)}' +
+    '.val-sp-actions{display:flex;align-items:center;gap:.5rem;margin:.7rem 0 .4rem}' +
+    '.val-sp-btn{font-family:inherit;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.4rem .8rem;border-radius:6px;border:1px solid var(--steel,#1e3a6e);background:transparent;color:var(--white,#F0F4FA);cursor:pointer;transition:border-color .15s,background .15s}' +
+    '.val-sp-btn:hover{border-color:var(--teal,#00B4D8);background:rgba(0,180,216,.1)}' +
+    '.val-sp-count{margin-left:auto;font-size:.72rem;color:var(--teal,#00B4D8)}' +
+    '.val-sp-list{max-height:210px;overflow-y:auto;border:1px solid var(--steel,#1e3a6e);border-radius:8px;background:rgba(10,22,40,.4)}' +
+    '.val-sp-list::-webkit-scrollbar{width:10px}.val-sp-list::-webkit-scrollbar-thumb{background:var(--steel,#1e3a6e);border-radius:5px}' +
+    '.val-sp-item{display:flex;align-items:center;gap:.6rem;padding:.4rem .8rem;cursor:pointer;font-size:.76rem;color:var(--white,#F0F4FA);border-bottom:1px solid rgba(30,58,110,.25)}' +
+    '.val-sp-item:hover{background:rgba(0,180,216,.07)}' +
+    '.val-sp-item input{accent-color:var(--teal,#00B4D8);width:14px;height:14px;cursor:pointer}' +
+    '.val-sp-item .val-sp-n{margin-left:auto;color:var(--grey,#8FA3BF);font-size:.72rem}' +
+    '.val-sp-item.hidden{display:none}';
+  document.head.appendChild(s);
 }
 
 function _buildSubProjectSelector(rows) {
   const bar = document.querySelector('.val-toolbar');
-  if (!bar || document.getElementById('val-subproject')) return;
-  const ids = [...new Set(rows.map(r => String(r['Sub Project ID'] ?? '').trim()).filter(Boolean))]
+  if (!bar || document.getElementById('val-sp-panel')) return;
+  _valSubKey = _valDetectSubKey(rows, fileData.expediting && fileData.expediting.headers);
+
+  const counts = new Map();
+  rows.forEach(r => { const id = String(r[_valSubKey] ?? '').trim(); if (id) counts.set(id, (counts.get(id) || 0) + 1); });
+  const MIN_ROWS = 11;   // projecten met 10 of minder regels weglaten uit de lijst
+  const ids = [...counts.keys()]
+    .filter(id => counts.get(id) >= MIN_ROWS)
     .sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
-  const wrap = document.createElement('div');
-  wrap.className = 'val-sp-wrap';
-  wrap.innerHTML =
-    `<label class="val-sp-label">🔗 Sub Project ID
-      <select id="val-subproject" class="val-select">
-        <option value="">Alle projecten (${rows.length} regels)</option>
-        ${ids.map(id => {
-          const n = rows.filter(r => String(r['Sub Project ID'] ?? '').trim() === id).length;
-          return `<option value="${esc(id)}">${esc(id)} (${n})</option>`;
-        }).join('')}
-      </select>
-    </label>
-    <span class="val-sp-status" id="val-sp-status">🔗 Bedrijfsbrede lijst gekoppeld — ${rows.length} regels</span>`;
-  bar.parentNode.insertBefore(wrap, bar);
-  wrap.querySelector('#val-subproject').addEventListener('change', function () {
-    _valSubProject = this.value;
-    const n = _valExpRows().length;
-    const st = document.getElementById('val-sp-status');
-    if (st) st.textContent = _valSubProject ? `Project ${_valSubProject}: ${n} regels` : `Alle projecten: ${n} regels`;
+
+  _valInjectSPStyle();
+
+  const panel = document.createElement('div');
+  panel.className = 'val-sp-panel';
+  panel.id = 'val-sp-panel';
+  panel.innerHTML =
+    `<div class="val-sp-head">📋 Bedrijfsbreed Expediten — selecteer Sub Project ID</div>` +
+    `<input class="val-sp-search" id="val-sp-search" placeholder="🔍 Zoek Sub Project ID…" autocomplete="off">` +
+    `<div class="val-sp-actions">` +
+    `<button class="val-sp-btn" id="val-sp-all" type="button">Alles</button>` +
+    `<button class="val-sp-btn" id="val-sp-none" type="button">Wis</button>` +
+    `<span class="val-sp-count" id="val-sp-count">0 geselecteerd</span>` +
+    `</div>` +
+    `<div class="val-sp-list" id="val-sp-list">` +
+    ids.map(id => `<label class="val-sp-item" data-id="${esc(id)}"><input type="checkbox" value="${esc(id)}"><span class="val-sp-id">${esc(id)}</span><span class="val-sp-n">${counts.get(id)}</span></label>`).join('') +
+    `</div>`;
+  bar.parentNode.insertBefore(panel, bar);
+
+  const apply = () => {
+    const cnt = document.getElementById('val-sp-count');
+    if (cnt) cnt.textContent = _valSubProjects.size + ' geselecteerd';
+    // Is er al een itemlijst gevalideerd? Opnieuw valideren met de nieuwe selectie.
+    if (typeof _valRows !== 'undefined' && _valRows.length && typeof runValidation === 'function') runValidation();
+  };
+  panel.querySelector('#val-sp-list').addEventListener('change', e => {
+    if (e.target.type !== 'checkbox') return;
+    if (e.target.checked) _valSubProjects.add(e.target.value); else _valSubProjects.delete(e.target.value);
+    apply();
+  });
+  panel.querySelector('#val-sp-search').addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    panel.querySelectorAll('.val-sp-item').forEach(it =>
+      it.classList.toggle('hidden', !!q && !it.dataset.id.toLowerCase().includes(q)));
+  });
+  panel.querySelector('#val-sp-all').addEventListener('click', () => {
+    panel.querySelectorAll('.val-sp-item:not(.hidden) input').forEach(cb => { cb.checked = true; _valSubProjects.add(cb.value); });
+    apply();
+  });
+  panel.querySelector('#val-sp-none').addEventListener('click', () => {
+    panel.querySelectorAll('.val-sp-item input').forEach(cb => cb.checked = false);
+    _valSubProjects.clear();
+    apply();
   });
 }
 
