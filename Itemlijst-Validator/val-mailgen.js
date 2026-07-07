@@ -287,4 +287,19 @@ Royal IHC`;
   global.ValMailer = { open, close,
     _supplierItems: supplierItems, _afsItems: afsItems,
     _supplierBody: supplierBody, _afsBody: afsBody };
+
+  /* ---------- open-knop automatisch in de toolbar plaatsen ---------- */
+  function _mountLaunch() {
+    const bar = document.querySelector('.val-toolbar');
+    if (!bar || document.getElementById('valmail-launch')) return;
+    const btn = document.createElement('button');
+    btn.id = 'valmail-launch';
+    btn.className = 'btn-val btn-val-mail';
+    btn.type = 'button';
+    btn.textContent = '\u2709 Mail opstellen';
+    btn.onclick = function () { open(); };
+    bar.appendChild(btn);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _mountLaunch);
+  else _mountLaunch();
 })(window);
