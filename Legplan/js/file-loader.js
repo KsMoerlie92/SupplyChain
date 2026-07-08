@@ -149,24 +149,29 @@ function processWorkbook(wb, filename, dz, fn) {
   // Find sheet: prefer one with IHC PO or CIPL-format data header (Delivery reference / Collo)
   const CIPL_HEADERS = ['ihc po','delivery reference','collo','mark/label','hs code'];
 
-  let sheetName = null;
-  for (const name of wb.SheetNames) {
-    const ws = wb.Sheets[name];
-    if (!ws['!ref']) continue;
-    const rng = XLSX.utils.decode_range(ws['!ref']);
-    for (let R = rng.s.r; R <= Math.min(rng.s.r + 60, rng.e.r) && !sheetName; R++) {
-      let hits = 0;
-      for (let C = rng.s.c; C <= Math.min(rng.s.c + 25, rng.e.c); C++) {
-        const cell = ws[XLSX.utils.encode_cell({r:R,c:C})];
-        if (!cell) continue;
-        const v = String(cell.v||'').trim().toLowerCase();
-        if (CIPL_HEADERS.some(h => v.includes(h))) hits++;
+  // Kies het hoofd-datablad. Sla het aparte "CIPL format"-blad over (dat wordt
+  // los ingelezen via _ciplWs); anders zou de CIPL-sheet — die géén Shipment-
+  // kolom heeft — als databron worden gebruikt en werken de shipments niet.
+  const findSheet = (skipCipl) => {
+    for (const name of wb.SheetNames) {
+      if (skipCipl && name.toLowerCase().includes('cipl')) continue;
+      const ws = wb.Sheets[name];
+      if (!ws || !ws['!ref']) continue;
+      const rng = XLSX.utils.decode_range(ws['!ref']);
+      for (let R = rng.s.r; R <= Math.min(rng.s.r + 60, rng.e.r); R++) {
+        let hits = 0;
+        for (let C = rng.s.c; C <= Math.min(rng.s.c + 25, rng.e.c); C++) {
+          const cell = ws[XLSX.utils.encode_cell({r:R,c:C})];
+          if (!cell) continue;
+          const v = String(cell.v||'').trim().toLowerCase();
+          if (CIPL_HEADERS.some(h => v.includes(h))) hits++;
+        }
+        if (hits >= 2) return name;
       }
-      if (hits >= 2) { sheetName = name; break; }
     }
-    if (sheetName) break;
-  }
-  if (!sheetName) sheetName = wb.SheetNames[0];
+    return null;
+  };
+  let sheetName = findSheet(true) || findSheet(false) || wb.SheetNames[0];
 
   const ws  = wb.Sheets[sheetName];
   const hdr = findHeaderRow(ws);
