@@ -228,6 +228,23 @@ function isUSD(header) {
 }
 
 // ── Validate a single data row ────────────────────────────────────────────
+// Parse een getal uit een veld dat ook een valutateken (€, $, £, ¥) en
+// duizendtal-/decimaalscheiding kan bevatten. Geeft null als het geen getal is.
+function _parseNum(raw) {
+  let s = String(raw == null ? '' : raw).replace(/[€$£¥]/g, '').replace(/\s/g, '');
+  if (!s) return null;
+  const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
+  if (lastComma > -1 && lastDot > -1) {
+    // beide aanwezig → de laatste is het decimaalteken, de andere is duizendtalscheiding
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.')   // europees: 1.234,56
+                            : s.replace(/,/g, '');                      // amerikaans: 1,234.56
+  } else if (lastComma > -1) {
+    s = s.replace(',', '.');   // alleen komma → decimaalteken
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
 async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   const errors   = {};  // col letter → error message
   const warnings = {};  // col letter → warning message
@@ -235,7 +252,7 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
 
   const v  = (col) => cells[COL[col]];
   const vs = (col) => String(v(col) ?? '').trim();
-  const vn = (col) => { const n = parseFloat(String(v(col)||'').replace(',','.')); return isNaN(n) ? null : n; };
+  const vn = (col) => _parseNum(v(col));
 
   // ── C: IHC PO — required, not empty ──────────────────────────────────────
   if (!vs('C')) errors['C'] = 'IHC PO is verplicht';
