@@ -619,7 +619,21 @@ async function _valConnectExpediting() {
 }
 
 if (document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', _valConnectExpediting);
+// Laadt de mail-template-generator vanzelf op de validatorpagina — ook als de
+// index het script niet expliciet inlaadt. Dubbel laden wordt voorkomen.
+function _valLoadMailgen() {
+  if (!document.querySelector('.val-toolbar')) return;                 // alleen validatorpagina
+  if (window.ValMailer || document.querySelector('script[data-valmailgen]')) return;  // al geladen
+  var s = document.createElement('script');
+  s.src = 'val-mailgen.js';
+  s.setAttribute('data-valmailgen', '1');
+  s.onerror = function () { console.warn('val-mailgen.js kon niet geladen worden'); };
+  document.head.appendChild(s);
+}
+
+document.addEventListener('DOMContentLoaded', _valConnectExpediting);
+document.addEventListener('DOMContentLoaded', _valLoadMailgen);
+if (document.readyState !== 'loading') _valLoadMailgen();
 else
   _valConnectExpediting();
 
