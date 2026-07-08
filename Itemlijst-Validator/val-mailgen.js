@@ -35,6 +35,41 @@
   function _consignee() { return (document.getElementById('val-consignee')?.value || '').trim(); }
   function _filename() { return (document.getElementById('val-filename')?.textContent || '').trim(); }
 
+  // Distinct basis-PO('s) uit de itemlijst (kolom C = 'Order No'; terugval kolom D, deel vóór '-')
+  function _poNumbers() {
+    const set = new Set();
+    _rows().forEach(r => {
+      const c = r.cells || [];
+      let po = _cell(c, 'C');
+      if (!po) { po = _cell(c, 'D'); if (po.indexOf('-') > 0) po = po.split('-')[0]; }
+      if (po) set.add(po);
+    });
+    return [...set];
+  }
+  // Sub Project ID: uit de multi-select selectie, anders afgeleid uit de expediting-data via de PO('s)
+  function _subProjectId() {
+    try {
+      if (typeof _valSubProjects !== 'undefined' && _valSubProjects.size) return [..._valSubProjects].join('/');
+      if (typeof fileData !== 'undefined' && fileData.expediting && Array.isArray(fileData.expediting.data)) {
+        const key = (typeof _valSubKey !== 'undefined' && _valSubKey) ? _valSubKey : 'Sub Project ID';
+        const pos = new Set(_poNumbers());
+        const subs = new Set();
+        fileData.expediting.data.forEach(r => {
+          const po = String(r['Order No'] ?? '').trim();
+          if (pos.has(po)) { const s = String(r[key] ?? '').trim(); if (s) subs.add(s); }
+        });
+        if (subs.size) return [...subs].join('/');
+      }
+    } catch (e) {}
+    return '';
+  }
+  // Onderwerp: "Sub Project ID - PO nummer - onderwerp" (lege delen worden weggelaten)
+  function _subjectLine(onderwerp) {
+    const po = _poNumbers();
+    const poStr = po.length > 3 ? po.slice(0, 3).join('/') + ' e.a.' : po.join('/');
+    return [_subProjectId(), poStr, onderwerp].filter(Boolean).join(' - ');
+  }
+
   /* ---------- regels per template ---------- */
   function supplierItems() {
     return _rows().map((r, idx) => {
@@ -129,7 +164,7 @@ Royal IHC`;
     leverancier: {
       naam: 'Leverancier \u2014 ontbrekende/afwijkende info',
       to: '',
-      subject: () => { const c = _consignee(); return 'Itemlijst \u2014 aan te vullen / te corrigeren gegevens' + (c ? ' \u2014 ' + c : ''); },
+      subject: () => _subjectLine('aan te vullen / te corrigeren gegevens'),
       itemsFn: supplierItems, bodyFn: supplierBody,
       label: it => `Regel ${it.ref}${it.item ? ' (item ' + it.item + ')' : ''}${it.desc ? ' \u2014 ' + it.desc : ''} \u00b7 ${it.issues.length} punt(en): ${it.issues.map(i => i.label).join(', ')}`,
       empty: 'Geen ontbrekende of afwijkende gegevens gevonden \u2014 niets te melden aan de leverancier.'
@@ -137,7 +172,7 @@ Royal IHC`;
     afs: {
       naam: 'AFS \u2014 voormelding (afmeting/gewicht)',
       to: AFS_EMAIL,
-      subject: () => { const c = _consignee(); return 'Voormelding AFS \u2014 oversized/zware items' + (c ? ' \u2014 ' + c : ''); },
+      subject: () => _subjectLine('voormelding oversized/zware items'),
       itemsFn: afsItems, bodyFn: afsBody,
       label: it => `${it.ref}${it.desc ? ' \u2014 ' + it.desc : ''} \u00b7 ${it.L || '?'}\u00d7${it.W || '?'}\u00d7${it.H || '?'} cm \u00b7 ${it.G || '?'} kg [${it.reason}]`,
       empty: 'Geen oversized/zware regels gevonden \u2014 geen voormelding bij AFS nodig.'
@@ -145,7 +180,7 @@ Royal IHC`;
     omvang: {
       naam: 'AFS — voormelding omvang (>20 colli)',
       to: AFS_EMAIL,
-      subject: () => { const c = _consignee(); return 'Voormelding AFS — grote zending (>20 colli)' + (c ? ' — ' + c : ''); },
+      subject: () => _subjectLine('voormelding grote zending (>20 colli)'),
       itemsFn: palletItems, bodyFn: palletBody,
       label: it => `Collo ${it.collo} · ${it.L || '?'}×${it.W || '?'}×${it.H || '?'} cm · ${it.rows} regel(s)`,
       empty: '20 of minder unieke collonummers (of geen collonummer-kolom gevonden) — geen voormelding vanwege omvang nodig.'
@@ -351,6 +386,11 @@ Royal IHC`;
     btn.id = 'valmail-launch';
     btn.className = 'btn-val btn-val-mail';
     btn.type = 'button';
+    btn.style.background = '#00C6E6';
+    btn.style.color = '#04222b';
+    btn.style.border = 'none';
+    btn.style.fontWeight = '700';
+    btn.style.boxShadow = '0 0 0 1px rgba(0,198,230,.55), 0 2px 12px rgba(0,198,230,.45)';
     btn.textContent = '\u2709 Mail opstellen';
     btn.onclick = function () { open(); };
     bar.appendChild(btn);
