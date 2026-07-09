@@ -374,7 +374,63 @@ Royal IHC`;
   }
   function close() { if (dom) dom.root.classList.remove('on'); }
 
-  global.ValMailer = { open, close,
+  // ── AFS-voormelding pop-up ──────────────────────────────────────────────
+  let _lastPrenotifySig = null;
+  function _showPrenotifyPopup(reasons) {
+    const old = document.getElementById('valmail-prenotify');
+    if (old) old.remove();
+    if (!document.getElementById('valmail-prenotify-style')) {
+      const st = document.createElement('style'); st.id = 'valmail-prenotify-style';
+      st.textContent =
+        '.vmp-overlay{position:fixed;inset:0;background:rgba(4,10,20,.6);display:flex;align-items:center;justify-content:center;z-index:99999}' +
+        '.vmp-card{background:var(--navy-mid,#0F2040);border:1px solid var(--steel,#1e3a6e);border-top:3px solid var(--red,#D91F2C);border-radius:10px;max-width:460px;width:90%;padding:1.2rem 1.3rem;font-family:var(--body,sans-serif);box-shadow:0 12px 40px rgba(0,0,0,.5)}' +
+        '.vmp-card h3{margin:0 0 .5rem;font-size:1rem;color:var(--white,#F0F4FA);display:flex;align-items:center;gap:.5rem}' +
+        '.vmp-card p{margin:.2rem 0 .7rem;font-size:.82rem;color:var(--grey,#9FB0C8)}' +
+        '.vmp-reasons{list-style:none;margin:0 0 .9rem;padding:0}' +
+        '.vmp-reasons li{font-size:.8rem;color:var(--white,#F0F4FA);padding:.4rem .65rem;background:rgba(217,31,44,.12);border:1px solid rgba(217,31,44,.35);border-radius:6px;margin-bottom:.35rem}' +
+        '.vmp-actions{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:flex-end}' +
+        '.vmp-btn{font-family:var(--mono,monospace);font-size:.75rem;font-weight:700;padding:.5rem .9rem;border-radius:6px;border:none;cursor:pointer;background:#00C6E6;color:#04222b}' +
+        '.vmp-btn.sec{background:transparent;border:1px solid var(--steel,#1e3a6e);color:var(--grey,#9FB0C8)}' +
+        '.vmp-btn:hover{filter:brightness(1.08)}';
+      document.head.appendChild(st);
+    }
+    const ov = document.createElement('div');
+    ov.className = 'vmp-overlay'; ov.id = 'valmail-prenotify';
+    const btns = reasons.map(r => `<button class="vmp-btn" data-tpl="${r.key}">\u2709 Mail opstellen \u2014 ${_esc(r.short)}</button>`).join('');
+    ov.innerHTML =
+      '<div class="vmp-card">' +
+        '<h3>\u26a0\ufe0f Voormelding bij AFS nodig</h3>' +
+        '<p>Deze itemlijst voldoet aan een voorwaarde die vooraf bij AFS gemeld moet worden:</p>' +
+        '<ul class="vmp-reasons">' + reasons.map(r => `<li>${_esc(r.text)}</li>`).join('') + '</ul>' +
+        '<div class="vmp-actions"><button class="vmp-btn sec" data-x>Later</button>' + btns + '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => {
+      if (e.target === ov || e.target.hasAttribute('data-x')) { ov.remove(); return; }
+      const tpl = e.target.getAttribute('data-tpl');
+      if (tpl) { ov.remove(); open({ template: tpl }); }
+    });
+  }
+
+  // Controleert na validatie of een AFS-voormelding nodig is en toont dan de pop-up.
+  function checkPrenotify() {
+    try {
+      const afs = afsItems(), pallets = palletItems();
+      const reasons = [];
+      if (afs.length) reasons.push({ key: 'afs', short: 'oversized/zwaar',
+        text: `${afs.length} regel(s) met afwijkende afmeting/gewicht (\u22652 maten > 3 m of bruto > 10.000 kg)` });
+      if (pallets.length) reasons.push({ key: 'omvang', short: '>20 colli',
+        text: `${pallets.length} unieke collo's/pallets (meer dan 20)` });
+      const sig = afs.length + '|' + pallets.length;
+      if (!reasons.length) { _lastPrenotifySig = null; return false; }
+      if (sig === _lastPrenotifySig) return false;   // al getoond voor deze staat
+      _lastPrenotifySig = sig;
+      _showPrenotifyPopup(reasons);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  global.ValMailer = { open, close, checkPrenotify,
     _supplierItems: supplierItems, _afsItems: afsItems,
     _supplierBody: supplierBody, _afsBody: afsBody };
 
