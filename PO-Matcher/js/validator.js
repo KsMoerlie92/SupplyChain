@@ -231,7 +231,9 @@ function isUSD(header) {
 // Parse een getal uit een veld dat ook een valutateken (€, $, £, ¥) en
 // duizendtal-/decimaalscheiding kan bevatten. Geeft null als het geen getal is.
 function _parseNum(raw) {
-  let s = String(raw == null ? '' : raw).replace(/[€$£¥]/g, '').replace(/\s/g, '');
+  // Verwijder alles wat geen cijfer, komma, punt of min-teken is
+  // (valutatekens €/$/£/¥, spaties incl. vaste spaties, letters, verborgen tekens…).
+  let s = String(raw == null ? '' : raw).replace(/[^\d.,\-]/g, '');
   if (!s) return null;
   const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
   if (lastComma > -1 && lastDot > -1) {
@@ -380,6 +382,14 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   // ── AA: Inspection Level — optional but must be valid if filled ───────────
   const aaVal = vs('AA');
   if (aaVal && !VL_INSP_LC.has(String(aaVal).toLowerCase())) errors['AA'] = `'${aaVal}' niet in toegestane lijst`;
+
+  // ── AFS-voormelding: ≥2 maten > 3 m (300 cm) óf bruto > 10.000 kg ─────────
+  {
+    const reasons = [];
+    if ([t, u, h2].filter(d => d != null && d > 300).length >= 2) reasons.push('oversized');
+    if (xVal != null && xVal > 10000) reasons.push('>10t');
+    if (reasons.length) computed._afs = reasons.join('+');
+  }
 
   return { errors, warnings, computed };
 }
@@ -738,6 +748,11 @@ async function runValidation() {
 
   document.getElementById('btn-val-export')?.removeAttribute('disabled');
   document.getElementById('btn-val-labels')?.removeAttribute('disabled');
+
+  // AFS-voormelding: pop-up tonen als een voorwaarde (oversized/zwaar óf >20 colli) geraakt is
+  if (window.ValMailer && typeof window.ValMailer.checkPrenotify === 'function') {
+    try { window.ValMailer.checkPrenotify(); } catch (e) {}
+  }
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
