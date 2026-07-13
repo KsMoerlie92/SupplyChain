@@ -30,7 +30,7 @@
   /* ─── Configuratie ────────────────────────────────────────────────────── */
 
   const RECIPIENT  = 'm.wendels@royalihc.com';
-  const TRIGGER_KW = 'Itemlijst';       // Power Automate trigger-sleutelwoord
+  const TRIGGER_KW = 'ITEMLIJST';       // Power Automate trigger-sleutelwoord (was 'Itemlijst')
   const SENDER_LBL = 'IHC Expedite 2.0';
 
   // Itemlijst-kolomnamen die het onderwerp bepalen
@@ -73,7 +73,7 @@
   function buildFilename(rows) {
     const delivRef = dominant(rows, COL_A).replace(/[/\\:*?"<>|]/g, '-');
     const supplier = dominant(rows, COL_K).replace(/[/\\:*?"<>|]/g, '-');
-    return [delivRef, TRIGGER_KW, supplier].filter(Boolean).join('_') + '.xlsx';
+    return [delivRef, TRIGGER_KW, supplier].filter(Boolean).join(' ') + '.xlsx';
   }
 
   /** Genereer Excel (base64) via SheetJS */
