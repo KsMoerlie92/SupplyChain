@@ -10,7 +10,7 @@
  *    Bij match: vult itemlijst kolommen C, D, E, F, G, K
  *
  *  Strategie B  (reverse  C+D → B+C+D)
- *    Itemlijst kolom C (IHC PO) + D (Item = "-1-1")
+ *    Itemlijst kolom C (IHC PO) + D (Item = "'1-2" formaat)
  *      ↔  Expediting kolom B (Order No) + C (Line No) + D (Release No)
  *    Bij match: vult itemlijst kolommen E, F, G, H, K
  *
@@ -59,9 +59,9 @@
 
   const trim = v => String(v ?? '').trim();
 
-  /** Zet item-string "1-1" of oud "-1-1" formaat om naar { line: "1", release: "1" } */
+  /** Zet item-string "'1-1" of oud "-1-1" formaat om naar { line: "1", release: "1" } */
   function parseItem(itemStr) {
-    const m = trim(itemStr).match(/^-?(\d+)-(\d+)$/);
+    const m = trim(itemStr).replace(/^['\-]+/, '').match(/^(\d+)-(\d+)$/);
     return m ? { line: m[1], release: m[2] } : null;
   }
 
@@ -151,7 +151,7 @@
     const orderNo = trim(expRow[EXP.ORDER]);
     const line    = trim(expRow[EXP.LINE]);
     const release = trim(expRow[EXP.RELEASE]);
-    const item    = (line && release) ? `${line}-${release}` : line;
+    const item    = (line && release) ? `'${line}-${release}` : line;  // ' prefix voorkomt datumopmaak in Excel
 
     const fill = (ilCol, val) => {
       if (!trim(ilRow[ilCol]) && trim(val)) ilRow[ilCol] = val;
