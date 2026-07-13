@@ -674,6 +674,64 @@ function _valLoadMailgen() {
 document.addEventListener('DOMContentLoaded', _valConnectExpediting);
 document.addEventListener('DOMContentLoaded', _valLoadMailgen);
 if (document.readyState !== 'loading') _valLoadMailgen();
+
+// ── Export → mail naar Wendels (val-export-mail.js) ────────────────────────
+// Bestandsnaam én onderwerp: "{Delivery ref} ITEMLIJST {Supplier}"
+function _valExportBaseName() {
+  const dom = (ci) => {
+    const counts = {};
+    _valRows.forEach(r => { const v = String(r.cells[ci] ?? '').trim(); if (v) counts[v] = (counts[v] || 0) + 1; });
+    return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || [''])[0];
+  };
+  const clean = s => String(s || '').replace(/[/\\:*?"<>|]/g, '-').trim();
+  return [clean(dom(COL.A)), 'ITEMLIJST', clean(dom(COL.K))].filter(Boolean).join(' ');
+}
+
+function _valLoadExportMail() {
+  if (!document.querySelector('.val-toolbar')) return;
+  if (window.ValExportMail || document.querySelector('script[data-valexportmail]')) return;
+  var s = document.createElement('script');
+  s.src = 'js/val-export-mail.js';
+  s.setAttribute('data-valexportmail', '1');
+  s.onerror = function () { console.warn('val-export-mail.js kon niet geladen worden'); };
+  document.head.appendChild(s);
+}
+
+// Bouwt objecten (header → actuele/omgezette celwaarde) zodat álle wijzigingen meegaan
+function _valMailRows() {
+  return _valRows.map(r => {
+    const o = {};
+    Object.entries(COL).forEach(([L, ci]) => {
+      const h = _valHeaders[ci] || L;
+      const v = r.cells[ci];
+      o[h] = (v === undefined || v === null) ? '' : v;
+    });
+    return o;
+  });
+}
+
+function _valExportMail() {
+  if (!_valRows || !_valRows.length) { alert('Laad en valideer eerst een Itemlijst.'); return; }
+  if (!window.ValExportMail || typeof window.ValExportMail.open !== 'function') {
+    alert('Mailmodule (val-export-mail.js) is nog niet geladen. Ververs de pagina en probeer opnieuw.'); return;
+  }
+  window.ValExportMail.open(_valMailRows());
+}
+
+// Koppelt de export-knop aan de mailflow (i.p.v. de directe download)
+function _valWireExportMail() {
+  if (!document.querySelector('.val-toolbar')) return;
+  const btn = document.getElementById('btn-val-export');
+  if (!btn || btn.dataset.mailWired) return;
+  btn.dataset.mailWired = '1';
+  btn.removeAttribute('onclick');
+  btn.onclick = _valExportMail;
+  if (/export/i.test(btn.textContent)) btn.textContent = '\uD83D\uDCE7 Exporteer & mail';
+}
+
+document.addEventListener('DOMContentLoaded', _valLoadExportMail);
+document.addEventListener('DOMContentLoaded', _valWireExportMail);
+if (document.readyState !== 'loading') { _valLoadExportMail(); _valWireExportMail(); }
 else
   _valConnectExpediting();
 
@@ -710,14 +768,14 @@ async function runValidation() {
   if (expeditingData && expeditingData.length) {
     for (const row of _valRows) {
       const n = _fillRowFromExpediting(row.cells, expeditingData);
-      if (n) { filledFields += n; filledRows++; }
+      if (n) { filledFields += n; filledRows++; row._edited = true; }   // meenemen in export
     }
   }
 
   // Landnaam → ISO 3166-1 alpha-2 code (Country of Origin, kolom N)
   for (const row of _valRows) {
     const code = _toCountryCode(row.cells[COL.N]);
-    if (code) row.cells[COL.N] = code;
+    if (code && code !== row.cells[COL.N]) { row.cells[COL.N] = code; row._edited = true; }   // meenemen in export
   }
 
   // Validate each row
@@ -969,7 +1027,7 @@ function exportValidatedItemlijst() {
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(_valWb, wsSummary, 'Validatie rapport');
 
-  XLSX.writeFile(_valWb, 'Itemlijst_gevalideerd.xlsx');
+  XLSX.writeFile(_valWb, _valExportBaseName() + '.xlsx');
 }
 
 
