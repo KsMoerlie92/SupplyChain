@@ -1066,15 +1066,53 @@ function handleValFile(fileOrEvent) {
 
     const fn = document.getElementById('val-filename');
     const dz = document.getElementById('val-dz');
-    if (fn) { fn.textContent = `${file.name} — ${_valRows.length} rijen`; fn.style.display = 'block'; }
     if (dz) dz.classList.add('loaded');
-
     buildValHeader();
     document.getElementById('btn-val-run')?.removeAttribute('disabled');
     document.getElementById('btn-val-labels')?.removeAttribute('disabled');
-    const sumEl0 = document.getElementById('val-summary');
-    if (sumEl0) sumEl0.innerHTML =
-      `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
+
+    // ── Val-crossref: vul C (IHC PO) en D (Item) in via Expediting lijst ──
+    // Loopt VOOR de samenvatting zodat de gebruiker de complete rijen ziet.
+    function _afterCrossref() {
+      if (fn) { fn.textContent = `${file.name} — ${_valRows.length} rijen`; fn.style.display = 'block'; }
+      const sumEl0 = document.getElementById('val-summary');
+      if (sumEl0) sumEl0.innerHTML =
+        `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
+    }
+
+    if (window.ValCrossref) {
+      // Zet _valRows om naar objecten die ValCrossref begrijpt
+      const xrefRows = _valRows.map(row => ({
+        'Delivery ref.'         : row.cells[COL.A] ?? '',
+        'Project'               : row.cells[COL.B] ?? '',
+        'IHC PO'                : row.cells[COL.C] ?? '',
+        'Item'                  : row.cells[COL.D] ?? '',
+        'Item description'      : row.cells[COL.E] ?? '',
+        'Quantity'              : row.cells[COL.F] ?? '',
+        'Unit of measure'       : row.cells[COL.G] ?? '',
+        'Component (Mark/Label)': row.cells[COL.H] ?? '',
+        'Supplier'              : row.cells[COL.K] ?? '',
+      }));
+
+      ValCrossref.runIfNeeded(xrefRows, function(enriched) {
+        // Kopieer aangevulde waarden terug naar de cells-array
+        enriched.forEach((obj, i) => {
+          if (!_valRows[i]) return;
+          const c = _valRows[i].cells;
+          // Alleen lege cellen overschrijven; markeer als bewerkt voor export
+          const was = { c: c[COL.C], d: c[COL.D] };
+          if (!c[COL.C] && obj['IHC PO'])  c[COL.C] = obj['IHC PO'];
+          if (!c[COL.D] && obj['Item'])     c[COL.D] = obj['Item'];
+          if (!c[COL.E] && obj['Item description']) c[COL.E] = obj['Item description'];
+          if (!c[COL.G] && obj['Unit of measure'])  c[COL.G] = obj['Unit of measure'];
+          if (!c[COL.K] && obj['Supplier']) c[COL.K] = obj['Supplier'];
+          if (c[COL.C] !== was.c || c[COL.D] !== was.d) _valRows[i]._edited = true;
+        });
+        _afterCrossref();
+      });
+    } else {
+      _afterCrossref();
+    }
    } catch (err) {
      console.error('Itemlijst inlezen mislukt:', err);
      const sumErr = document.getElementById('val-summary');
