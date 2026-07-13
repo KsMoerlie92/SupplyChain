@@ -1047,7 +1047,11 @@ function handleValFile(fileOrEvent) {
     _remapColumns();
 
     _valRows = (raw.slice(hdrIdx + 1) || [])
-      .filter(r => hasVal(r[0]) && hasVal(r[2]))
+      // FIX: accept rows where col A (Delivery ref.) is filled AND either
+      // col C (IHC PO) OR col H (Component/Mark) is present.
+      // Col C may be empty before cross-referencing with the Expediting list
+      // (val-crossref.js fills C and D in afterwards via the modal).
+      .filter(r => hasVal(r[0]) && (hasVal(r[2]) || hasVal(r[7])))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
     // Load country codes from Master tab
