@@ -59,7 +59,7 @@
 
   const trim = v => String(v ?? '').trim();
 
-  /** Zet item-string "-1-1" om naar { line: "1", release: "1" } */
+  /** Zet item-string "1-1" of oud "-1-1" formaat om naar { line: "1", release: "1" } */
   function parseItem(itemStr) {
     const m = trim(itemStr).match(/^-?(\d+)-(\d+)$/);
     return m ? { line: m[1], release: m[2] } : null;
@@ -151,7 +151,7 @@
     const orderNo = trim(expRow[EXP.ORDER]);
     const line    = trim(expRow[EXP.LINE]);
     const release = trim(expRow[EXP.RELEASE]);
-    const item    = (line && release) ? `-${line}-${release}` : line;
+    const item    = (line && release) ? `${line}-${release}` : line;
 
     const fill = (ilCol, val) => {
       if (!trim(ilRow[ilCol]) && trim(val)) ilRow[ilCol] = val;
