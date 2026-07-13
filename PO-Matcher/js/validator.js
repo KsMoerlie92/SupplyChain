@@ -487,8 +487,9 @@ function _buildExpIndex(expeditingData) {
 
 // Expediting-veldnaam → itemlijst-kolomletter. Alleen LEGE cellen worden gevuld.
 const _EXP_FILL_MAP = [
-  ['Order No',          'C'],  // IHC PO (basis-PO)
-  ['Purchase Order No', 'D'],  // Item # = PO + line/release  (bevat '-')
+  ['Order No',          'C'],  // IHC PO (basis-PO = Order No)
+  // Kolom D (Item) wordt apart samengesteld: '"+Line No+"-"+Release No
+  // ('prefix voorkomt datuminterpretatie in Excel, bv. '7-1)
   ['Description',       'E'],  // Omschrijving
   ['Supplier Name',     'K'],  // Supplier
   ['Country of Origin', 'N'],  // Land van oorsprong
@@ -512,6 +513,18 @@ function _fillRowFromExpediting(cells, expeditingData) {
   if (!match) return 0;
 
   let filled = 0;
+
+  // ── Kolom D (Item): '"+Line No+"-"+Release No  (apostrof = tekstprefix Excel) ──
+  if (!String(cells[COL.D] ?? '').trim()) {
+    const line    = String(match['Line No']    ?? '').trim();
+    const release = String(match['Release No'] ?? '').trim();
+    if (line || release) {
+      cells[COL.D] = line && release ? `'${line}-${release}` : line || release;
+      filled++;
+    }
+  }
+
+  // ── Overige kolommen via de fill-map ──────────────────────────────────────
   for (const [field, colLetter] of _EXP_FILL_MAP) {
     const ci = COL[colLetter];
     if (ci === undefined) continue;
