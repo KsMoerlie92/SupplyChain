@@ -487,8 +487,9 @@ function _buildExpIndex(expeditingData) {
 
 // Expediting-veldnaam → itemlijst-kolomletter. Alleen LEGE cellen worden gevuld.
 const _EXP_FILL_MAP = [
-  ['Order No',          'C'],  // IHC PO (basis-PO)
-  ['Purchase Order No', 'D'],  // Item # = PO + line/release  (bevat '-')
+  ['Order No',          'C'],  // IHC PO (basis-PO = Order No)
+  // Kolom D (Item) wordt apart samengesteld: '"+Line No+"-"+Release No
+  // ('prefix voorkomt datuminterpretatie in Excel, bv. '7-1)
   ['Description',       'E'],  // Omschrijving
   ['Supplier Name',     'K'],  // Supplier
   ['Country of Origin', 'N'],  // Land van oorsprong
@@ -512,6 +513,18 @@ function _fillRowFromExpediting(cells, expeditingData) {
   if (!match) return 0;
 
   let filled = 0;
+
+  // ── Kolom D (Item): '"+Line No+"-"+Release No  (apostrof = tekstprefix Excel) ──
+  if (!String(cells[COL.D] ?? '').trim()) {
+    const line    = String(match['Line No']    ?? '').trim();
+    const release = String(match['Release No'] ?? '').trim();
+    if (line || release) {
+      cells[COL.D] = line && release ? `'${line}-${release}` : line || release;
+      filled++;
+    }
+  }
+
+  // ── Overige kolommen via de fill-map ──────────────────────────────────────
   for (const [field, colLetter] of _EXP_FILL_MAP) {
     const ci = COL[colLetter];
     if (ci === undefined) continue;
@@ -661,8 +674,142 @@ function _valLoadMailgen() {
 document.addEventListener('DOMContentLoaded', _valConnectExpediting);
 document.addEventListener('DOMContentLoaded', _valLoadMailgen);
 if (document.readyState !== 'loading') _valLoadMailgen();
-else
-  _valConnectExpediting();
+
+// ── Export → mail naar Wendels (val-export-mail.js) ────────────────────────
+// Bestandsnaam én onderwerp: "{Delivery ref} ITEMLIJST {Supplier}"
+function _valExportBaseName() {
+  const dom = (ci) => {
+    const counts = {};
+    _valRows.forEach(r => { const v = String(r.cells[ci] ?? '').trim(); if (v) counts[v] = (counts[v] || 0) + 1; });
+    return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || [''])[0];
+  };
+  const clean = s => String(s || '').replace(/[/\\:*?"<>|]/g, '-').trim();
+  return [clean(dom(COL.A)), 'ITEMLIJST', clean(dom(COL.K))].filter(Boolean).join(' ');
+}
+
+function _valLoadExportMail() {
+  if (!document.querySelector('.val-toolbar')) return;
+  if (window.ValExportMail || document.querySelector('script[data-valexportmail]')) return;
+  var s = document.createElement('script');
+  s.src = 'js/val-export-mail.js';
+  s.setAttribute('data-valexportmail', '1');
+  s.onerror = function () { console.warn('val-export-mail.js kon niet geladen worden'); };
+  document.head.appendChild(s);
+}
+
+// Bouwt objecten (header → actuele/omgezette celwaarde) zodat álle wijzigingen meegaan
+function _valMailRows() {
+  return _valRows.map(r => {
+    const o = {};
+    Object.entries(COL).forEach(([L, ci]) => {
+      const h = _valHeaders[ci] || L;
+      const v = r.cells[ci];
+      o[h] = (v === undefined || v === null) ? '' : v;
+    });
+    return o;
+  });
+}
+
+function _valExportMail() {
+  if (!_valRows || !_valRows.length) { alert('Laad en valideer eerst een Itemlijst.'); return; }
+  if (!window.ValExportMail || typeof window.ValExportMail.open !== 'function') {
+    alert('Mailmodule (val-export-mail.js) is nog niet geladen. Ververs de pagina en probeer opnieuw.'); return;
+  }
+  window.ValExportMail.open(_valMailRows());
+}
+
+// Koppelt de export-knop aan de mailflow (i.p.v. de directe download)
+function _valWireExportMail() {
+  if (!document.querySelector('.val-toolbar')) return;
+  const btn = document.getElementById('btn-val-export');
+  if (!btn || btn.dataset.mailWired) return;
+  btn.dataset.mailWired = '1';
+  btn.removeAttribute('onclick');
+  btn.onclick = _valExportMail;
+  if (/export/i.test(btn.textContent)) btn.textContent = '\uD83D\uDCE7 Exporteer & mail';
+}
+
+document.addEventListener('DOMContentLoaded', _valLoadExportMail);
+document.addEventListener('DOMContentLoaded', _valWireExportMail);
+if (document.readyState !== 'loading') { _valLoadExportMail(); _valWireExportMail(); }
+
+// ── Moederlijst uploaden → koppelen aan smart-fill / cross-ref ─────────────
+// Zet een geüploade Moederlijst (expediting-lijst) in fileData.expediting,
+// exact de koppeling die _valConnectExpediting ook gebruikt, en hervalideert.
+function _valPickMoederSheet(wb) {
+  const names = (wb.SheetNames || []);
+  const rows = (n) => { const ws = wb.Sheets[n]; if (!ws || !ws['!ref']) return 0;
+    const r = XLSX.utils.decode_range(ws['!ref']); return (r.e.r - r.s.r + 1); };
+  const nonCipl = names.filter(n => !/cipl|shipment/i.test(n));   // CIPL-/shipment-bladen overslaan
+  const pool = nonCipl.length ? nonCipl : names;
+  return pool.slice().sort((a, b) => rows(b) - rows(a))[0] || names[0];
+}
+
+function _valHandleMoederUpload(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';   // reset zodat hetzelfde bestand opnieuw gekozen kan worden
+  if (!file) return;
+  const sh = document.getElementById('val-sheet-warnings');
+  if (sh) sh.innerHTML = '<span style="color:var(--teal)">\u23F3 Moederlijst inlezen\u2026</span>';
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const pick = _valPickMoederSheet(wb);
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[pick], { header: 1, raw: true, defval: '' });
+      let table = { headers: [], rows: [] };
+      if (window.ExpeditingCore && ExpeditingCore.rawTable) table = ExpeditingCore.rawTable(raw);
+      if (!table.rows || !table.rows.length) {
+        if (sh) sh.innerHTML = '<span style="color:#f59e0b">\u26A0 Geen bruikbare regels in de Moederlijst gevonden.</span>';
+        return;
+      }
+      if (typeof fileData === 'undefined') window.fileData = {};
+      fileData.expediting = { data: table.rows, headers: table.headers, name: file.name, source: 'upload' };
+      if (typeof _buildSubProjectSelector === 'function') _buildSubProjectSelector(table.rows);
+      const heeftItemlijst = (typeof _valRows !== 'undefined' && _valRows && _valRows.length);
+      if (sh) sh.innerHTML = '<span style="color:#22c55e">\u2713 Moederlijst gekoppeld: <b>' + esc(file.name) +
+        '</b> (' + table.rows.length + ' regels)' +
+        (heeftItemlijst ? ' \u2014 opnieuw aan het valideren\u2026' : ' \u2014 upload nu een Itemlijst en klik Valideer.') + '</span>';
+      if (heeftItemlijst && typeof runValidation === 'function') runValidation();
+    } catch (err) {
+      console.error('Moederlijst-upload mislukt:', err);
+      if (sh) sh.innerHTML = '<span style="color:#ef4444">Fout bij inlezen Moederlijst: ' + esc(err.message) + '</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen ─────
+function _valHighlightMailBtn() {
+  const btn = document.getElementById('valmail-launch');
+  if (!btn) return;
+  let hasErr = false, hasDev = false;
+  try { hasErr = Array.isArray(_valRows) && _valRows.some(r => r && r.errors && Object.keys(r.errors).length > 0); } catch (e) {}
+  try {
+    if (window.ValMailer) {
+      const afs = (ValMailer._afsItems && ValMailer._afsItems()) || [];
+      const pal = (ValMailer._palletItems && ValMailer._palletItems()) || [];
+      hasDev = (afs.length > 0) || (pal.length > 0);
+    }
+  } catch (e) {}
+  if (!document.getElementById('valmail-alert-style')) {
+    const st = document.createElement('style'); st.id = 'valmail-alert-style';
+    st.textContent =
+      '#valmail-launch.valmail-alert{background:#D91F2C!important;color:#fff!important;' +
+      'box-shadow:0 0 0 2px rgba(217,31,44,.55),0 0 16px rgba(217,31,44,.6)!important;' +
+      'animation:valmailPulse 1.5s ease-in-out infinite}' +
+      '@keyframes valmailPulse{0%,100%{box-shadow:0 0 0 2px rgba(217,31,44,.5),0 0 10px rgba(217,31,44,.45)}' +
+      '50%{box-shadow:0 0 0 3px rgba(217,31,44,.78),0 0 22px rgba(217,31,44,.85)}}';
+    document.head.appendChild(st);
+  }
+  const on = hasErr || hasDev;
+  btn.classList.toggle('valmail-alert', on);
+  btn.title = on
+    ? 'Let op: ' + [hasErr ? 'fouten in de lijst' : '', hasDev ? 'AFS-voormelding nodig (omvang/gewicht/>20 colli)' : ''].filter(Boolean).join(' + ')
+    : 'Mail opstellen voor AFS / leverancier';
+}
+
+if (document.readyState !== 'loading') _valConnectExpediting();
 
 // ── Run full validation ────────────────────────────────────────────────────
 async function runValidation() {
@@ -697,14 +844,14 @@ async function runValidation() {
   if (expeditingData && expeditingData.length) {
     for (const row of _valRows) {
       const n = _fillRowFromExpediting(row.cells, expeditingData);
-      if (n) { filledFields += n; filledRows++; }
+      if (n) { filledFields += n; filledRows++; row._edited = true; }   // meenemen in export
     }
   }
 
   // Landnaam → ISO 3166-1 alpha-2 code (Country of Origin, kolom N)
   for (const row of _valRows) {
     const code = _toCountryCode(row.cells[COL.N]);
-    if (code) row.cells[COL.N] = code;
+    if (code && code !== row.cells[COL.N]) { row.cells[COL.N] = code; row._edited = true; }   // meenemen in export
   }
 
   // Validate each row
@@ -753,6 +900,7 @@ async function runValidation() {
   if (window.ValMailer && typeof window.ValMailer.checkPrenotify === 'function') {
     try { window.ValMailer.checkPrenotify(); } catch (e) {}
   }
+  _valHighlightMailBtn();   // AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
@@ -956,7 +1104,7 @@ function exportValidatedItemlijst() {
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(_valWb, wsSummary, 'Validatie rapport');
 
-  XLSX.writeFile(_valWb, 'Itemlijst_gevalideerd.xlsx');
+  XLSX.writeFile(_valWb, _valExportBaseName() + '.xlsx');
 }
 
 
@@ -1047,7 +1195,11 @@ function handleValFile(fileOrEvent) {
     _remapColumns();
 
     _valRows = (raw.slice(hdrIdx + 1) || [])
-      .filter(r => hasVal(r[0]) && hasVal(r[2]))
+      // FIX: accept rows where col A (Delivery ref.) is filled AND either
+      // col C (IHC PO) OR col H (Component/Mark) is present.
+      // Col C may be empty before cross-referencing with the Expediting list
+      // (val-crossref.js fills C and D in afterwards via the modal).
+      .filter(r => hasVal(r[0]) && (hasVal(r[2]) || hasVal(r[7])))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
     // Load country codes from Master tab
@@ -1062,15 +1214,53 @@ function handleValFile(fileOrEvent) {
 
     const fn = document.getElementById('val-filename');
     const dz = document.getElementById('val-dz');
-    if (fn) { fn.textContent = `${file.name} — ${_valRows.length} rijen`; fn.style.display = 'block'; }
     if (dz) dz.classList.add('loaded');
-
     buildValHeader();
     document.getElementById('btn-val-run')?.removeAttribute('disabled');
     document.getElementById('btn-val-labels')?.removeAttribute('disabled');
-    const sumEl0 = document.getElementById('val-summary');
-    if (sumEl0) sumEl0.innerHTML =
-      `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
+
+    // ── Val-crossref: vul C (IHC PO) en D (Item) in via Expediting lijst ──
+    // Loopt VOOR de samenvatting zodat de gebruiker de complete rijen ziet.
+    function _afterCrossref() {
+      if (fn) { fn.textContent = `${file.name} — ${_valRows.length} rijen`; fn.style.display = 'block'; }
+      const sumEl0 = document.getElementById('val-summary');
+      if (sumEl0) sumEl0.innerHTML =
+        `<span style="color:var(--muted)">${_valRows.length} rijen geladen — klik Valideer om te starten</span>`;
+    }
+
+    if (window.ValCrossref) {
+      // Zet _valRows om naar objecten die ValCrossref begrijpt
+      const xrefRows = _valRows.map(row => ({
+        'Delivery ref.'         : row.cells[COL.A] ?? '',
+        'Project'               : row.cells[COL.B] ?? '',
+        'IHC PO'                : row.cells[COL.C] ?? '',
+        'Item'                  : row.cells[COL.D] ?? '',
+        'Item description'      : row.cells[COL.E] ?? '',
+        'Quantity'              : row.cells[COL.F] ?? '',
+        'Unit of measure'       : row.cells[COL.G] ?? '',
+        'Component (Mark/Label)': row.cells[COL.H] ?? '',
+        'Supplier'              : row.cells[COL.K] ?? '',
+      }));
+
+      ValCrossref.runIfNeeded(xrefRows, function(enriched) {
+        // Kopieer aangevulde waarden terug naar de cells-array
+        enriched.forEach((obj, i) => {
+          if (!_valRows[i]) return;
+          const c = _valRows[i].cells;
+          // Alleen lege cellen overschrijven; markeer als bewerkt voor export
+          const was = { c: c[COL.C], d: c[COL.D] };
+          if (!c[COL.C] && obj['IHC PO'])  c[COL.C] = obj['IHC PO'];
+          if (!c[COL.D] && obj['Item'])     c[COL.D] = obj['Item'];
+          if (!c[COL.E] && obj['Item description']) c[COL.E] = obj['Item description'];
+          if (!c[COL.G] && obj['Unit of measure'])  c[COL.G] = obj['Unit of measure'];
+          if (!c[COL.K] && obj['Supplier']) c[COL.K] = obj['Supplier'];
+          if (c[COL.C] !== was.c || c[COL.D] !== was.d) _valRows[i]._edited = true;
+        });
+        _afterCrossref();
+      });
+    } else {
+      _afterCrossref();
+    }
    } catch (err) {
      console.error('Itemlijst inlezen mislukt:', err);
      const sumErr = document.getElementById('val-summary');

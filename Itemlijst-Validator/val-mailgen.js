@@ -431,7 +431,7 @@ Royal IHC`;
   }
 
   global.ValMailer = { open, close, checkPrenotify,
-    _supplierItems: supplierItems, _afsItems: afsItems,
+    _supplierItems: supplierItems, _afsItems: afsItems, _palletItems: palletItems,
     _supplierBody: supplierBody, _afsBody: afsBody };
 
   /* ---------- open-knop automatisch in de toolbar plaatsen ---------- */
@@ -447,9 +447,11 @@ Royal IHC`;
     btn.style.border = 'none';
     btn.style.fontWeight = '700';
     btn.style.boxShadow = '0 0 0 1px rgba(0,198,230,.55), 0 2px 12px rgba(0,198,230,.45)';
-    btn.textContent = '\u2709 Mail opstellen';
+    btn.textContent = '\u2709 Mail AFS / leverancier';
     btn.onclick = function () { open(); };
-    bar.appendChild(btn);
+    const anchor = document.getElementById('val-consignee-wrap');
+    if (anchor && anchor.parentNode === bar) bar.insertBefore(btn, anchor);
+    else bar.appendChild(btn);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _mountLaunch);
   else _mountLaunch();

@@ -33,9 +33,12 @@
       <!-- Toolbar -->
       <div class="val-toolbar">
         <button class="btn-val btn-val-run"    id="btn-val-run"    disabled onclick="runValidation()">▶ Valideer</button>
-        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
-        <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Genereer Merken/Labels</button>
-        <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
+        <button class="btn-val btn-val-moeder" id="btn-val-moeder" onclick="document.getElementById('val-moeder-input').click()"
+          title="Upload een Moederlijst/expeditinglijst en koppel die aan de validatie (smart-fill + cross-ref)">📋 Moederlijst uploaden</button>
+        <input type="file" id="val-moeder-input" accept=".xlsx,.xls,.xlsm" style="display:none" onchange="_valHandleMoederUpload(event)">
+        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="_valExportMail()"
+          title="Genereer een mail naar m.wendels@royalihc.com met de gevalideerde Itemlijst als Excel-bijlage">📧 Exporteer &amp; mail</button>
+        <div id="val-consignee-wrap" style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
           <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
           <input type="text" id="val-consignee" class="val-consignee-input"
             value="PACIFIC SHIPBUILDING JSC" placeholder="Consignee naam"
@@ -86,6 +89,10 @@ setStatus = function(msg, isError) {
     : '<span style="color:var(--muted)">' + String(msg) + '</span>';
 };
 </script>
+
+<!-- Cross-referentie (vult C/D/H vanuit expediting) + export-mail (.eml met Excel-bijlage naar Wendels) -->
+<script src="js/val-crossref.js"></script>
+<script src="js/val-export-mail.js"></script>
 
 <!-- Mail-template-generator (itemlijst) — plaatst zelf een knop in de toolbar -->
 <script src="val-mailgen.js"></script>
