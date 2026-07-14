@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expediting KPI – Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1 id="appTitle">Expediting KPI – Dashboard</h1>
+          <p id="appSubtitle" class="subtitle">Bedrijfsbrede expediting-lijst → KPI's per Sub Project ID</p>
+        </div>
+      </div>
+      <div id="milestones" class="milestones"></div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="controls">
+      <div class="control">
+        <label for="subprojectSelect">Sub Project ID</label>
+        <select id="subprojectSelect"></select>
+      </div>
+      <div class="control">
+        <label for="kpiSelect">KPI</label>
+        <select id="kpiSelect"></select>
+      </div>
+      <div class="control">
+        <label for="meetmomentSelect">Meetmoment</label>
+        <select id="meetmomentSelect"></select>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="dot ok"></span> Binnen norm</span>
+        <span class="legend-item"><span class="dot warn"></span> Aandacht</span>
+        <span class="legend-item"><span class="dot bad"></span> Buiten norm</span>
+      </div>
+    </section>
+
+    <section class="upload-panel">
+      <div class="upload-info">
+        <h3>Nieuw meetmoment toevoegen</h3>
+        <p>
+          Sleep of kies de bedrijfsbrede expediting-lijst (<strong>.xlsx</strong> of <strong>.json</strong>).
+          De KPI's worden automatisch <strong>per Sub Project ID</strong> berekend en als nieuw
+          meetmoment toegevoegd. Zo heb je bij elke bedrijfsbrede upload direct een nieuw meetpunt.
+        </p>
+      </div>
+      <div class="upload-actions">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.json" hidden />
+        <button id="uploadBtn" class="btn btn-primary">📄 Lijst kiezen…</button>
+        <button id="downloadHistoryBtn" class="btn btn-ghost">⬇ Download bijgewerkte history</button>
+        <button id="resetBtn" class="btn btn-ghost">↺ Reset naar origineel</button>
+      </div>
+      <div id="dropZone" class="drop-zone">Sleep hier je bedrijfsbrede lijst (.xlsx)</div>
+      <div id="uploadStatus" class="upload-status"></div>
+    </section>
+
+    <section>
+      <h2 class="section-title">KPI-overzicht</h2>
+      <div id="meetmomentBadge" class="badge"></div>
+      <div id="kpiCards" class="cards-grid"></div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Trend over meetmomenten</h2>
+      <p id="chartNote" class="note"></p>
+      <div class="chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Detailtabel (meetmomenten × KPI)</h2>
+      <div class="table-wrap">
+        <table id="detailsTable"></table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>
+      Databron: <code>kpi-history.json</code> — automatisch berekend uit de bedrijfsbrede
+      expediting-lijst, <strong>per Sub Project ID</strong>. Elke upload van een nieuwe lijst
+      voegt een nieuw meetmoment toe.
+    </p>
+    <p class="muted">Expediting | Royal IHC · Supply Chain</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
