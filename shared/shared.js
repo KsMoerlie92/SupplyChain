@@ -1,115 +1,104 @@
-// ── IHC Expedite 2.0 — Navigation bar (subpages, prefix ../) ─────────────
+// ── IHC Expedite 2.0 — Navigation bar (subpages) ─────────────────────────
+// Injects a fixed top nav bar. Include in every subpage AFTER page content.
+// For the root index.html use shared-root.js (different href prefix).
+
 (function () {
+  // ── Thema (donker/licht) — toepassen vóór de nav wordt opgebouwd ─────────
   try {
     if (localStorage.getItem('ihc-theme') === 'light')
       document.documentElement.setAttribute('data-theme', 'light');
   } catch (e) {}
   const isLight = () => document.documentElement.getAttribute('data-theme') === 'light';
 
-  const PREFIX = '../'; // subpagina's; op root wordt dit ''
+  // Twee menu's met dropdowns — gelijk aan de hoofdpagina
   const MENUS = [
     { label: 'Expediting', items: [
-      { href: PREFIX + 'PO-Matcher/',          icon: '🔍', title: 'Expediting Tool',    sub: 'Expediting- vs. moederlijst & late items' },
-      { href: PREFIX + 'Expediting-Mailer/',   icon: '✉️', title: 'Expediting Mailer',  sub: 'Stel expediting-mails op per order' },
-      { href: PREFIX + 'FAT-Overview/',        icon: '🧪', title: 'FAT Overview',       sub: 'Factory Acceptance Tests in beeld' },
+      { href: '../PO-Matcher/',          icon: '🔍', title: 'Expediting Tool',    sub: 'Expediting- vs. moederlijst & late items' },
+      { href: '../Expediting-Mailer/',   icon: '✉️', title: 'Expediting Mailer',  sub: 'Stel expediting-mails op per order' },
+      { href: '../KPI-Dashboard/',       icon: '📊', title: 'Dashboard',          sub: 'KPI-cijfers per Sub Project ID' },
+      { href: '../FAT-Overview/',        icon: '🧪', title: 'FAT Overview',       sub: 'Factory Acceptance Tests in beeld' },
     ]},
     { label: 'Logistics', items: [
-      { href: PREFIX + 'Legplan/',             icon: '📦', title: 'Logistic Portal',    sub: 'Legplan, CIPL & shipment-informatie' },
-      { href: PREFIX + 'DG-Overview/',         icon: '⚠️', title: 'DG Overview',        sub: 'Gevaarlijke stoffen in de lijst' },
-      { href: PREFIX + 'Itemlijst-Validator/', icon: '📋', title: 'Itemlijst Validator', sub: 'Valideer & corrigeer itemlijsten' },
+      { href: '../Legplan/',             icon: '📦', title: 'Logistic Portal',    sub: 'Legplan, CIPL & shipment-informatie' },
+      { href: '../DG-Overview/',         icon: '⚠️', title: 'DG Overview',        sub: 'Gevaarlijke stoffen in de lijst' },
+      { href: '../Itemlijst-Validator/', icon: '📋', title: 'Itemlijst Validator', sub: 'Valideer & corrigeer itemlijsten' },
     ]},
   ];
 
-  const segs = window.location.pathname.toLowerCase().split('/').filter(Boolean);
-  const seg  = h => h.replace('../', '').replace(/\/$/, '').toLowerCase();
-  const isActive = h => { const s = seg(h); return !!s && segs.includes(s); };
+  const path = window.location.pathname.toLowerCase();
+  const seg = href => href.replace('../', '').replace(/\/$/, '').toLowerCase();
+  const isActive = href => { const s = seg(href); return !!s && path.includes(s); };
+  const CHEV = '<svg viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>';
 
-  const CHEV  = '<svg class="ihc-chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>';
-  const CARET = '<svg class="ihc-caret" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>';
+  const menusHtml = MENUS.map(m => {
+    const groupActive = m.items.some(it => isActive(it.href));
+    const items = m.items.map(it => `
+      <a class="ihc-dd-link${isActive(it.href) ? ' active' : ''}" href="${it.href}">
+        <span class="ihc-dd-ico">${it.icon}</span>
+        <span class="ihc-dd-txt"><span class="ihc-dd-title">${it.title}</span><span class="ihc-dd-sub">${it.sub}</span></span>
+        <svg class="ihc-chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>
+      </a>`).join('');
+    return `
+      <div class="ihc-nav-item">
+        <button class="ihc-nav-trigger${groupActive ? ' active' : ''}" type="button">${m.label} <svg class="ihc-caret" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button>
+        <div class="ihc-dropdown">${items}</div>
+      </div>`;
+  }).join('');
 
-  const el = (tag, props = {}, txt) => {
-    const n = document.createElement(tag);
-    Object.entries(props).forEach(([k, v]) => (k in n) ? (n[k] = v) : n.setAttribute(k, v));
-    if (txt != null) n.textContent = txt;
-    return n;
-  };
+  const nav = document.createElement('nav');
+  nav.className = 'ihc-nav';
+  nav.id = 'ihc-nav';
+  nav.innerHTML = `
+    <a class="ihc-nav-brand" href="../">
+      <img class="ihc-logo ihc-logo-dark"  src="../shared/logo-dark.png" alt="Royal IHC">
+      <img class="ihc-logo ihc-logo-light" src="../shared/logo.png"      alt="Royal IHC">
+      <span class="ihc-nav-title">Expedite 2.0</span>
+    </a>
+    <button class="ihc-burger" type="button" aria-label="Menu" aria-expanded="false">☰</button>
+    <div class="ihc-nav-menu" id="ihc-nav-menu">${menusHtml}</div>
+    <div class="ihc-nav-actions">
+      <a class="ihc-nav-btn" id="ihc-admin-btn" href="../Admin/" title="Admin — centrale expediting-upload" aria-label="Admin">⚙️</a>
+      <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
+        title="${isLight() ? 'Donker thema' : 'Licht thema'}"
+        aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>
+    </div>`;
 
-  // ── Nav opbouwen via DOM (geen losse <a>/<img> in strings) ───────────────
-  const nav = el('nav', { className: 'ihc-nav', id: 'ihc-nav' });
+  const spacer = document.createElement('div');
+  spacer.className = 'ihc-nav-spacer';
 
-  const brand = el('a', { className: 'ihc-nav-brand', href: PREFIX });
-  brand.append(
-    el('img', { className: 'ihc-logo ihc-logo-dark',  src: PREFIX + 'shared/logo-dark.png', alt: 'Royal IHC' }),
-    el('img', { className: 'ihc-logo ihc-logo-light', src: PREFIX + 'shared/logo.png',      alt: 'Royal IHC' }),
-    el('span', { className: 'ihc-nav-title' }, 'Expedite 2.0')
-  );
-
-  const burger = el('button', { className: 'ihc-burger', type: 'button', 'aria-label': 'Menu', 'aria-expanded': 'false' }, '☰');
-
-  const menu = el('div', { className: 'ihc-nav-menu', id: 'ihc-nav-menu' });
-  MENUS.forEach(m => {
-    const item = el('div', { className: 'ihc-nav-item' });
-    const trig = el('button', { className: 'ihc-nav-trigger' + (m.items.some(it => isActive(it.href)) ? ' active' : ''), type: 'button' });
-    trig.innerHTML = m.label + ' ' + CARET;
-    const dd = el('div', { className: 'ihc-dropdown' });
-    m.items.forEach(it => {
-      const a = el('a', { className: 'ihc-dd-link' + (isActive(it.href) ? ' active' : ''), href: it.href });
-      a.innerHTML =
-        '<span class="ihc-dd-ico">' + it.icon + '</span>' +
-        '<span class="ihc-dd-txt"><span class="ihc-dd-title">' + it.title + '</span>' +
-        '<span class="ihc-dd-sub">' + it.sub + '</span></span>' + CHEV;
-      dd.appendChild(a);
-    });
-    item.append(trig, dd);
-    menu.appendChild(item);
-  });
-
-  const actions = el('div', { className: 'ihc-nav-actions' });
-  actions.append(
-    el('a', { className: 'ihc-nav-btn', id: 'ihc-admin-btn', href: PREFIX + 'Admin/', title: 'Admin — centrale expediting-upload', 'aria-label': 'Admin' }, '⚙️'),
-    el('button', { className: 'ihc-theme-toggle', id: 'ihc-theme-toggle', type: 'button',
-      title: isLight() ? 'Donker thema' : 'Licht thema', 'aria-label': 'Wissel thema' }, isLight() ? '🌙' : '☀️')
-  );
-
-  nav.append(brand, burger, menu, actions);
-  const spacer = el('div', { className: 'ihc-nav-spacer' });
-
-  // ── Invoegen VÓÓR de wiring → balk altijd zichtbaar ──────────────────────
+  // Insert at very top of body
   document.body.insertBefore(spacer, document.body.firstChild);
   document.body.insertBefore(nav, spacer);
 
-  // ── Events (afgeschermd) ─────────────────────────────────────────────────
-  try {
-    const closeMobileMenu = () => {
-      menu.classList.remove('show');
-      burger.setAttribute('aria-expanded', 'false');
-      nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
-    };
-    burger.addEventListener('click', e => {
-      e.stopPropagation();
-      const show = menu.classList.toggle('show');
-      burger.setAttribute('aria-expanded', show ? 'true' : 'false');
-      if (!show) nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
-    });
-    nav.querySelectorAll('.ihc-nav-trigger').forEach(t => t.addEventListener('click', () => {
-      if (window.matchMedia('(min-width:861px)').matches) return;
+  // ── Mobiel: burger + tik-om-uit-te-klappen ───────────────────────────────
+  const burger = nav.querySelector('.ihc-burger');
+  if (burger) burger.addEventListener('click', () => {
+    const menu = document.getElementById('ihc-nav-menu');
+    const show = menu.classList.toggle('show');
+    burger.setAttribute('aria-expanded', show ? 'true' : 'false');
+  });
+  nav.querySelectorAll('.ihc-nav-trigger').forEach(t => {
+    t.addEventListener('click', () => {
+      if (window.matchMedia('(min-width:861px)').matches) return; // desktop = hover
       const item = t.closest('.ihc-nav-item');
       const open = item.classList.contains('open');
       nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
       if (!open) item.classList.add('open');
-    }));
-    nav.querySelectorAll('.ihc-dd-link').forEach(a => a.addEventListener('click', closeMobileMenu));
-    document.addEventListener('click', e => { if (!e.target.closest('.ihc-nav')) closeMobileMenu(); });
-    window.addEventListener('resize', () => { if (window.matchMedia('(min-width:861px)').matches) closeMobileMenu(); });
-
-    const btn = document.getElementById('ihc-theme-toggle');
-    btn.addEventListener('click', () => {
-      const toLight = !isLight();
-      if (toLight) document.documentElement.setAttribute('data-theme', 'light');
-      else         document.documentElement.removeAttribute('data-theme');
-      try { localStorage.setItem('ihc-theme', toLight ? 'light' : 'dark'); } catch (e) {}
-      btn.textContent = toLight ? '🌙' : '☀️';
-      btn.title = toLight ? 'Donker thema' : 'Licht thema';
     });
-  } catch (e) { console.error('[ihc-nav] event wiring faalde:', e); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ihc-nav-item'))
+      nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
+  });
+
+  // ── Thema wisselen + onthouden ──────────────────────────────────────────
+  const btn = document.getElementById('ihc-theme-toggle');
+  if (btn) btn.addEventListener('click', () => {
+    const toLight = !isLight();
+    if (toLight) document.documentElement.setAttribute('data-theme', 'light');
+    else         document.documentElement.removeAttribute('data-theme');
+    try { localStorage.setItem('ihc-theme', toLight ? 'light' : 'dark'); } catch (e) {}
+    btn.textContent = toLight ? '🌙' : '☀️';
+    btn.title = toLight ? 'Donker thema' : 'Licht thema';
+  });
 })();
