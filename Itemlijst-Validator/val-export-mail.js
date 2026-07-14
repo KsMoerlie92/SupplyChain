@@ -151,7 +151,6 @@
     const encSubject = subject;  // ASCII-veilig voor typische delivery refs + namen
 
     return [
-      `From: ${SENDER_LBL}`,
       `To: ${to}`,
       `Subject: ${encSubject}`,
       `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
@@ -280,7 +279,7 @@
     });
 
     const fTo      = field('Aan',       RECIPIENT);
-    const fFrom    = field('Van',       SENDER_LBL);
+    const fFrom    = field('Van',       'Je eigen Outlook-account');
     const fSubjWrap = field('Onderwerp', subject, true);
     const fSubjInp  = fSubjWrap._input;
 
