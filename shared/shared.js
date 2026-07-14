@@ -24,17 +24,15 @@
     ]},
   ];
 
-  const path = window.location.pathname.toLowerCase();
+  // Exacte segment-match i.p.v. losse includes (voorkomt false positives)
+  const segs = window.location.pathname.toLowerCase().split('/').filter(Boolean);
   const seg = href => href.replace('../', '').replace(/\/$/, '').toLowerCase();
-  const isActive = href => { const s = seg(href); return !!s && path.includes(s); };
-  const CHEV = '<svg viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>';
+  const isActive = href => { const s = seg(href); return !!s && segs.includes(s); };
 
   const menusHtml = MENUS.map(m => {
     const groupActive = m.items.some(it => isActive(it.href));
     const items = m.items.map(it => `
-      <a class="ihc-dd-link${isActive(it.href) ? ' active' : ''}" href="${it.href}">
-        <span class="ihc-dd-ico">${it.icon}</span>
-        <span class="ihc-dd-txt"><span class="ihc-dd-title">${it.title}</span><span class="ihc-dd-sub">${it.sub}</span></span>
+      <a class="ihc-dd-link${isActive(it.href) ? ' active' : ''}" href="${it.href class="ihc-dd-txt"><span class="ihc-dd-title">${it.title}</span><span class="ihc-dd-sub">${it.sub}</span></span>
         <svg class="ihc-chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg>
       </a>`).join('');
     return `
@@ -48,16 +46,14 @@
   nav.className = 'ihc-nav';
   nav.id = 'ihc-nav';
   nav.innerHTML = `
-    <a class="ihc-nav-brand" href="../">
-      <img class="ihc-logo ihc-logo-dark"  src="../shared/logo-dark.png" alt="Royal IHC">
-      <img class="ihc-logo ihc-logo-light" src="../shared/logo.png"      alt="Royal IHC">
+    <a class="ihc-nav-d/logo-dark.png
+      ../shared/logo.png
       <span class="ihc-nav-title">Expedite 2.0</span>
     </a>
     <button class="ihc-burger" type="button" aria-label="Menu" aria-expanded="false">☰</button>
     <div class="ihc-nav-menu" id="ihc-nav-menu">${menusHtml}</div>
     <div class="ihc-nav-actions">
-      <a class="ihc-nav-btn" id="ihc-admin-btn" href="../Admin/" title="Admin — centrale expediting-upload" aria-label="Admin">⚙️</a>
-      <button class="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
+      <a class="ihc-nav-btn" id="ss="ihc-theme-toggle" id="ihc-theme-toggle" type="button"
         title="${isLight() ? 'Donker thema' : 'Licht thema'}"
         aria-label="Wissel thema">${isLight() ? '🌙' : '☀️'}</button>
     </div>`;
@@ -69,13 +65,24 @@
   document.body.insertBefore(spacer, document.body.firstChild);
   document.body.insertBefore(nav, spacer);
 
+  const menu = document.getElementById('ihc-nav-menu');
+
+  // Helper: mobiel menu volledig sluiten
+  const closeMobileMenu = () => {
+    if (menu) menu.classList.remove('show');
+    if (burger) burger.setAttribute('aria-expanded', 'false');
+    nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
+  };
+
   // ── Mobiel: burger + tik-om-uit-te-klappen ───────────────────────────────
   const burger = nav.querySelector('.ihc-burger');
-  if (burger) burger.addEventListener('click', () => {
-    const menu = document.getElementById('ihc-nav-menu');
+  if (burger) burger.addEventListener('click', e => {
+    e.stopPropagation();
     const show = menu.classList.toggle('show');
     burger.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (!show) nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
   });
+
   nav.querySelectorAll('.ihc-nav-trigger').forEach(t => {
     t.addEventListener('click', () => {
       if (window.matchMedia('(min-width:861px)').matches) return; // desktop = hover
@@ -85,9 +92,20 @@
       if (!open) item.classList.add('open');
     });
   });
+
+  // Klik op een dropdown-link → menu sluiten (mobiel)
+  nav.querySelectorAll('.ihc-dd-link').forEach(a => {
+    a.addEventListener('click', () => closeMobileMenu());
+  });
+
+  // Klik buiten de nav → alles sluiten
   document.addEventListener('click', e => {
-    if (!e.target.closest('.ihc-nav-item'))
-      nav.querySelectorAll('.ihc-nav-item.open').forEach(i => i.classList.remove('open'));
+    if (!e.target.closest('.ihc-nav')) closeMobileMenu();
+  });
+
+  // Bij terug naar desktop-breedte: mobiele states resetten
+  window.addEventListener('resize', () => {
+    if (window.matchMedia('(min-width:861px)').matches) closeMobileMenu();
   });
 
   // ── Thema wisselen + onthouden ──────────────────────────────────────────
