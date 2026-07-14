@@ -8,7 +8,8 @@
  *   1. Gebruiker klikt "Versturen naar Moederlijst"
  *   2. Popup toont de vooraf ingevulde mail ter controle
  *   3. Gebruiker klikt "Mail klaarzetten"
- *   4. .eml bestand download → opent in Outlook → gebruiker klikt Verzenden
+ *   4. .eml downloadt → dubbelklik opent in Outlook als bewerkbaar concept
+ *      (X-Unsent:1) met bijlage erin → gebruiker bewerkt evt. en klikt Verzenden
  *   5. Power Automate pikt de mail op via het subject-sleutelwoord "Itemlijst"
  *      en schrijft de bijlage terug naar de Moederlijst
  *
@@ -153,7 +154,9 @@
       `From: ${SENDER_LBL}`,
       `To: ${to}`,
       `Subject: ${encSubject}`,
+      `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
       `MIME-Version: 1.0`,
+      `X-Unsent: 1`,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       `X-Generator: IHC-Expedite-2.0`,
       ``,
