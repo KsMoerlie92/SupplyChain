@@ -732,8 +732,84 @@ function _valWireExportMail() {
 document.addEventListener('DOMContentLoaded', _valLoadExportMail);
 document.addEventListener('DOMContentLoaded', _valWireExportMail);
 if (document.readyState !== 'loading') { _valLoadExportMail(); _valWireExportMail(); }
-else
-  _valConnectExpediting();
+
+// ── Moederlijst uploaden → koppelen aan smart-fill / cross-ref ─────────────
+// Zet een geüploade Moederlijst (expediting-lijst) in fileData.expediting,
+// exact de koppeling die _valConnectExpediting ook gebruikt, en hervalideert.
+function _valPickMoederSheet(wb) {
+  const names = (wb.SheetNames || []);
+  const rows = (n) => { const ws = wb.Sheets[n]; if (!ws || !ws['!ref']) return 0;
+    const r = XLSX.utils.decode_range(ws['!ref']); return (r.e.r - r.s.r + 1); };
+  const nonCipl = names.filter(n => !/cipl|shipment/i.test(n));   // CIPL-/shipment-bladen overslaan
+  const pool = nonCipl.length ? nonCipl : names;
+  return pool.slice().sort((a, b) => rows(b) - rows(a))[0] || names[0];
+}
+
+function _valHandleMoederUpload(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';   // reset zodat hetzelfde bestand opnieuw gekozen kan worden
+  if (!file) return;
+  const sh = document.getElementById('val-sheet-warnings');
+  if (sh) sh.innerHTML = '<span style="color:var(--teal)">\u23F3 Moederlijst inlezen\u2026</span>';
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const pick = _valPickMoederSheet(wb);
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[pick], { header: 1, raw: true, defval: '' });
+      let table = { headers: [], rows: [] };
+      if (window.ExpeditingCore && ExpeditingCore.rawTable) table = ExpeditingCore.rawTable(raw);
+      if (!table.rows || !table.rows.length) {
+        if (sh) sh.innerHTML = '<span style="color:#f59e0b">\u26A0 Geen bruikbare regels in de Moederlijst gevonden.</span>';
+        return;
+      }
+      if (typeof fileData === 'undefined') window.fileData = {};
+      fileData.expediting = { data: table.rows, headers: table.headers, name: file.name, source: 'upload' };
+      if (typeof _buildSubProjectSelector === 'function') _buildSubProjectSelector(table.rows);
+      const heeftItemlijst = (typeof _valRows !== 'undefined' && _valRows && _valRows.length);
+      if (sh) sh.innerHTML = '<span style="color:#22c55e">\u2713 Moederlijst gekoppeld: <b>' + esc(file.name) +
+        '</b> (' + table.rows.length + ' regels)' +
+        (heeftItemlijst ? ' \u2014 opnieuw aan het valideren\u2026' : ' \u2014 upload nu een Itemlijst en klik Valideer.') + '</span>';
+      if (heeftItemlijst && typeof runValidation === 'function') runValidation();
+    } catch (err) {
+      console.error('Moederlijst-upload mislukt:', err);
+      if (sh) sh.innerHTML = '<span style="color:#ef4444">Fout bij inlezen Moederlijst: ' + esc(err.message) + '</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen ─────
+function _valHighlightMailBtn() {
+  const btn = document.getElementById('valmail-launch');
+  if (!btn) return;
+  let hasErr = false, hasDev = false;
+  try { hasErr = Array.isArray(_valRows) && _valRows.some(r => r && r.errors && Object.keys(r.errors).length > 0); } catch (e) {}
+  try {
+    if (window.ValMailer) {
+      const afs = (ValMailer._afsItems && ValMailer._afsItems()) || [];
+      const pal = (ValMailer._palletItems && ValMailer._palletItems()) || [];
+      hasDev = (afs.length > 0) || (pal.length > 0);
+    }
+  } catch (e) {}
+  if (!document.getElementById('valmail-alert-style')) {
+    const st = document.createElement('style'); st.id = 'valmail-alert-style';
+    st.textContent =
+      '#valmail-launch.valmail-alert{background:#D91F2C!important;color:#fff!important;' +
+      'box-shadow:0 0 0 2px rgba(217,31,44,.55),0 0 16px rgba(217,31,44,.6)!important;' +
+      'animation:valmailPulse 1.5s ease-in-out infinite}' +
+      '@keyframes valmailPulse{0%,100%{box-shadow:0 0 0 2px rgba(217,31,44,.5),0 0 10px rgba(217,31,44,.45)}' +
+      '50%{box-shadow:0 0 0 3px rgba(217,31,44,.78),0 0 22px rgba(217,31,44,.85)}}';
+    document.head.appendChild(st);
+  }
+  const on = hasErr || hasDev;
+  btn.classList.toggle('valmail-alert', on);
+  btn.title = on
+    ? 'Let op: ' + [hasErr ? 'fouten in de lijst' : '', hasDev ? 'AFS-voormelding nodig (omvang/gewicht/>20 colli)' : ''].filter(Boolean).join(' + ')
+    : 'Mail opstellen voor AFS / leverancier';
+}
+
+if (document.readyState !== 'loading') _valConnectExpediting();
 
 // ── Run full validation ────────────────────────────────────────────────────
 async function runValidation() {
@@ -824,6 +900,7 @@ async function runValidation() {
   if (window.ValMailer && typeof window.ValMailer.checkPrenotify === 'function') {
     try { window.ValMailer.checkPrenotify(); } catch (e) {}
   }
+  _valHighlightMailBtn();   // AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
