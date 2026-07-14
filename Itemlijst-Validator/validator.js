@@ -691,7 +691,7 @@ function _valLoadExportMail() {
   if (!document.querySelector('.val-toolbar')) return;
   if (window.ValExportMail || document.querySelector('script[data-valexportmail]')) return;
   var s = document.createElement('script');
-  s.src = 'js/val-export-mail.js';
+  s.src = 'val-export-mail.js';
   s.setAttribute('data-valexportmail', '1');
   s.onerror = function () { console.warn('val-export-mail.js kon niet geladen worden'); };
   document.head.appendChild(s);
