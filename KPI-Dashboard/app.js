@@ -120,31 +120,99 @@ function toDate(v){
   return null;
 }
 function isEmpty(v){ return v===null||v===undefined||(typeof v==='string'&&v.trim()===''); }
-function findCol(headers, name){ let i = headers.indexOf(name); if (i>=0) return i;
-  const low = String(name).toLowerCase().trim();
-  return headers.findIndex(h => String(h).toLowerCase().trim()===low); }
+function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+// name mag een string zijn of een lijst met alternatieve kolomnamen
+function findCol(headers, name){
+  const names = Array.isArray(name) ? name : [name];
+  for (const n of names){
+    let i = headers.indexOf(n); if (i>=0) return i;
+    const low = String(n).toLowerCase().trim();
+    i = headers.findIndex(h => String(h).toLowerCase().trim()===low);
+    if (i>=0) return i;
+  }
+  return -1;
+}
 
-function computeKpisForLines(lines, C){
+/*  Rapportagestructuur
+ *  ───────────────────
+ *  Alle regels
+ *    ├─ Niet bevestigd (status ≠ Confirmed)  → KPI not_confirmed_pct   (niet expediteerbaar)
+ *    ├─ Administratie niet bijgewerkt        → KPI stale_admin_pct     (niet expediteerbaar)
+ *    │    PO's waarvan álle regels bevestigd zijn, maar waar alle datums
+ *    │    identiek zijn én in het verleden liggen.
+ *    └─ EXPEDITEERBAAR  → basis voor late_pct, avg_delay, critical_delay, not_yet_expedited
+ */
+function computeKpisForLines(lines, C, rules){
   const total = lines.length; if (!total) return null;
-  let late=0; const delays=[]; let confirmed=0, nye=0;
+  const CONF = String((rules && rules.confirmed_status) || 'Confirmed').toLowerCase();
+  const isConfirmed = r => String(r[C.pls]||'').trim().toLowerCase()===CONF;
+
+  // 1. Niet bevestigd — zonder leveranciersbevestiging kunnen wij niets valideren
+  const notConfirmed = lines.filter(r => !isConfirmed(r));
+
+  // 2. PO's met alles bevestigd, maar alle datums gelijk én in het verleden
+  const today = startOfToday();
+  const byPo = {};
   for (const r of lines){
+    const po = String((C.po>=0 ? r[C.po] : '')||'').trim() || '(geen PO)';
+    (byPo[po] = byPo[po] || []).push(r);
+  }
+  const stale = new Set();
+  if (C.po >= 0){
+    for (const po in byPo){
+      const grp = byPo[po];
+      if (po==='(geen PO)' || !grp.every(isConfirmed)) continue;
+      const ds = grp.map(r => toDate(r[C.stale])).filter(Boolean);
+      if (ds.length !== grp.length) continue;                       // niet elke regel heeft een datum
+      const t0 = ds[0].getTime();
+      if (!ds.every(d => d.getTime()===t0)) continue;               // datums niet identiek
+      if (ds[0] >= today) continue;                                 // niet in het verleden
+      grp.forEach(r => stale.add(r));
+    }
+  }
+
+  // 3. Wat overblijft is expediteerbaar
+  const expediteerbaar = lines.filter(r => isConfirmed(r) && !stale.has(r));
+  const n = expediteerbaar.length;
+
+  let late=0; const delays=[]; let nye=0;
+  for (const r of expediteerbaar){
     if (String(r[C.ds]||'').toLowerCase()==='late') late++;
     const w = toDate(r[C.wanted]); const p = toDate(r[C.planned]);
     if (w && p) delays.push(Math.round((p-w)/86400000));
-    if (String(r[C.pls]||'').toLowerCase()==='confirmed'){ confirmed++; if (isEmpty(r[C.lastexp])) nye++; }
+    if (isEmpty(r[C.lastexp])) nye++;
   }
   const pos = delays.filter(d=>d>0); const crit = delays.filter(d=>d>30).length;
-  return { late_pct: round1(100*late/total), avg_delay: pos.length?round1(mean(pos)):null,
-    critical_delay: round1(100*crit/total), not_yet_expedited: confirmed?round1(100*nye/confirmed):null,
-    schedule_adherence:null, field_visits:null, ncr:null };
+
+  return {
+    // expediting-KPI's — uitsluitend over de expediteerbare regels
+    late_pct:          n ? round1(100*late/n) : null,
+    avg_delay:         pos.length ? round1(mean(pos)) : null,
+    critical_delay:    n ? round1(100*crit/n) : null,
+    not_yet_expedited: n ? round1(100*nye/n) : null,
+    // kwaliteits-KPI's — over álle regels, tonen wat elders blijft liggen
+    not_confirmed_pct: round1(100*notConfirmed.length/total),
+    stale_admin_pct:   round1(100*stale.size/total),
+    // handmatig
+    schedule_adherence:null, field_visits:null, ncr:null,
+    _counts: { totaal: total, expediteerbaar: n,
+               niet_bevestigd: notConfirmed.length, admin_open: stale.size },
+  };
 }
 function computeSnapshot(headers, rows, meta){
   const cols = CONFIG.columns;
+  const rules = CONFIG.rules || {};
   const C = { sp:findCol(headers,cols.sub_project_id), spdesc:findCol(headers,cols.sub_project_description),
+    po:findCol(headers,cols.po_number),
     pls:findCol(headers,cols.po_line_status), ds:findCol(headers,cols.delivery_status),
     wanted:findCol(headers,cols.latest_wanted_receipt_date), planned:findCol(headers,cols.planned_delivery_date),
     lastexp:findCol(headers,cols.last_expedited) };
+  // kolom waarop de 'administratie niet bijgewerkt'-check draait
+  C.stale = C[ (rules.stale_date_column === 'latest_wanted_receipt_date') ? 'wanted' : 'planned' ];
   if (C.sp < 0) throw new Error("Kolom 'Sub Project ID' niet gevonden in het bestand.");
+  const warn = [];
+  if (C.po < 0) warn.push("PO-nummerkolom niet gevonden — 'Administratie niet bijgewerkt' kan niet berekend worden.");
+  if (C.pls < 0) warn.push("Kolom 'PO Line Status' niet gevonden — alle regels tellen als niet-bevestigd.");
   const groups = {}; const descMap = {};
   for (const r of rows){
     const sp = String((r[C.sp]!==undefined?r[C.sp]:'')||'').trim(); if (!sp) continue;
@@ -153,14 +221,14 @@ function computeSnapshot(headers, rows, meta){
   }
   const subprojects = {}; let allLines = [];
   for (const sp in groups){
-    subprojects[sp] = { description:descMap[sp]||'', total:groups[sp].length, kpis:computeKpisForLines(groups[sp], C) };
+    subprojects[sp] = { description:descMap[sp]||'', total:groups[sp].length, kpis:computeKpisForLines(groups[sp], C, rules) };
     allLines = allLines.concat(groups[sp]);
   }
-  const aggregate = { total:allLines.length, kpis:computeKpisForLines(allLines, C) };
+  const aggregate = { total:allLines.length, kpis:computeKpisForLines(allLines, C, rules) };
   let date=null; const fn=(meta && meta.filename)||'';
   const m = fn.match(/(\d{2})-(\d{2})-(\d{4})/); if (m) date = m[3]+'-'+m[2]+'-'+m[1];
   if (!date) date = new Date().toISOString().slice(0,10);
-  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rows.length}, aggregate, subprojects };
+  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rows.length,warnings:warn}, aggregate, subprojects };
 }
 
 function setStatus(msg, cls){ document.getElementById('uploadStatus').innerHTML =
@@ -194,8 +262,10 @@ function addMeetmoment(snap){
   buildSubprojectSelect(); buildMeetmomentSelect();
   document.getElementById('meetmomentSelect').value = snap.meetmoment.date; renderAll();
   const nSub = Object.keys(snap.subprojects).length;
+  const warn = (snap.meetmoment.warnings||[]);
   setStatus('✓ Meetmoment ' + snap.meetmoment.label + ' toegevoegd — ' + nSub +
-    ' Sub Project ID\'s, ' + snap.meetmoment.rows + ' regels. Vergeet niet te downloaden en te committen.', 'ok-msg');
+    ' Sub Project ID\'s, ' + snap.meetmoment.rows + ' regels. Vergeet niet te downloaden en te committen.' +
+    (warn.length ? '<br><span class="err-msg">⚠ ' + warn.join(' ') + '</span>' : ''), 'ok-msg');
 }
 function downloadHistory(){
   const blob = new Blob([JSON.stringify(HISTORY, null, 2)], {type:'application/json'});
@@ -219,8 +289,13 @@ function renderBadge(mm){
   if (!mm){ el.textContent=''; return; }
   const node = getNode(mm, spid); const scope = spid==='__ALL__' ? 'Bedrijfsbreed' : spid;
   const tot = node ? node.total : 0;
-  el.textContent = 'Meetmoment: ' + mm.meetmoment.label + ' · bron: ' + (mm.meetmoment.filename||'—') +
+  let txt = 'Meetmoment: ' + mm.meetmoment.label + ' · bron: ' + (mm.meetmoment.filename||'—') +
     ' · scope: ' + scope + ' (' + tot + ' regels)';
+  const c = node && node.kpis && node.kpis._counts;
+  if (c) txt += ' → ' + c.expediteerbaar + ' expediteerbaar' +
+    ' · ' + c.niet_bevestigd + ' niet bevestigd' +
+    ' · ' + c.admin_open + ' admin niet bijgewerkt';
+  el.textContent = txt;
 }
 function renderCards(mm){
   const spid = document.getElementById('subprojectSelect').value;

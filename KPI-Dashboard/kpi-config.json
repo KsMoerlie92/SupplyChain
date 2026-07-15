@@ -10,10 +10,12 @@
     ]
   },
   "kpis": [
-    {"id":"late_pct","name":"Late %","definition":"Aandeel PO-regels met Delivery Status = 'Late'.","formula":"late / totaal","source":"Bedrijfsbrede expediting-lijst (Delivery Status)","owner":"Expediter","unit":"%","direction":"lower_better","green":20,"yellow":40,"norm":"< 20%","auto":true},
-    {"id":"avg_delay","name":"Avg delay (dagen)","definition":"Gemiddelde vertraging (Planned Delivery Date − Latest Wanted Receipt Date) over regels met positieve vertraging.","formula":"gemiddelde dagen vertraging","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"dagen","direction":"lower_better","green":10,"yellow":20,"norm":"< 10 dagen","auto":true},
-    {"id":"critical_delay","name":"Critical delay","definition":"Aandeel PO-regels met vertraging > 30 dagen.","formula":"% regels > 30 dagen te laat","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
-    {"id":"not_yet_expedited","name":"Not Yet Expedited","definition":"Aandeel PO-regels met status 'Confirmed' maar zonder datum in 'Last Expedited'. Indicator voor achterstand in opvolging.","formula":"% confirmed zonder 'Last Expedited'","source":"Bedrijfsbrede expediting-lijst (PO Line Status + Last Expedited)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
+    {"id":"late_pct","name":"Late %","definition":"Aandeel expediteerbare regels met Delivery Status = 'Late'. Alleen bevestigde, administratief schone regels tellen mee.","formula":"late / totaal","source":"Bedrijfsbrede expediting-lijst (Delivery Status, scope: expediteerbaar)","owner":"Expediter","unit":"%","direction":"lower_better","green":20,"yellow":40,"norm":"< 20%","auto":true},
+    {"id":"avg_delay","name":"Avg delay (dagen)","definition":"Gemiddelde vertraging (Planned Delivery Date − Latest Wanted Receipt Date) over expediteerbare regels met positieve vertraging.","formula":"gemiddelde dagen vertraging","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"dagen","direction":"lower_better","green":10,"yellow":20,"norm":"< 10 dagen","auto":true},
+    {"id":"critical_delay","name":"Critical delay","definition":"Aandeel expediteerbare regels met vertraging > 30 dagen.","formula":"% regels > 30 dagen te laat","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
+    {"id":"not_yet_expedited","name":"Not Yet Expedited","definition":"Aandeel expediteerbare regels zonder datum in 'Last Expedited'. Indicator voor achterstand in opvolging. Niet-bevestigde en administratief vervuilde regels tellen niet mee.","formula":"% expediteerbaar zonder 'Last Expedited'","source":"Bedrijfsbrede expediting-lijst (PO Line Status + Last Expedited)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
+    {"id":"not_confirmed_pct","name":"Niet bevestigd (Released)","definition":"Aandeel PO-regels dat nog niet op 'Confirmed' staat. Zonder leveranciersbevestiging kan de validatiecheck niet gedaan worden — deze regels zijn niet expediteerbaar en tellen niet mee in de overige KPI's.","formula":"% regels met status ≠ Confirmed","source":"Bedrijfsbrede expediting-lijst (PO Line Status)","owner":"Inkoop / Purchasing","unit":"%","direction":"lower_better","green":5,"yellow":15,"norm":"< 5%","auto":true},
+    {"id":"stale_admin_pct","name":"Administratie niet bijgewerkt","definition":"Aandeel regels op PO's waarvan álle regels bevestigd zijn, maar waar alle datums identiek zijn én in het verleden liggen. Signaal dat de administratie niet is bijgehouden. Niet expediteerbaar, telt niet mee in de overige KPI's.","formula":"% regels op PO's met identieke datums in het verleden","source":"Bedrijfsbrede expediting-lijst (PO-nummer + datums)","owner":"Inkoop / Purchasing","unit":"%","direction":"lower_better","green":0,"yellow":5,"norm":"0%","auto":true},
     {"id":"schedule_adherence","name":"Schedule adherence","definition":"Aandeel milestones (M1/M2/M3) op of vóór planning gehaald. Handmatig in te vullen.","formula":"milestone hits %","source":"Project planning (handmatig)","owner":"Project mgmt + Expediter","unit":"%","direction":"higher_better","green":90,"yellow":75,"norm":"> 90%","auto":false},
     {"id":"field_visits","name":"Field expedite visits","definition":"Aantal fysieke leveranciersbezoeken die periode. Handmatig in te vullen.","formula":"# bezoeken","source":"Expediting agenda (handmatig)","owner":"Expediter","unit":"#","direction":"count_only","green":0,"yellow":0,"norm":"—","auto":false},
     {"id":"ncr","name":"Aantal issues gemeld (NCR)","definition":"Aantal Non-Conformance Reports gemeld die periode, expediting-gerelateerd. Handmatig in te vullen.","formula":"# NCR's","source":"Quality / IFS (handmatig)","owner":"QC + Expediter","unit":"#","direction":"lower_better","green":2,"yellow":5,"norm":"< 3/week","auto":false}
@@ -21,10 +23,16 @@
   "columns": {
     "sub_project_id": "Sub Project ID",
     "sub_project_description": "Sub Project Description",
+    "po_number": ["Order No", "PO No", "PO Number", "Order Number", "PO nummer"],
     "po_line_status": "PO Line Status",
     "delivery_status": "Delivery Status",
     "latest_wanted_receipt_date": "Latest Wanted Receipt Date",
     "planned_delivery_date": "Planned Delivery Date",
     "last_expedited": "Last Expedited"
+  },
+  "rules": {
+    "confirmed_status": "Confirmed",
+    "stale_date_column": "planned_delivery_date",
+    "_toelichting": "Alleen regels met PO Line Status = confirmed_status zijn expediteerbaar. PO's waarvan álle regels bevestigd zijn maar waar alle datums in stale_date_column identiek zijn én in het verleden liggen, worden als 'administratie niet bijgewerkt' apart geteld en niet meegenomen in de expediting-KPI's."
   }
 }

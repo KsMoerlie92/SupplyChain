@@ -13,6 +13,8 @@
         "avg_delay": null,
         "critical_delay": null,
         "not_yet_expedited": null,
+        "not_confirmed_pct": null,
+        "stale_admin_pct": null,
         "schedule_adherence": null,
         "field_visits": null,
         "ncr": null
