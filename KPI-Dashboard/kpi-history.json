@@ -1,0 +1,23 @@
+[
+  {
+    "meetmoment": {
+      "label": "start",
+      "date": "2026-01-01",
+      "filename": "(nog geen lijst geüpload)",
+      "rows": 0
+    },
+    "aggregate": {
+      "total": 0,
+      "kpis": {
+        "late_pct": null,
+        "avg_delay": null,
+        "critical_delay": null,
+        "not_yet_expedited": null,
+        "schedule_adherence": null,
+        "field_visits": null,
+        "ncr": null
+      }
+    },
+    "subprojects": {}
+  }
+]

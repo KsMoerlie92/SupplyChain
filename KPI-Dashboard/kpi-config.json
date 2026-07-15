@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "title": "Expediting KPI – Dashboard",
+    "subtitle": "Bedrijfsbrede expediting-lijst → KPI's per Sub Project ID",
+    "owner": "Supply Chain Lead",
+    "milestones": [
+      "M1 Production Start (10-20%)",
+      "M2 Half-Way (40-70%)",
+      "M3 Last Mile (90-100%)"
+    ]
+  },
+  "kpis": [
+    {"id":"late_pct","name":"Late %","definition":"Aandeel PO-regels met Delivery Status = 'Late'.","formula":"late / totaal","source":"Bedrijfsbrede expediting-lijst (Delivery Status)","owner":"Expediter","unit":"%","direction":"lower_better","green":20,"yellow":40,"norm":"< 20%","auto":true},
+    {"id":"avg_delay","name":"Avg delay (dagen)","definition":"Gemiddelde vertraging (Planned Delivery Date − Latest Wanted Receipt Date) over regels met positieve vertraging.","formula":"gemiddelde dagen vertraging","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"dagen","direction":"lower_better","green":10,"yellow":20,"norm":"< 10 dagen","auto":true},
+    {"id":"critical_delay","name":"Critical delay","definition":"Aandeel PO-regels met vertraging > 30 dagen.","formula":"% regels > 30 dagen te laat","source":"Bedrijfsbrede expediting-lijst (datums)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
+    {"id":"not_yet_expedited","name":"Not Yet Expedited","definition":"Aandeel PO-regels met status 'Confirmed' maar zonder datum in 'Last Expedited'. Indicator voor achterstand in opvolging.","formula":"% confirmed zonder 'Last Expedited'","source":"Bedrijfsbrede expediting-lijst (PO Line Status + Last Expedited)","owner":"Expediter","unit":"%","direction":"lower_better","green":10,"yellow":25,"norm":"< 10%","auto":true},
+    {"id":"schedule_adherence","name":"Schedule adherence","definition":"Aandeel milestones (M1/M2/M3) op of vóór planning gehaald. Handmatig in te vullen.","formula":"milestone hits %","source":"Project planning (handmatig)","owner":"Project mgmt + Expediter","unit":"%","direction":"higher_better","green":90,"yellow":75,"norm":"> 90%","auto":false},
+    {"id":"field_visits","name":"Field expedite visits","definition":"Aantal fysieke leveranciersbezoeken die periode. Handmatig in te vullen.","formula":"# bezoeken","source":"Expediting agenda (handmatig)","owner":"Expediter","unit":"#","direction":"count_only","green":0,"yellow":0,"norm":"—","auto":false},
+    {"id":"ncr","name":"Aantal issues gemeld (NCR)","definition":"Aantal Non-Conformance Reports gemeld die periode, expediting-gerelateerd. Handmatig in te vullen.","formula":"# NCR's","source":"Quality / IFS (handmatig)","owner":"QC + Expediter","unit":"#","direction":"lower_better","green":2,"yellow":5,"norm":"< 3/week","auto":false}
+  ],
+  "columns": {
+    "sub_project_id": "Sub Project ID",
+    "sub_project_description": "Sub Project Description",
+    "po_line_status": "PO Line Status",
+    "delivery_status": "Delivery Status",
+    "latest_wanted_receipt_date": "Latest Wanted Receipt Date",
+    "planned_delivery_date": "Planned Delivery Date",
+    "last_expedited": "Last Expedited"
+  }
+}
