@@ -32,6 +32,7 @@
 
   const RECIPIENT  = 'm.wendels@royalihc.com';
   const TRIGGER_KW = 'ITEMLIJST';       // Power Automate trigger-sleutelwoord (was 'Itemlijst')
+  const TABLE_NAME = 'Itemlijst';       // naam van de Excel-tabel (voor Power Automate)
   const SENDER_LBL = 'IHC Expedite 2.0';
 
   // Itemlijst-kolomnamen die het onderwerp bepalen
@@ -94,8 +95,18 @@
     }
     const allCols = [...presentCols, ...extraCols];
 
+    // Kolomnamen uniek + niet-leeg maken. Moet vóór de opbouw gebeuren: de kopcel
+    // en de tabelkolomnaam moeten identiek zijn, anders wil Excel het bestand repareren.
+    const seenName = Object.create(null);
+    const colNames = allCols.map((c, i) => {
+      let n = trim(c) || ('Kolom' + (i + 1));
+      if (seenName[n.toLowerCase()]) { let k = 2; while (seenName[(n + '_' + k).toLowerCase()]) k++; n = n + '_' + k; }
+      seenName[n.toLowerCase()] = true;
+      return n;
+    });
+
     const wsData = [
-      allCols,
+      colNames,
       ...rows.map(r => allCols.map(h => r[h] ?? '')),
     ];
     const wb = XLSX.utils.book_new();
@@ -111,7 +122,82 @@
     });
 
     XLSX.utils.book_append_sheet(wb, ws, TRIGGER_KW);
-    return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+
+    // Als echte Excel-tabel wegschrijven (nodig voor Power Automate).
+    // Lukt dat niet, dan valt hij terug op een gewoon werkblad i.p.v. te crashen.
+    try {
+      return sheetToTableXlsxBase64(wb, colNames, rows.length);
+    } catch (e) {
+      console.warn('Tabel-injectie mislukt, export als gewoon werkblad:', e);
+      return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+    }
+  }
+
+  /**
+   * SheetJS schrijft geen echte Excel-tabel (ListObject). Die injecteren we hier
+   * zelf in de xlsx-zip via XLSX.CFB: table1.xml + relatie + content-type + tableParts.
+   * Resultaat: een tabel met de naam TABLE_NAME, zoals Ctrl+T in Excel.
+   */
+  function sheetToTableXlsxBase64(wb, cols, nRows) {
+    const xesc = (s) => String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // cols zijn al uniek + niet-leeg gemaakt in rowsToXlsxBase64 (kop == tabelkolom)
+    const names = cols;
+
+    const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const cfb = XLSX.CFB.read(new Uint8Array(buf), { type: 'array' });
+    const find = (p) => {
+      const i = cfb.FullPaths.findIndex(f => f.replace(/^Root Entry\//, '') === p);
+      return i < 0 ? null : cfb.FileIndex[i];
+    };
+    const readTxt = (p) => {
+      const f = find(p); if (!f) throw new Error('ontbrekend deel: ' + p);
+      const c = f.content;
+      let s = ''; for (let i = 0; i < c.length; i++) s += String.fromCharCode(c[i]);
+      return decodeURIComponent(escape(s));   // UTF-8 → tekst
+    };
+    const write = (p, s) => {
+      const u = unescape(encodeURIComponent(s));            // tekst → UTF-8
+      const a = new Uint8Array(u.length);
+      for (let i = 0; i < u.length; i++) a[i] = u.charCodeAt(i) & 0xFF;
+      XLSX.CFB.utils.cfb_add(cfb, '/' + p, a);
+    };
+
+    const lastCol = XLSX.utils.encode_col(names.length - 1);
+    const ref = 'A1:' + lastCol + Math.max(nRows + 1, 2);   // minimaal 1 (lege) datarij
+
+    // 1. de tabel zelf
+    const tcols = names.map((n, i) => '<tableColumn id="' + (i + 1) + '" name="' + xesc(n) + '"/>').join('');
+    write('xl/tables/table1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+      '<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" ' +
+      'name="' + TABLE_NAME + '" displayName="' + TABLE_NAME + '" ref="' + ref + '" totalsRowShown="0">' +
+      '<autoFilter ref="' + ref + '"/>' +
+      '<tableColumns count="' + names.length + '">' + tcols + '</tableColumns>' +
+      '<tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" ' +
+      'showRowStripes="1" showColumnStripes="0"/></table>');
+
+    // 2. werkblad koppelen (eigen autoFilter weg — de tabel regelt dat zelf)
+    let sheet = readTxt('xl/worksheets/sheet1.xml').replace(/<autoFilter[^>]*\/>/, '');
+    sheet = sheet.replace('</worksheet>',
+      '<tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>');
+    write('xl/worksheets/sheet1.xml', sheet);
+
+    // 3. relatie werkblad → tabel
+    write('xl/worksheets/_rels/sheet1.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" ' +
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" ' +
+      'Target="../tables/table1.xml"/></Relationships>');
+
+    // 4. content-type registreren
+    write('[Content_Types].xml', readTxt('[Content_Types].xml').replace('</Types>',
+      '<Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/></Types>'));
+
+    return XLSX.CFB.write(cfb, { fileType: 'zip', type: 'base64', compression: true });
   }
 
   /** Bouw de e-mailtekst (body) */
