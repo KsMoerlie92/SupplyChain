@@ -40,11 +40,12 @@
     totW:      [['Total Net Weight'], 'AP'],
     wUoM:      [['Weight UoM'], 'AQ'],
   };
-  // kolommen die per tabblad noodzakelijk zijn
+  // Kolommen zónder welke een tabblad zinloos is. Overige kolommen mogen
+  // ontbreken: die blijven leeg, met een melding erboven.
   const NEEDED = {
-    large: ['totW', 'netW'],
+    large: ['totW'],
     late:  ['delStatus'],
-    fat:   ['fatDate', 'fatLoc'],
+    fat:   ['fatDate'],
   };
 
   let HEADERS = [], ROWS = [], C = {}, MISSING = [];
@@ -173,61 +174,87 @@
   function renderWarnings() {
     const el = $('lio-warnings');
     if (!MISSING.length) { el.innerHTML = ''; return; }
-    el.innerHTML = '<div class="lio-warn">⚠ Ontbrekende kolommen in deze lijst: <b>' +
-      esc(MISSING.join(', ')) + '</b>.<br>Deze lijst is waarschijnlijk een smalle export. ' +
-      'Exporteer de bedrijfsbrede lijst mét alle kolommen (o.a. Net Weight, Total Net Weight, ' +
-      'FAT Location, Delivery Address) en upload die opnieuw via Admin.</div>';
+    el.innerHTML = '<div class="lio-warn">⚠ Deze kolommen zitten niet in de geladen lijst: <b>' +
+      esc(MISSING.join(', ')) + '</b> — die velden blijven leeg.<br>' +
+      'Oorzaak: de Admin-upload filtert kolommen weg (KEEP_COLS in <code>shared/expediting-data.js</code>). ' +
+      'Upload de bedrijfsbrede lijst opnieuw via <b>Admin</b> met de bijgewerkte <code>expediting-data.js</code>, ' +
+      'download de nieuwe <code>expediting-data.json</code> en commit die.</div>';
   }
 
-  // ── Sub Project ID selectie ──────────────────────────────────────────────
+  // ── Sub Project ID selectie — zelfde opmaak als de Itemlijst-Validator ───
+  function injectSPStyle() {
+    if (document.getElementById('val-sp-style')) return;
+    const s = document.createElement('style'); s.id = 'val-sp-style';
+    s.textContent =
+      '.val-sp-panel{margin:.6rem 0 0;padding:1rem 1.1rem;background:var(--navy-mid,#0F2040);border:1px solid var(--steel,#1e3a6e);border-radius:12px;font-family:var(--mono,monospace)}' +
+      '.val-sp-head{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.8rem;letter-spacing:.03em;color:var(--white,#F0F4FA)}' +
+      '.val-sp-search{width:100%;box-sizing:border-box;padding:.55rem .8rem;border-radius:8px;border:1px solid var(--steel,#1e3a6e);background:var(--navy,#0A1628);color:var(--white,#F0F4FA);font-family:inherit;font-size:.8rem;outline:none;margin-top:.8rem}' +
+      '.val-sp-search:focus{border-color:var(--teal,#00B4D8)}' +
+      '.val-sp-actions{display:flex;align-items:center;gap:.5rem;margin:.7rem 0 .4rem}' +
+      '.val-sp-btn{font-family:inherit;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.4rem .8rem;border-radius:6px;border:1px solid var(--steel,#1e3a6e);background:transparent;color:var(--white,#F0F4FA);cursor:pointer;transition:border-color .15s,background .15s}' +
+      '.val-sp-btn:hover{border-color:var(--teal,#00B4D8);background:rgba(0,180,216,.1)}' +
+      '.val-sp-count{margin-left:auto;font-size:.72rem;color:var(--teal,#00B4D8)}' +
+      '.val-sp-list{max-height:210px;overflow-y:auto;border:1px solid var(--steel,#1e3a6e);border-radius:8px;background:rgba(10,22,40,.4)}' +
+      '.val-sp-list::-webkit-scrollbar{width:10px}.val-sp-list::-webkit-scrollbar-thumb{background:var(--steel,#1e3a6e);border-radius:5px}' +
+      '.val-sp-item{display:flex;align-items:center;gap:.6rem;padding:.4rem .8rem;cursor:pointer;font-size:.76rem;color:var(--white,#F0F4FA);border-bottom:1px solid rgba(30,58,110,.25)}' +
+      '.val-sp-item:hover{background:rgba(0,180,216,.07)}' +
+      '.val-sp-item input{accent-color:var(--teal,#00B4D8);width:14px;height:14px;cursor:pointer}' +
+      '.val-sp-item .val-sp-n{margin-left:auto;color:var(--grey,#8FA3BF);font-size:.72rem}' +
+      '.val-sp-item.hidden{display:none}';
+    document.head.appendChild(s);
+  }
+
   function buildSubProjectPanel() {
     const panel = $('lio-sp-panel');
-    const map = new Map();
+    const counts = new Map();
     for (const r of ROWS) {
       const id = trim(val(r, 'sp')); if (!id) continue;
-      if (!map.has(id)) map.set(id, { n: 0, desc: trim(val(r, 'spDesc')) });
-      map.get(id).n++;
+      counts.set(id, (counts.get(id) || 0) + 1);
     }
-    const ids = [...map.keys()].sort();
+    const ids = [...counts.keys()].sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
     if (!ids.length) { panel.innerHTML = ''; return; }
-    SPSEL = new Set(ids);
+
+    injectSPStyle();
+    SPSEL = new Set();                       // standaard: niets geselecteerd (= alle projecten)
+    panel.className = 'val-sp-panel';
     panel.innerHTML =
-      '<div class="lio-sp-head">📋 Selecteer Sub Project ID <span class="lio-sp-count" id="lio-sp-count"></span></div>' +
-      '<input class="lio-sp-search" id="lio-sp-search" placeholder="🔍 Zoek Sub Project ID…" autocomplete="off">' +
-      '<div class="lio-sp-actions">' +
-      '<button class="lio-sp-btn" id="lio-sp-all">Alles</button>' +
-      '<button class="lio-sp-btn" id="lio-sp-none">Niets</button></div>' +
-      '<div class="lio-sp-list" id="lio-sp-list">' +
-      ids.map(id => '<label class="lio-sp-item" data-id="' + esc(id) + '">' +
-        '<input type="checkbox" checked value="' + esc(id) + '"> ' +
-        '<span class="lio-sp-id">' + esc(id) + '</span>' +
-        '<span class="lio-sp-desc">' + esc(map.get(id).desc) + '</span>' +
-        '<span class="lio-sp-n">' + map.get(id).n + '</span></label>').join('') +
+      '<div class="val-sp-head">📋 Bedrijfsbreed Expediten — selecteer Sub Project ID</div>' +
+      '<input class="val-sp-search" id="val-sp-search" placeholder="🔍 Zoek Sub Project ID…" autocomplete="off">' +
+      '<div class="val-sp-actions">' +
+      '<button class="val-sp-btn" id="val-sp-all" type="button">Alles</button>' +
+      '<button class="val-sp-btn" id="val-sp-none" type="button">Wis</button>' +
+      '<span class="val-sp-count" id="val-sp-count">0 geselecteerd</span>' +
+      '</div>' +
+      '<div class="val-sp-list" id="val-sp-list">' +
+      ids.map(id => '<label class="val-sp-item" data-id="' + esc(id) + '">' +
+        '<input type="checkbox" value="' + esc(id) + '">' +
+        '<span class="val-sp-id">' + esc(id) + '</span>' +
+        '<span class="val-sp-n">' + counts.get(id) + '</span></label>').join('') +
       '</div>';
-    panel.querySelectorAll('input[type=checkbox]').forEach(cb =>
-      cb.addEventListener('change', () => {
-        cb.checked ? SPSEL.add(cb.value) : SPSEL.delete(cb.value);
-        updateSpCount(); render();
-      }));
-    $('lio-sp-all').addEventListener('click', () => toggleAll(true));
-    $('lio-sp-none').addEventListener('click', () => toggleAll(false));
-    $('lio-sp-search').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase();
-      panel.querySelectorAll('.lio-sp-item').forEach(it =>
-        it.style.display = it.textContent.toLowerCase().includes(q) ? '' : 'none');
+
+    const apply = () => {
+      const c = $('val-sp-count');
+      if (c) c.textContent = SPSEL.size + ' geselecteerd';
+      render();
+    };
+    panel.querySelector('#val-sp-list').addEventListener('change', e => {
+      if (e.target.type !== 'checkbox') return;
+      if (e.target.checked) SPSEL.add(e.target.value); else SPSEL.delete(e.target.value);
+      apply();
     });
-    updateSpCount();
-  }
-  function toggleAll(on) {
-    SPSEL = new Set();
-    document.querySelectorAll('#lio-sp-list input[type=checkbox]').forEach(cb => {
-      if (cb.closest('.lio-sp-item').style.display === 'none') return;
-      cb.checked = on; if (on) SPSEL.add(cb.value);
+    panel.querySelector('#val-sp-search').addEventListener('input', function () {
+      const q = this.value.trim().toLowerCase();
+      panel.querySelectorAll('.val-sp-item').forEach(it =>
+        it.classList.toggle('hidden', !!q && !it.dataset.id.toLowerCase().includes(q)));
     });
-    updateSpCount(); render();
-  }
-  function updateSpCount() {
-    const el = $('lio-sp-count'); if (el) el.textContent = '(' + SPSEL.size + ' geselecteerd)';
+    panel.querySelector('#val-sp-all').addEventListener('click', () => {
+      panel.querySelectorAll('.val-sp-item:not(.hidden) input').forEach(cb => { cb.checked = true; SPSEL.add(cb.value); });
+      apply();
+    });
+    panel.querySelector('#val-sp-none').addEventListener('click', () => {
+      panel.querySelectorAll('.val-sp-item input').forEach(cb => cb.checked = false);
+      SPSEL.clear(); apply();
+    });
   }
 
   // ── tabbladen ────────────────────────────────────────────────────────────

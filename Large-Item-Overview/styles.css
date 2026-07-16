@@ -10,29 +10,6 @@
   border-radius:8px;padding:.6rem .8rem;margin-bottom:.6rem;
   font-family:var(--mono,'JetBrains Mono',monospace);font-size:.68rem;color:#ffb3b9;line-height:1.5}
 
-/* Sub Project ID paneel */
-#lio-sp-panel:not(:empty){background:var(--navy-mid,#0F2040);border:1px solid rgba(127,150,190,.25);
-  border-radius:8px;padding:.7rem .8rem;margin-bottom:.6rem}
-.lio-sp-head{font-family:var(--mono,'JetBrains Mono',monospace);font-size:.7rem;font-weight:700;
-  color:#e6ecf5;margin-bottom:.5rem}
-.lio-sp-count{color:var(--muted,#6b7a99);font-weight:400}
-.lio-sp-search{width:100%;background:#0A1628;border:1px solid rgba(127,150,190,.3);border-radius:6px;
-  padding:.35rem .5rem;color:#e6ecf5;font-size:.75rem;margin-bottom:.4rem}
-.lio-sp-search:focus{outline:none;border-color:var(--teal,#00B4D8)}
-.lio-sp-actions{display:flex;gap:.4rem;margin-bottom:.5rem}
-.lio-sp-btn{background:rgba(127,150,190,.15);border:1px solid rgba(127,150,190,.3);color:#c7d3e8;
-  border-radius:5px;padding:.2rem .6rem;font-size:.65rem;cursor:pointer;
-  font-family:var(--mono,'JetBrains Mono',monospace)}
-.lio-sp-btn:hover{background:rgba(0,180,216,.2);border-color:var(--teal,#00B4D8)}
-.lio-sp-list{max-height:140px;overflow-y:auto;display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.15rem}
-.lio-sp-item{display:flex;align-items:center;gap:.4rem;padding:.15rem .3rem;border-radius:4px;
-  cursor:pointer;font-size:.7rem;color:#c7d3e8}
-.lio-sp-item:hover{background:rgba(127,150,190,.12)}
-.lio-sp-id{font-family:var(--mono,'JetBrains Mono',monospace);font-weight:700;color:#e6ecf5}
-.lio-sp-desc{color:var(--muted,#6b7a99);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.lio-sp-n{font-family:var(--mono,'JetBrains Mono',monospace);font-size:.6rem;color:var(--muted,#6b7a99)}
-
 /* Tabbladen */
 .lio-tabs{display:flex;align-items:center;gap:.3rem;border-bottom:2px solid rgba(127,150,190,.25);
   margin-bottom:.6rem;flex-wrap:wrap}
