@@ -81,7 +81,8 @@
     'Delivery Status','Latest Wanted Receipt Date','Planned Delivery Date','Last Expedited','Last Confirmed',
     'Total/Currency','Delivery Terms','FAT Date Required','Country of Origin','Customs Stat No',
     // Nodig voor Large Item Overview + FAT Overview:
-    'Delivery Address','FAT Location','Net Weight','Total Net Weight','Weight UoM'
+    'Delivery Address','FAT Location','Net Weight','Total Net Weight','Weight UoM',
+    'Unified Ref Code Description','FAT Supplier Protocol Date'
   ];
   // Bouw het commit-bestand (compacte arrays) uit een rauwe tabel { headers, rows(objecten) }
   function buildCommitJSON(rawTable, metaObj){
