@@ -14,23 +14,40 @@
 
   // welke Excel-kolom hoort bij welk modelveld
   const COLS = {
-    po:'Purchase Order No', sub:'Sub Project ID', subDesc:'Sub Project Description',
+    po:'Purchase Order No', orderNo:'Order No', sub:'Sub Project ID', subDesc:'Sub Project Description',
     supplier:'Supplier Name', buyer:'Buyer Name', tc:'Technical Coordinator Name',
     part:'Part No', desc:'Description', uref:'Unified Reference Code',
-    qtyRec:'Purchase Qty to Receive', status:'PO Line Status', dstatus:'Delivery Status',
+    urefDesc:'Unified Ref Code Description',
+    qty:'Qty', qtyRec:'Purchase Qty to Receive', status:'PO Line Status', dstatus:'Delivery Status',
     lwr:'Latest Wanted Receipt Date', planned:'Planned Delivery Date',
     lastConf:'Last Confirmed', lastExp:'Last Expedited', total:'Total/Currency',
     origin:'Country of Origin', customs:'Customs Stat No', terms:'Delivery Terms',
-    fatReq:'FAT Date Required'
+    address:'Delivery Address',
+    fatReq:'FAT Date Required', fatLoc:'FAT Location', fatProto:'FAT Supplier Protocol Date',
+    netW:'Net Weight', totW:'Total Net Weight', wUoM:'Weight UoM'
   };
 
   function toDate(v){
     if(v==null||v==='') return null;
     if(v instanceof Date) return isNaN(v)?null:v;
     if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d; }
-    const d=new Date(v); return isNaN(d)?null:d;
+    const s=String(v).trim();
+    // DD-MM-JJJJ / DD/MM/JJJJ eerst zelf afvangen: new Date() leest dit als
+    // MM/DD (Amerikaans) en maakt van 12-05-2026 dan 5 december i.p.v. 12 mei.
+    const m=s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+    const d=new Date(s); return isNaN(d)?null:d;   // ISO en "25-SEP-26" (IFS) gaan hier goed
   }
-  function num(v){ return typeof v==='number'?v:(parseFloat(v)||0); }
+  function num(v){
+    if(typeof v==='number') return isFinite(v)?v:0;
+    let s=String(v==null?'':v).replace(/[^\d.,-]/g,'');
+    if(!s) return 0;
+    const c=s.lastIndexOf(','), d=s.lastIndexOf('.');
+    if(c>-1&&d>-1) s=(c>d)? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,'');
+    else if(c>-1)  s=(s.match(/,/g)||[]).length>1 ? s.replace(/,/g,'') : s.replace(',','.');
+    else if(d>-1&&(s.match(/\./g)||[]).length>1) s=s.replace(/\./g,'');   // 1.234.567 = duizendtallen
+    return parseFloat(s)||0;
+  }
   function dmy(d){ d=toDate(d); if(!d) return '—'; const z=n=>String(n).padStart(2,'0'); return `${z(d.getDate())}/${z(d.getMonth()+1)}/${d.getFullYear()}`; }
   function shortD(d){ d=toDate(d); if(!d) return '—'; return `${d.getDate()} ${MONTHS[d.getMonth()]}`; }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -56,14 +73,16 @@
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
       const status=g(row,'status'); if(!OPEN.includes(status)) continue;
       const o={
-        po:g(row,'po'), sub:g(row,'sub'), subDesc:g(row,'subDesc'),
+        po:g(row,'po'), orderNo:g(row,'orderNo'), sub:g(row,'sub'), subDesc:g(row,'subDesc'),
         supplier:g(row,'supplier'), buyer:g(row,'buyer'), tc:g(row,'tc'),
-        part:g(row,'part'), desc:g(row,'desc'), uref:g(row,'uref'),
-        qtyRec:g(row,'qtyRec'), status, dstatus:g(row,'dstatus'),
+        part:g(row,'part'), desc:g(row,'desc'), uref:g(row,'uref'), urefDesc:g(row,'urefDesc'),
+        qty:g(row,'qty'), qtyRec:g(row,'qtyRec'), status, dstatus:g(row,'dstatus'),
         lwr:toDate(g(row,'lwr')), planned:toDate(g(row,'planned')),
         lastConf:toDate(g(row,'lastConf')), lastExp:toDate(g(row,'lastExp')),
         total:num(g(row,'total')), origin:g(row,'origin'),
-        customs:g(row,'customs'), terms:g(row,'terms'), fatReq:toDate(g(row,'fatReq'))
+        customs:g(row,'customs'), terms:g(row,'terms'), address:g(row,'address'),
+        fatReq:toDate(g(row,'fatReq')), fatLoc:g(row,'fatLoc'), fatProto:toDate(g(row,'fatProto')),
+        netW:num(g(row,'netW')), totW:num(g(row,'totW')), wUoM:g(row,'wUoM')
       };
       o.unconf=(status==='Released')||!o.lastConf;
       o.late=o.dstatus==='Late';
