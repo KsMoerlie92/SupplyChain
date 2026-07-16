@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stored = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     HISTORY = stored || JSON.parse(JSON.stringify(BASE_HISTORY));
     init();
+    warnIfStale();
   } catch (err) {
     document.body.innerHTML =
       '<div style="padding:40px;font-family:sans-serif;color:#C62828">' +
@@ -24,6 +25,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       '<p>Draai je dit lokaal? Start <code>python -m http.server</code> zodat fetch() werkt.</p></div>';
   }
 });
+
+// Een meetmoment is "verouderd" als het berekend is met een oudere versie van
+// deze app, waarin een inmiddels toegevoegde automatische KPI nog niet bestond.
+// Die sleutel ontbreekt dan in de opgeslagen snapshot -> de kaart toont "—".
+// Zonder de bronlijst valt dat niet te herberekenen: de lijst moet opnieuw
+// geupload worden. Daarom melden we het in plaats van stil "—" te tonen.
+function missingAutoKpis(mm) {
+  const auto = CONFIG.kpis.filter(k => k.auto).map(k => k.id);
+  const k = (mm && mm.aggregate && mm.aggregate.kpis) || {};
+  return auto.filter(id => !(id in k));
+}
+function staleMeetmomenten() {
+  return HISTORY.filter(mm => (mm.meetmoment.rows > 0) && missingAutoKpis(mm).length > 0);
+}
+function warnIfStale() {
+  const stale = staleMeetmomenten();
+  if (!stale.length) return;
+  const miss = missingAutoKpis(stale[0])
+    .map(id => { const k = kpiById(id); return k ? k.name : id; });
+  setStatus('⚠ ' + stale.length + ' meetmoment(en) zijn berekend met een oudere versie en missen: <b>' +
+    miss.join(', ') + '</b>. Deze KPI\'s tonen daarom "—". ' +
+    'Upload de bijbehorende bedrijfsbrede lijst opnieuw — dat herberekent het meetmoment ' +
+    '(zelfde datum = overschrijven) en vult de ontbrekende waarden aan.', 'err-msg');
+}
 
 function init() {
   document.getElementById('appTitle').textContent = CONFIG.meta.title;
@@ -303,8 +328,14 @@ function renderCards(mm){
   const wrap = document.getElementById('kpiCards'); wrap.innerHTML = '';
   CONFIG.kpis.forEach(kpi => {
     const value = getValue(mm, spid, kpi.id); const st = getStatus(kpi, value);
+    const node = getNode(mm, spid);
+    // onderscheid: nooit berekend (oude snapshot) vs. wel berekend maar leeg
+    const nietBerekend = kpi.auto && value === null && node && node.kpis && !(kpi.id in node.kpis);
     const card = document.createElement('div');
-    card.className = 'card ' + st.cls + (kpi.id===kpiSel ? ' active' : ''); card.title = kpi.definition;
+    card.className = 'card ' + st.cls + (kpi.id===kpiSel ? ' active' : '');
+    card.title = nietBerekend
+      ? 'Niet berekend in dit meetmoment (oudere versie) — upload de lijst opnieuw.'
+      : kpi.definition;
     const autoTag = kpi.auto ? '<span class="card-auto auto">automatisch</span>'
       : '<span class="card-auto manual">handmatig</span>';
     card.innerHTML =
@@ -313,7 +344,9 @@ function renderCards(mm){
       '<div class="card-value">' + fmt(kpi, value) +
       '<span class="unit">' + (kpi.unit==='#' ? '' : ' ' + kpi.unit) + '</span></div>' +
       '<div class="card-norm">Norm: ' + kpi.norm + '</div>' + autoTag +
-      '<div class="card-def">' + kpi.definition + '</div>';
+      '<div class="card-def">' + (nietBerekend
+        ? '<span style="color:var(--bad)">⚠ Niet berekend in dit meetmoment — upload de lijst opnieuw.</span>'
+        : kpi.definition) + '</div>';
     card.addEventListener('click', () => {
       if (kpi.auto){ document.getElementById('kpiSelect').value = kpi.id; renderAll(); }
       else { editManual(kpi.id); }
