@@ -33,6 +33,9 @@
     terms:     [['Delivery Terms'], 'Y'],
     fatLoc:    [['FAT Location'], 'AH'],
     fatDate:   [['FAT Date Required'], 'AI'],
+    protoDate: [['FAT Supplier Protocol Date'], 'AG'],
+    sysNo:     [['Unified Reference Code'], 'M'],
+    refDesc:   [['Unified Ref Code Description'], 'N'],
     netW:      [['Net Weight'], 'AO'],
     totW:      [['Total Net Weight'], 'AP'],
     wUoM:      [['Weight UoM'], 'AQ'],
@@ -52,19 +55,18 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const trim = (v) => String(v == null ? '' : v).trim();
   const flat = (v) => trim(v).replace(/\s*[\r\n]+\s*/g, ', ').replace(/\s{2,}/g, ' ');
-  const letterToIdx = (L) => { let n = 0; for (const ch of L) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; };
 
+  // Zoekt uitsluitend op kolomNAAM. De letter in MAP is documentatie: zodra de
+  // Admin-upload kolommen wegfiltert kloppen posities niet meer, en een
+  // letter-terugval koos dan stilzwijgend de verkeerde kolom.
   function resolveCols(headers) {
     const low = headers.map(h => trim(h).toLowerCase());
     const cols = {}; const missing = [];
     for (const key in MAP) {
-      const [names, letter] = MAP[key];
+      const names = MAP[key][0];
       let i = -1;
       for (const n of names) { i = low.indexOf(n.toLowerCase()); if (i >= 0) break; }
-      if (i < 0) {                                  // terugval op kolomletter
-        const li = letterToIdx(letter);
-        if (li < headers.length && trim(headers[li])) i = li; else missing.push(names[0]);
-      }
+      if (i < 0) missing.push(names[0]);
       cols[key] = i;
     }
     return { cols, missing };
@@ -243,16 +245,12 @@
   function rowsFor(tab) {
     const base = ROWS.filter(inScope);
     if (tab === 'large') {
-      return base.filter(r => { const w = num(val(r, 'totW')); return w != null && w >= THRESHOLD; })
-        .sort((a, b) => (num(val(b, 'totW')) || 0) - (num(val(a, 'totW')) || 0));
+      return base.filter(r => { const w = num(val(r, 'totW')); return w != null && w >= THRESHOLD; });
     }
     if (tab === 'late') {
-      return base.filter(r => trim(val(r, 'delStatus')).toLowerCase() === 'late')
-        .sort((a, b) => (delay(b) || 0) - (delay(a) || 0));
+      return base.filter(r => trim(val(r, 'delStatus')).toLowerCase() === 'late');
     }
-    return base.filter(r => trim(val(r, 'fatDate')) || trim(val(r, 'fatLoc')))
-      .sort((a, b) => { const x = toDate(val(a, 'fatDate')), y = toDate(val(b, 'fatDate'));
-        return (x ? x.getTime() : 8e15) - (y ? y.getTime() : 8e15); });
+    return base.filter(r => trim(val(r, 'fatDate')) || trim(val(r, 'fatLoc')));
   }
   function delay(r) {
     const w = toDate(val(r, 'wanted')), p = toDate(val(r, 'planned'));
@@ -261,9 +259,10 @@
 
   // ── kolomdefinities per tabblad ──────────────────────────────────────────
   const COMMON_TAIL = [
-    { h: 'Delivery Address', f: r => flat(val(r, 'address')) },
-    { h: 'Incoterm',         f: r => flat(val(r, 'terms')) },
-    { h: 'Last Expedited',   f: r => fmtDate(val(r, 'lastExp')), cls: r => lastExpCls(r) },
+    { h: 'Delivery Address', k: 'addr', f: r => flat(val(r, 'address')) },
+    { h: 'Incoterm',         k: 'inco', f: r => flat(val(r, 'terms')) },
+    { h: 'Last Expedited',   k: 'lexp', f: r => fmtDate(val(r, 'lastExp')),
+      d: r => toDate(val(r, 'lastExp')), cls: r => lastExpCls(r) },
   ];
   function lastExpCls(r) {
     const d = toDate(val(r, 'lastExp'));
@@ -271,46 +270,102 @@
     const days = Math.round((startOfToday() - d) / 86400000);
     return days > 60 ? 'lio-warn-c' : '';
   }
+  // ── FAT: leadtime-regels uit de oude FAT-Overview ────────────────────────
+  const LEAD_MIN = 28, LEAD_MAX = 35, INVITE_DAYS = 14;
+  const addDays = (d, n) => d ? new Date(d.getTime() + n * 86400000) : null;
+  function calcLead(fat, delivery) {
+    if (!fat || !delivery) return { key: 'missing', label: 'Data incompleet', gap: null };
+    const gap = Math.round((delivery - fat) / 86400000);
+    if (gap >= LEAD_MIN && gap <= LEAD_MAX) return { key: 'ok', label: 'OK (' + gap + ' dgn)', gap };
+    if (gap < LEAD_MIN) return { key: 'short', label: 'Te kort (' + gap + ' dgn)', gap };
+    return { key: 'long', label: 'Te vroeg (' + gap + ' dgn)', gap };
+  }
+  const leadOf = (r) => calcLead(toDate(val(r, 'fatDate')), toDate(val(r, 'planned')));
+  // Protocol goedgekeurd = er staat een datum in AG
+  const protoOk = (r) => toDate(val(r, 'protoDate')) ? 'Y' : '';
+
   const DEFS = {
     large: [
-      { h: 'PO No',        f: r => trim(val(r, 'po')) },
-      { h: 'Sub Project',  f: r => trim(val(r, 'sp')) },
-      { h: 'Supplier',     f: r => flat(val(r, 'supplier')) },
-      { h: 'Part No',      f: r => trim(val(r, 'part')) },
-      { h: 'Omschrijving', f: r => flat(val(r, 'desc')) },
-      { h: 'Qty',          f: r => fmtNum(num(val(r, 'qty'))), num: true },
-      { h: 'Net Weight',   f: r => fmtNum(num(val(r, 'netW'))), num: true },
-      { h: 'Totaal gewicht', f: r => fmtNum(num(val(r, 'totW'))), num: true, cls: () => 'lio-strong' },
-      { h: 'UoM',          f: r => trim(val(r, 'wUoM')) },
-      { h: 'Planned',      f: r => fmtDate(val(r, 'planned')) },
+      { h: 'PO No',        k: 'po',   f: r => trim(val(r, 'po')) },
+      { h: 'Sub Project',  k: 'sp',   f: r => trim(val(r, 'sp')) },
+      { h: 'Supplier',     k: 'sup',  f: r => flat(val(r, 'supplier')) },
+      { h: 'Part No',      k: 'part', f: r => trim(val(r, 'part')) },
+      { h: 'Omschrijving', k: 'desc', f: r => flat(val(r, 'desc')) },
+      { h: 'Qty',          k: 'qty',  f: r => fmtNum(num(val(r, 'qty'))), num: true, n: r => num(val(r, 'qty')) },
+      { h: 'Net Weight',   k: 'netW', f: r => fmtNum(num(val(r, 'netW'))), num: true, n: r => num(val(r, 'netW')) },
+      { h: 'Totaal gewicht', k: 'totW', f: r => fmtNum(num(val(r, 'totW'))), num: true,
+        n: r => num(val(r, 'totW')), cls: () => 'lio-strong' },
+      { h: 'UoM',          k: 'uom',  f: r => trim(val(r, 'wUoM')) },
+      { h: 'Planned',      k: 'pdd',  f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')) },
       ...COMMON_TAIL,
     ],
     late: [
-      { h: 'PO No',        f: r => trim(val(r, 'po')) },
-      { h: 'Sub Project',  f: r => trim(val(r, 'sp')) },
-      { h: 'Supplier',     f: r => flat(val(r, 'supplier')) },
-      { h: 'Part No',      f: r => trim(val(r, 'part')) },
-      { h: 'Omschrijving', f: r => flat(val(r, 'desc')) },
-      { h: 'Wanted',       f: r => fmtDate(val(r, 'wanted')) },
-      { h: 'Planned',      f: r => fmtDate(val(r, 'planned')) },
-      { h: 'Dagen te laat', f: r => { const d = delay(r); return d == null ? '' : String(d); },
-        num: true, cls: r => { const d = delay(r); return d > 30 ? 'lio-bad' : d > 0 ? 'lio-warn-c' : ''; } },
+      { h: 'PO No',        k: 'po',   f: r => trim(val(r, 'po')) },
+      { h: 'Sub Project',  k: 'sp',   f: r => trim(val(r, 'sp')) },
+      { h: 'Supplier',     k: 'sup',  f: r => flat(val(r, 'supplier')) },
+      { h: 'Part No',      k: 'part', f: r => trim(val(r, 'part')) },
+      { h: 'Omschrijving', k: 'desc', f: r => flat(val(r, 'desc')) },
+      { h: 'Wanted',       k: 'want', f: r => fmtDate(val(r, 'wanted')), d: r => toDate(val(r, 'wanted')) },
+      { h: 'Planned',      k: 'pdd',  f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')) },
+      { h: 'Dagen te laat', k: 'off', f: r => { const d = delay(r); return d == null ? '' : String(d); },
+        num: true, n: r => delay(r),
+        cls: r => { const d = delay(r); return d > 30 ? 'lio-bad' : d > 0 ? 'lio-warn-c' : ''; } },
       ...COMMON_TAIL,
     ],
     fat: [
-      { h: 'PO No',        f: r => trim(val(r, 'po')) },
-      { h: 'Sub Project',  f: r => trim(val(r, 'sp')) },
-      { h: 'Supplier',     f: r => flat(val(r, 'supplier')) },
-      { h: 'Omschrijving', f: r => flat(val(r, 'desc')) },
-      { h: 'Engineer',     f: r => flat(val(r, 'engineer')) },
-      { h: 'FAT Location', f: r => flat(val(r, 'fatLoc')) },
-      { h: 'FAT datum',    f: r => fmtDate(val(r, 'fatDate')),
+      { h: 'System No',        k: 'sysNo',  f: r => flat(val(r, 'sysNo')) },
+      { h: 'PO Number',        k: 'po',     f: r => flat(val(r, 'orderNo')) },
+      { h: 'Name',             k: 'name',   f: r => flat(val(r, 'refDesc')) },
+      { h: 'FAT',              k: 'fatT',   f: () => 'FAT' },
+      { h: 'Leverancier',      k: 'sup',    f: r => flat(val(r, 'supplier')) },
+      { h: 'FAT Location',     k: 'floc',   f: r => flat(val(r, 'fatLoc')) },
+      { h: 'Client Required',  k: 'creq',   f: () => '', title: 'Nog geen bronkolom in de bedrijfsbrede lijst (Customer Attendance ID)' },
+      { h: 'Expected FAT Date', k: 'fdate', f: r => fmtDate(val(r, 'fatDate')), d: r => toDate(val(r, 'fatDate')),
         cls: r => { const d = toDate(val(r, 'fatDate')); if (!d) return '';
-          const days = Math.round((d - startOfToday()) / 86400000);
-          return days < 0 ? 'lio-bad' : days <= 30 ? 'lio-warn-c' : ''; } },
-      ...COMMON_TAIL,
+          const x = Math.round((d - startOfToday()) / 86400000);
+          return x < 0 ? 'lio-bad' : x <= 30 ? 'lio-warn-c' : ''; } },
+      { h: 'Client invite before', k: 'inv', f: r => fmtDate(addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS)),
+        d: r => addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS), cls: () => 'lio-dim',
+        title: 'FAT-datum − 14 dagen. Zolang Customer Attendance ID ontbreekt, wordt dit voor élke regel getoond.' },
+      { h: 'Protocol goedgekeurd', k: 'proto', f: protoOk,
+        cls: r => protoOk(r) ? 'lio-ok' : '', title: 'Y zodra FAT Supplier Protocol Date (AG) een datum bevat' },
+      { h: 'Responsible Name', k: 'resp',   f: r => flat(val(r, 'engineer')) },
+      { h: 'Aanwezig klant',   k: 'cAtt',   f: () => '', title: 'Nog geen bronkolom in de bedrijfsbrede lijst (Customer Attendance ID)' },
+      { h: 'Planned Delivery Date (exw)', k: 'pdd', f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')),
+        cls: r => leadOf(r).key === 'short' || leadOf(r).key === 'long' ? 'lio-bad' : '' },
+      { h: 'Remarks',          k: 'rem',    f: r => leadOf(r).label,
+        cls: r => { const k = leadOf(r).key; return k === 'ok' ? 'lio-ok' : k === 'missing' ? 'lio-dim' : 'lio-warn-c'; } },
+      { h: 'Sub Project',      k: 'sp',     f: r => flat(val(r, 'sp')) },
+      { h: 'Last Expedited',   k: 'lexp',   f: r => fmtDate(val(r, 'lastExp')), d: r => toDate(val(r, 'lastExp')),
+        cls: r => lastExpCls(r) },
     ],
   };
+
+  // ── sorteren (zelfde gedrag als Late Items in de PO-Matcher) ─────────────
+  const SORT = { large: { col: 'totW', dir: 'desc' }, late: { col: 'off', dir: 'desc' }, fat: { col: 'fdate', dir: 'asc' } };
+  window.lioSort = function (key) {
+    const s = SORT[TAB];
+    if (s.col === key) s.dir = (s.dir === 'asc') ? 'desc' : 'asc';
+    else { s.col = key; s.dir = 'asc'; }
+    render();
+  };
+  function sortRows(rows, defs) {
+    const s = SORT[TAB];
+    const def = defs.find(d => d.k === s.col);
+    if (!def) return rows;
+    const keyOf = (r) => def.n ? def.n(r) : def.d ? (def.d(r) ? def.d(r).getTime() : null) : def.f(r);
+    const dir = (s.dir === 'desc') ? -1 : 1;
+    return rows.slice().sort((a, b) => {
+      const av = keyOf(a), bv = keyOf(b);
+      const aB = (av === null || av === undefined || av === '');
+      const bB = (bv === null || bv === undefined || bv === '');
+      if (aB && bB) return 0;
+      if (aB) return 1;                       // lege waarden altijd onderaan
+      if (bB) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), 'nl', { numeric: true }) * dir;
+    });
+  }
 
   // ── rendering ────────────────────────────────────────────────────────────
   function render() {
@@ -318,10 +373,16 @@
     renderTools();
     const miss = NEEDED[TAB].filter(k => C[k] < 0);
     const defs = DEFS[TAB];
-    const rows = miss.length ? [] : rowsFor(TAB);
+    const rows = miss.length ? [] : sortRows(rowsFor(TAB), defs);
 
-    $('lio-thead').innerHTML = '<tr>' + defs.map(d =>
-      '<th' + (d.num ? ' class="lio-num"' : '') + '>' + esc(d.h) + '</th>').join('') + '</tr>';
+    const s = SORT[TAB];
+    $('lio-thead').innerHTML = '<tr>' + defs.map(d => {
+      const on = d.k === s.col;
+      const arrow = on ? (s.dir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+      const cls = ['lio-sortable', d.num ? 'lio-num' : '', on ? 'lio-sort-active' : ''].filter(Boolean).join(' ');
+      return '<th class="' + cls + '" onclick="lioSort(\'' + d.k + '\')"' +
+        ' title="' + esc(d.title || ('Sorteer op ' + d.h)) + '">' + esc(d.h) + arrow + '</th>';
+    }).join('') + '</tr>';
 
     if (miss.length) {
       $('lio-summary').innerHTML = '<span class="lio-bad-txt">Dit overzicht kan niet getoond worden: ' +

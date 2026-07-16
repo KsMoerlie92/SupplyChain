@@ -65,3 +65,10 @@
 .lio-bad{color:#ff8a93;font-weight:700}
 .lio-warn-c{color:#f5b83d}
 .lio-empty{text-align:center;color:var(--muted,#6b7a99);padding:1.2rem;white-space:normal}
+
+/* Sorteerbare koppen — zelfde gedrag als Late Items in de PO-Matcher */
+.lio-table th.lio-sortable{cursor:pointer;user-select:none}
+.lio-table th.lio-sortable:hover{color:var(--teal,#00B4D8)}
+.lio-table th.lio-sort-active{color:var(--teal,#00B4D8)}
+.lio-ok{color:#4ade80;font-weight:700}
+.lio-dim{color:var(--muted,#6b7a99)}
