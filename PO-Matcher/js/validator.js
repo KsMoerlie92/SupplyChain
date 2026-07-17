@@ -691,7 +691,7 @@ function _valLoadExportMail() {
   if (!document.querySelector('.val-toolbar')) return;
   if (window.ValExportMail || document.querySelector('script[data-valexportmail]')) return;
   var s = document.createElement('script');
-  s.src = 'js/val-export-mail.js';
+  s.src = 'val-export-mail.js';
   s.setAttribute('data-valexportmail', '1');
   s.onerror = function () { console.warn('val-export-mail.js kon niet geladen worden'); };
   document.head.appendChild(s);
@@ -777,6 +777,36 @@ function _valHandleMoederUpload(ev) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ── Teambrede telling van validaties ───────────────────────────────────────
+// Stuurt een klein event naar /api/validaties (zie shared/validatie-log.js).
+// Vereist geen handeling van de gebruiker en mag nooit iets breken.
+function _valLogValidatie() {
+  try {
+    if (!window.ValidatieLog || !Array.isArray(_valRows) || !_valRows.length) return;
+    let fouten = 0, waarschuwingen = 0;
+    for (const r of _valRows) {
+      if (r && r.errors)   fouten += Object.keys(r.errors).length;
+      if (r && r.warnings) waarschuwingen += Object.keys(r.warnings).length;
+    }
+    const dom = (idx) => {                       // meest voorkomende waarde in een kolom
+      const t = {};
+      for (const r of _valRows) {
+        const v = String((r.cells && r.cells[idx]) || '').trim();
+        if (v) t[v] = (t[v] || 0) + 1;
+      }
+      return Object.keys(t).sort((a, b) => t[b] - t[a])[0] || '';
+    };
+    ValidatieLog.log({
+      tool: 'itemlijst-validator',
+      deliveryRef: dom(COL.A),
+      supplier: dom(COL.K),
+      bestand: (document.getElementById('val-filename')?.textContent || '').trim(),
+      regels: _valRows.length,
+      fouten, waarschuwingen,
+    });
+  } catch (e) { /* loggen mag de validatie nooit hinderen */ }
 }
 
 // ── AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen ─────
@@ -901,6 +931,7 @@ async function runValidation() {
     try { window.ValMailer.checkPrenotify(); } catch (e) {}
   }
   _valHighlightMailBtn();   // AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen
+  _valLogValidatie();       // teambrede telling (fire-and-forget, faalt stil)
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
