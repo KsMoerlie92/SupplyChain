@@ -1,0 +1,8 @@
+{
+  "meta": {
+    "bijgewerkt": null,
+    "events": 0,
+    "toelichting": "Teller van itemlijst-validaties. Download de bijgewerkte log via de knop in de Itemlijst-Validator en commit dit bestand als shared/validatie-log.json."
+  },
+  "events": []
+}
