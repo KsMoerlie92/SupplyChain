@@ -161,43 +161,60 @@ function findCol(headers, name){
 /*  Rapportagestructuur
  *  ───────────────────
  *  Alle regels
- *    ├─ Niet bevestigd (status ≠ Confirmed)  → KPI not_confirmed_pct   (niet expediteerbaar)
- *    ├─ Administratie niet bijgewerkt        → KPI stale_admin_pct     (niet expediteerbaar)
- *    │    PO's waarvan álle regels bevestigd zijn, maar waar alle datums
- *    │    identiek zijn én in het verleden liggen.
- *    └─ EXPEDITEERBAAR  → basis voor late_pct, avg_delay, critical_delay, not_yet_expedited
+ *    ├─ Al geleverd (Received/Arrived)      → buiten de rapportage: hier valt
+ *    │                                         niets meer te expediten
+ *    └─ OPEN regels  = noemer van de KPI's hieronder
+ *         ├─ Niet bevestigd (≠ Confirmed)   → KPI not_confirmed_pct
+ *         ├─ Administratie niet bijgewerkt  → KPI stale_admin_pct
+ *         │    PO's (≥ stale_min_lines regels) waarvan álle regels bevestigd
+ *         │    zijn, met identieke datums die in het verleden liggen.
+ *         └─ EXPEDITEERBAAR → late_pct, avg_delay, critical_delay, not_yet_expedited
  */
 function computeKpisForLines(lines, C, rules){
-  const total = lines.length; if (!total) return null;
+  if (!lines.length) return null;
   const CONF = String((rules && rules.confirmed_status) || 'Confirmed').toLowerCase();
-  const isConfirmed = r => String(r[C.pls]||'').trim().toLowerCase()===CONF;
+  const DELIV = ((rules && rules.delivered_statuses) || ['Received','Arrived']).map(s=>String(s).toLowerCase());
+  const MINL = (rules && rules.stale_min_lines) || 2;
+  const stat = r => String(r[C.pls]||'').trim().toLowerCase();
+  const isConfirmed = r => stat(r)===CONF;
 
-  // 1. Niet bevestigd — zonder leveranciersbevestiging kunnen wij niets valideren
-  const notConfirmed = lines.filter(r => !isConfirmed(r));
+  // 0. Al geleverd → buiten de rapportage (anders tellen ze als 'niet bevestigd')
+  const geleverd = lines.filter(r => DELIV.includes(stat(r)));
+  const open = lines.filter(r => !DELIV.includes(stat(r)));
+  const total = open.length;
+  if (!total) return { late_pct:null, avg_delay:null, critical_delay:null, not_yet_expedited:null,
+    not_confirmed_pct:null, stale_admin_pct:null, schedule_adherence:null, field_visits:null, ncr:null,
+    _counts:{ totaal:lines.length, geleverd:geleverd.length, open:0, expediteerbaar:0, niet_bevestigd:0, admin_open:0 } };
 
-  // 2. PO's met alles bevestigd, maar alle datums gelijk én in het verleden
+  // 1. Niet bevestigd — zonder leveranciersbevestiging valt er niets te valideren
+  const notConfirmed = open.filter(r => !isConfirmed(r));
+
+  // 2. PO's met alles bevestigd, identieke datums, in het verleden.
+  //    Minimaal MINL regels: bij één regel is 'alle datums identiek' triviaal waar.
   const today = startOfToday();
   const byPo = {};
-  for (const r of lines){
-    const po = String((C.po>=0 ? r[C.po] : '')||'').trim() || '(geen PO)';
+  for (const r of open){
+    const po = String((C.po>=0 ? r[C.po] : '')||'').trim();
+    if (!po) continue;
     (byPo[po] = byPo[po] || []).push(r);
   }
   const stale = new Set();
   if (C.po >= 0){
     for (const po in byPo){
       const grp = byPo[po];
-      if (po==='(geen PO)' || !grp.every(isConfirmed)) continue;
+      if (grp.length < MINL) continue;                               // te weinig regels om te vergelijken
+      if (!grp.every(isConfirmed)) continue;
       const ds = grp.map(r => toDate(r[C.stale])).filter(Boolean);
-      if (ds.length !== grp.length) continue;                       // niet elke regel heeft een datum
+      if (ds.length !== grp.length) continue;                        // niet elke regel heeft een datum
       const t0 = ds[0].getTime();
-      if (!ds.every(d => d.getTime()===t0)) continue;               // datums niet identiek
-      if (ds[0] >= today) continue;                                 // niet in het verleden
+      if (!ds.every(d => d.getTime()===t0)) continue;                // datums niet identiek
+      if (ds[0] >= today) continue;                                  // niet in het verleden
       grp.forEach(r => stale.add(r));
     }
   }
 
   // 3. Wat overblijft is expediteerbaar
-  const expediteerbaar = lines.filter(r => isConfirmed(r) && !stale.has(r));
+  const expediteerbaar = open.filter(r => isConfirmed(r) && !stale.has(r));
   const n = expediteerbaar.length;
 
   let late=0; const delays=[]; let nye=0;
@@ -210,17 +227,14 @@ function computeKpisForLines(lines, C, rules){
   const pos = delays.filter(d=>d>0); const crit = delays.filter(d=>d>30).length;
 
   return {
-    // expediting-KPI's — uitsluitend over de expediteerbare regels
     late_pct:          n ? round1(100*late/n) : null,
     avg_delay:         pos.length ? round1(mean(pos)) : null,
     critical_delay:    n ? round1(100*crit/n) : null,
     not_yet_expedited: n ? round1(100*nye/n) : null,
-    // kwaliteits-KPI's — over álle regels, tonen wat elders blijft liggen
     not_confirmed_pct: round1(100*notConfirmed.length/total),
     stale_admin_pct:   round1(100*stale.size/total),
-    // handmatig
     schedule_adherence:null, field_visits:null, ncr:null,
-    _counts: { totaal: total, expediteerbaar: n,
+    _counts: { totaal: lines.length, geleverd: geleverd.length, open: total, expediteerbaar: n,
                niet_bevestigd: notConfirmed.length, admin_open: stale.size },
   };
 }
@@ -317,9 +331,9 @@ function renderBadge(mm){
   let txt = 'Meetmoment: ' + mm.meetmoment.label + ' · bron: ' + (mm.meetmoment.filename||'—') +
     ' · scope: ' + scope + ' (' + tot + ' regels)';
   const c = node && node.kpis && node.kpis._counts;
-  if (c) txt += ' → ' + c.expediteerbaar + ' expediteerbaar' +
-    ' · ' + c.niet_bevestigd + ' niet bevestigd' +
-    ' · ' + c.admin_open + ' admin niet bijgewerkt';
+  if (c) txt += ' → ' + c.geleverd + ' geleverd · ' + c.open + ' open: ' +
+    c.expediteerbaar + ' expediteerbaar · ' + c.niet_bevestigd + ' niet bevestigd · ' +
+    c.admin_open + ' admin niet bijgewerkt';
   el.textContent = txt;
 }
 function renderCards(mm){
