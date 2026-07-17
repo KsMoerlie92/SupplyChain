@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Expediting KPI Dashboard — automatisch berekende KPI's per Sub Project ID uit de bedrijfsbrede expediting-lijst." />
+  <meta name="theme-color" content="#003366" />
+  <link rel="icon" href="../shared/favicon.ico" type="image/x-icon" />
   <title>Expediting KPI – Dashboard</title>
   <link rel="stylesheet" href="../shared/nav.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -10,91 +13,106 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
+
   <header class="app-header">
     <div class="header-inner">
       <div class="brand">
         <span class="brand-mark"></span>
         <div>
           <h1 id="appTitle">Expediting KPI – Dashboard</h1>
-          <p id="appSubtitle" class="subtitle">Bedrijfsbrede expediting-lijst → KPI's per Sub Project ID</p>
+          <p id="appSubtitle" class="subtitle">
+            Bedrijfsbrede expediting-lijst → KPI's per Sub Project ID
+          </p>
         </div>
       </div>
-      <div id="milestones" class="milestones"></div>
+      <div id="milestones" class="milestones" aria-label="Mijlpalen"></div>
     </div>
   </header>
 
   <main class="container">
-    <section class="controls">
+
+    <section class="controls" aria-label="Filters">
       <div class="control">
         <label for="subprojectSelect">Sub Project ID</label>
-        <select id="subprojectSelect"></select>
+        <select id="subprojectSelect" aria-label="Kies Sub Project ID"></select>
       </div>
       <div class="control">
         <label for="kpiSelect">KPI</label>
-        <select id="kpiSelect"></select>
+        <select id="kpiSelect" aria-label="Kies KPI"></select>
       </div>
       <div class="control">
         <label for="meetmomentSelect">Meetmoment</label>
-        <select id="meetmomentSelect"></select>
+        <select id="meetmomentSelect" aria-label="Kies meetmoment"></select>
       </div>
-      <div class="legend">
-        <span class="legend-item"><span class="dot ok"></span> Binnen norm</span>
+      <div class="legend" aria-label="Legenda statuskleuren">
+        <span class="legend-item"><span class="dot ok"  ></span> Binnen norm</span>
         <span class="legend-item"><span class="dot warn"></span> Aandacht</span>
-        <span class="legend-item"><span class="dot bad"></span> Buiten norm</span>
+        <span class="legend-item"><span class="dot bad" ></span> Buiten norm</span>
       </div>
     </section>
 
-    <section class="upload-panel">
+    <section class="upload-panel" aria-label="Nieuw meetmoment toevoegen">
       <div class="upload-info">
         <h3>Nieuw meetmoment toevoegen</h3>
         <p>
-          Sleep of kies de bedrijfsbrede expediting-lijst (<strong>.xlsx</strong> of <strong>.json</strong>).
-          De KPI's worden automatisch <strong>per Sub Project ID</strong> berekend en als nieuw
-          meetmoment toegevoegd. Zo heb je bij elke bedrijfsbrede upload direct een nieuw meetpunt.
+          Sleep of kies de bedrijfsbrede expediting-lijst
+          (<strong>.xlsx</strong> of <strong>.json</strong>).
+          De KPI's worden automatisch <strong>per Sub Project ID</strong> berekend
+          en als nieuw meetmoment toegevoegd. Zo heb je bij elke bedrijfsbrede
+          upload direct een nieuw meetpunt.
         </p>
       </div>
       <div class="upload-actions">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.json" hidden />
-        <button id="uploadBtn" class="btn btn-primary">📄 Lijst kiezen…</button>
-        <button id="downloadHistoryBtn" class="btn btn-ghost">⬇ Download bijgewerkte history</button>
-        <button id="resetBtn" class="btn btn-ghost">↺ Reset naar origineel</button>
+        <button id="uploadBtn"          class="btn btn-primary">📄 Lijst kiezen…</button>
+        <button id="downloadHistoryBtn" class="btn btn-ghost"  >⬇ Download bijgewerkte history</button>
+        <button id="resetBtn"           class="btn btn-ghost"  >↺ Reset naar origineel</button>
       </div>
-      <div id="dropZone" class="drop-zone">Sleep hier je bedrijfsbrede lijst (.xlsx)</div>
-      <div id="uploadStatus" class="upload-status"></div>
+      <div id="dropZone" class="drop-zone" role="button" tabindex="0"
+           aria-label="Dropzone — sleep hier je bedrijfsbrede lijst">
+        Sleep hier je bedrijfsbrede lijst (.xlsx)
+      </div>
+      <div id="uploadStatus" class="upload-status" role="status" aria-live="polite"></div>
     </section>
 
-    <section>
+    <section aria-label="KPI-overzicht">
       <h2 class="section-title">KPI-overzicht</h2>
-      <div id="meetmomentBadge" class="badge"></div>
-      <div id="kpiCards" class="cards-grid"></div>
+      <div id="meetmomentBadge" class="badge" role="status" aria-live="polite"></div>
+      <div id="kpiCards" class="cards-grid" role="list"></div>
     </section>
 
-    <section>
+    <section aria-label="Trend over meetmomenten">
       <h2 class="section-title">Trend over meetmomenten</h2>
       <p id="chartNote" class="note"></p>
       <div class="chart-wrap">
-        <canvas id="trendChart"></canvas>
+        <canvas id="trendChart" role="img" aria-label="Trendgrafiek KPI's"></canvas>
       </div>
     </section>
 
-    <section>
+    <section aria-label="Detailtabel meetmomenten versus KPI's">
       <h2 class="section-title">Detailtabel (meetmomenten × KPI)</h2>
       <div class="table-wrap">
-        <table id="detailsTable"></table>
+        <table id="detailsTable">
+          <caption class="sr-only">
+            Overzicht van KPI-waarden per meetmoment en Sub Project ID
+          </caption>
+        </table>
       </div>
     </section>
+
   </main>
 
   <footer class="app-footer">
     <p>
-      Databron: <code>kpi-history.json</code> — automatisch berekend uit de bedrijfsbrede
-      expediting-lijst, <strong>per Sub Project ID</strong>. Elke upload van een nieuwe lijst
-      voegt een nieuw meetmoment toe.
+      Databron: <code>kpi-history.json</code> — automatisch berekend uit de
+      bedrijfsbrede expediting-lijst, <strong>per Sub Project ID</strong>.
+      Elke upload van een nieuwe lijst voegt een nieuw meetmoment toe.
     </p>
     <p class="muted">Expediting | Royal IHC · Supply Chain</p>
   </footer>
 
   <script src="app.js"></script>
   <script src="../shared/shared.js"></script>
+
 </body>
 </html>
