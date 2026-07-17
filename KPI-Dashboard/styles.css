@@ -36,8 +36,18 @@ section{margin-bottom:28px}
   border:1px solid var(--border); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow);}
 .control{display:flex; flex-direction:column; gap:6px}
 .control label{font-size:.72rem; font-weight:700; color:var(--kpi-navy); text-transform:uppercase; letter-spacing:.5px}
-select{appearance:none;
-  background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23003366' stroke-width='1.6'/></svg>") no-repeat right 10px center;
+
+/* Dropdown-pijltje als pure CSS (geen SVG-URL → onmogelijk te mangelen bij plakken) */
+select{appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background-color:#fff;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--kpi-navy) 50%),
+    linear-gradient(135deg, var(--kpi-navy) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
   border:1px solid var(--border); border-radius:8px; padding:9px 34px 9px 12px; font-size:.9rem;
   color:#1f2937; min-width:190px; cursor:pointer; transition:border .15s, box-shadow .15s;}
 #subprojectSelect{min-width:260px}
