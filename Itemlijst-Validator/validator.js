@@ -441,10 +441,15 @@ function _findColloLetter() {
   return L || null;
 }
 
-// Genormaliseerde L×B×H-handtekening van een rij (leeg blijft leeg).
+// Genormaliseerde L×B×H-handtekening van een rij. Een rij zonder eigen
+// maatvoering (T/U/V allemaal leeg) geeft null terug — die rij "erft" de
+// maatvoering van de eerste regel van het collonummer en is dus nooit in
+// conflict, in plaats van als eigen (lege) handtekening mee te tellen.
 function _dimSignature(cells) {
-  const num = c => { const n = parseFloat(String(c ?? '').replace(',', '.').trim()); return isNaN(n) ? '' : n; };
-  return num(cells[COL.T]) + '×' + num(cells[COL.U]) + '×' + num(cells[COL.V]);
+  const num = c => { const n = parseFloat(String(c ?? '').replace(',', '.').trim()); return isNaN(n) ? null : n; };
+  const t = num(cells[COL.T]), u = num(cells[COL.U]), v = num(cells[COL.V]);
+  if (t === null && u === null && v === null) return null;
+  return t + '×' + u + '×' + v;
 }
 
 function _validateColloConsistency(rows) {
@@ -464,7 +469,9 @@ function _validateColloConsistency(rows) {
   let added = 0; const warnings = [];
   for (const [collo, members] of groups) {
     if (members.length < 2) continue;
-    const sigs = new Set(members.map(m => _dimSignature(m.cells)));
+    // Alleen rijen mét eigen maatvoering meetellen — regels zonder eigen
+    // T/U/V erven de maatvoering van het collonummer en zijn nooit conflicterend.
+    const sigs = new Set(members.map(m => _dimSignature(m.cells)).filter(s => s !== null));
     if (sigs.size > 1) {   // zelfde collonummer, verschillende maatvoering → fout
       warnings.push(`Collo ${collo}: ${members.length} regels met verschillende maatvoering (L×B×H) — moet gelijk zijn`);
       for (const row of members) {
