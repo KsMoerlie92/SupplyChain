@@ -243,6 +243,19 @@ const DEFAULT_RULES = {
     ],
     "action": "Individuele beoordeling nodig. Xenon = gas onder druk, Gyro = mogelijk kwik.",
     "regulations": "Diverse – per item beoordelen"
+  },
+  "\ud83d\udd35 12. Computer Based Systems (cyberresilience)": {
+    "risk": "medium",
+    "keywords": [
+      "ECDIS", "RADAR", "AIS transponder", "Gyro compass", "GNSS receiver",
+      "Dynamic Positioning", "DPS", "Integrated Automation System", "IAS",
+      "Engine Control System", "Remote Propulsion control", "Boiler Management system",
+      "Ballast water management system", "VDR", "SSAS", "Cargo Control and monitoring",
+      "Loading computer", "Inert Gas System", "NAVTEX", "INMARSAT"
+    ],
+    "action": "Bepaal of dit een Computer Based System (CBS) is onder IACS UR E26/E27. Toets tegen de laag-risico-uitzonderingscriteria (geïsoleerd/geen netwerk, geen bereikbare fysieke poorten, fysiek afgeschermde locatie, niet-geïntegreerd, geen categorie III-veiligheidsfunctie) — bij twijfel is een volledige cyberresilience-beoordeling vereist. Vul het volledige beoordelingsformulier in via de link hieronder.",
+    "regulations": "IACS UR E26/E27, IACS Rec. 166 (Cyber Resilience), IACS Rec. 171 (mei 2022)",
+    "formLink": "../E27-Assessment/index.html"
   }
 };
 
@@ -347,10 +360,16 @@ function analyzeData(rows){
   var orderCol = keys.find(function(k){ return k === 'Order No'; })
               || keys.find(function(k){ return k.toLowerCase() === 'order no'; });
 
-  // Date column (Column U or header match)
-  var dateCol = keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('confirm') !== -1 && lk.indexOf('date') !== -1; })
-             || keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('delivery') !== -1 || lk.indexOf('verwacht') !== -1 || lk === 'eta' || lk.indexOf('planned') !== -1; });
-  if(!dateCol && keys.length > 20) dateCol = keys[20];
+  // Date column — vereist ALTIJD 'date' in de kolomnaam, anders matcht
+  // "Delivery Status" (bevat 'delivery' maar is geen datum!) per ongeluk
+  // vóór "Planned Delivery Date" omdat Array.find() de EERSTE match neemt.
+  var dateCol = keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('date') !== -1 && (lk.indexOf('planned') !== -1 || lk.indexOf('delivery') !== -1); })
+             || keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('date') !== -1 && lk.indexOf('confirm') !== -1; })
+             || keys.find(function(k){ var lk = k.toLowerCase(); return lk.indexOf('date') !== -1 && lk.indexOf('wanted') !== -1; })
+             || keys.find(function(k){ var lk = k.toLowerCase(); return lk === 'eta' || lk.indexOf('verwacht') !== -1; });
+  // Geen statische index-fallback meer: de kolomvolgorde verschilt tussen een
+  // verse Excel-upload en de gecommitte expediting-data.json (KEEP_COLS-
+  // volgorde), dus een vast getal als "kolom 20" is niet betrouwbaar.
 
   // v2.2 — Last Expedited column
   var lastExpCol = keys.find(function(k){ return k.toLowerCase().indexOf('expedit') !== -1; })
@@ -476,7 +495,8 @@ function renderResults(results){
       sec1.className = 'cat-section';
       sec1.innerHTML = '<h4>\uD83D\uDCCB Aanbevolen actie</h4>'
         + '<p style="font-size:.85em;color:var(--orange)">' + escapeHtml(rule.action) + '</p>'
-        + '<p style="font-size:.8em;color:var(--text-dim);margin-top:4px">Regelgeving: ' + escapeHtml(rule.regulations) + '</p>';
+        + '<p style="font-size:.8em;color:var(--text-dim);margin-top:4px">Regelgeving: ' + escapeHtml(rule.regulations) + '</p>'
+        + (rule.formLink ? '<a href="' + escapeHtml(rule.formLink) + '" target="_blank" class="btn-form-link">\uD83D\uDCC4 Open volledig beoordelingsformulier (UR E27) \u2197</a>' : '');
       contentDiv.appendChild(sec1);
 
       // PO sections
