@@ -167,7 +167,20 @@ function _remapColumns() {
   }
 }
 
-// ── parseHColumn: parse Mark/Label multi-value notation ────────────────────
+// ── HS-code normaliseren bij het inladen ────────────────────────────────────
+// Een ingeladen HS-code moet altijd 10 cijfers hebben. Bevat de bron 12 cijfers
+// (bv. een TARIC-code met 2 extra nationale subverdeling-cijfers), dan vallen
+// de laatste 2 cijfers weg zodat er 10 overblijven. Korter dan 10 blijft
+// ongewijzigd (dat vangt validateRow al af als fout).
+function _normalizeHSCode(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return v;
+  const digits = s.replace(/[\s.]/g, '');
+  if (!/^\d+$/.test(digits)) return v;          // geen zuiver cijferveld — met rust laten
+  return digits.length > 10 ? digits.slice(0, 10) : digits;
+}
+
+
 function parseHColumn(value) {
   if (!value || !String(value).trim()) return [];
   const s = String(value).trim();
@@ -531,7 +544,7 @@ function _fillRowFromExpediting(cells, expeditingData) {
     if (String(cells[ci] ?? '').trim()) continue;        // niet overschrijven
     const val = match[field];
     if (val === null || val === undefined || String(val).trim() === '') continue;
-    cells[ci] = String(val).trim();
+    cells[ci] = (colLetter === 'O') ? _normalizeHSCode(String(val).trim()) : String(val).trim();
     filled++;
   }
   return filled;
@@ -1233,6 +1246,14 @@ function handleValFile(fileOrEvent) {
       .filter(r => hasVal(r[0]) && (hasVal(r[2]) || hasVal(r[7])))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
 
+    // HS-code (kolom O) altijd op 10 cijfers brengen — bv. een 12-cijferige
+    // TARIC-code uit het bestand verliest de laatste 2 cijfers.
+    for (const row of _valRows) {
+      const orig = row.cells[COL.O];
+      const norm = _normalizeHSCode(orig);
+      if (norm !== orig) { row.cells[COL.O] = norm; row._edited = true; }
+    }
+
     // Load country codes from Master tab
     _valCOO = new Set();
     if (wb.Sheets['Master']) {
@@ -1662,13 +1683,13 @@ function toggleValHSMeasures(t10, badgeEl) {
       </div>`;
     }
 
-    const duties   = cached.measures || null;
+    const duties   = ('measures' in (cached || {})) ? cached.measures : undefined;
     const descHtml = cached.desc
       ? `<div style="color:var(--muted);font-size:.68rem;margin:.2rem 0 .5rem">${esc(cached.desc)}</div>` : '';
     const pageBtn  = `<a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">📋 tariffnumber.com ↗</a>`;
 
-    if (duties === null) {
-      // API not yet fetched or loading
+    if (duties === undefined) {
+      // Nog niet opgehaald — de async fetch hieronder is net gestart
       return `<div class="hs-measures-inner hs-clean">
         <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig in EU CN 2026
         ${descHtml}
@@ -1676,6 +1697,20 @@ function toggleValHSMeasures(t10, badgeEl) {
           ${pageBtn}
           <span style="color:var(--muted);font-size:.65rem" id="hs-loading-${t10}">⏳ Maatregelen laden…</span>
         </div>
+      </div>`;
+    }
+
+    if (duties === null) {
+      // API onbereikbaar (CORS/netwerk) — NIET stilzwijgend als "geen maatregelen" tonen,
+      // dat zou exportcontrole/dual-use-restricties kunnen verbergen.
+      return `<div class="hs-measures-inner hs-unknown">
+        <span style="font-weight:700">? <code>${esc(t10)}</code></span> — geldig in EU CN 2026
+        ${descHtml}
+        <div style="margin-top:.5rem;color:#f59e0b;font-size:.7rem">
+          ⚠ Maatregelen (export/dual-use) konden niet worden opgehaald (netwerk/CORS).
+          Controleer handmatig op ${esc(pageLink)} vóór export.
+        </div>
+        <div style="margin-top:.5rem">${pageBtn}</div>
       </div>`;
     }
 
@@ -1749,7 +1784,7 @@ function toggleValHSMeasures(t10, badgeEl) {
   if (cached?.valid && !cached.measures) {
     (async () => {
       const duties = await _fetchMeasures(t10);
-      const newCached = { ..._hsCache.get(t10), measures: duties || [] };
+      const newCached = { ..._hsCache.get(t10), measures: duties };   // null = onbekend, [] = bevestigd leeg
       _hsCache.set(t10, newCached);
       // Update panel content in-place
       const panel = expTd.querySelector('.hs-measures-panel');
@@ -1773,7 +1808,7 @@ async function checkHSCodesLive() {
 
   for (const [t10, rowIdxs] of codeMap) {
     const local = _checkGNCodes(t10);
-    const cached = { valid: local?.valid ?? null, desc: local?.desc || '', measures: null };
+    const cached = { valid: local?.valid ?? null, desc: local?.desc || '' };   // measures: (nog) niet gezet = niet opgehaald
     _hsCache.set(t10, cached);
 
     let stateClass, badgeHtml;
@@ -1798,12 +1833,40 @@ async function checkHSCodesLive() {
 
     rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
   }
+
+  // Ongeldige HS-codes worden pas hier (async) bekend — de samenvatting, de
+  // AFS/leverancier-mailknop en de validatie-log zijn vlak na runValidation()
+  // al vastgezet en missen deze fouten dus. Bijwerken zodra het klaar is.
+  const sumEl = document.getElementById('val-summary');
+  if (sumEl) {
+    let totalErrors = 0, totalWarnings = 0;
+    for (const r of _valRows) {
+      totalErrors   += Object.keys(r.errors || {}).length;
+      totalWarnings += Object.keys(r.warnings || {}).length;
+    }
+    const cls = totalErrors === 0 ? 'var(--green)' : 'var(--red)';
+    sumEl.innerHTML =
+      `<span style="color:${cls};font-weight:700">${totalErrors === 0 ? '✅' : '❌'} ${totalErrors} fout(en)</span>` +
+      `<span style="color:var(--amber)">  ⚠️ ${totalWarnings} waarschuwing(en)</span>` +
+      `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>` +
+      `<span style="color:var(--teal)">  🔎 HS-nomenclatuur gecontroleerd</span>`;
+  }
+  if (typeof _valHighlightMailBtn === 'function') _valHighlightMailBtn();
+  // GEEN nieuwe _valLogValidatie()-aanroep hier: die telt elke aanroep als een
+  // aparte validatie (nieuw event-id). Die stond al vóór checkHSCodesLive() in
+  // runValidation() en blijft dus de bron voor de teller — dat telt correct,
+  // alleen mist die ene telling nog de HS-nomenclatuurfouten (bekende beperking).
 }
 
 function _setHSCellState(rowIdx, stateClass, badgeHtml) {
   const td = document.querySelector(`[data-row="${rowIdx}"][data-col="${COL.O}"]`)?.closest('td');
   if (!td) return;
-  td.className = `val-cell ${stateClass}`;
+  // Alleen de hs-* statusklasse vervangen, de rest (val-cell-err/-warn/-ihc/...) intact laten.
+  td.className = td.className
+    .split(/\s+/)
+    .filter(c => c && !/^hs-/.test(c) && c !== 'loading')
+    .concat(stateClass)
+    .join(' ');
   const iconEl = td.querySelector('.hs-icon');
   if (iconEl) iconEl.innerHTML = badgeHtml || '';
 }
