@@ -260,6 +260,18 @@ function _parseNum(raw) {
   return isNaN(n) ? null : n;
 }
 
+// Herkent een valuta-aanduiding (symbool of 3-letterige code) in een celwaarde.
+// Geen aanduiding gevonden → aangenomen EUR (het standaardformaat van de Itemlijst).
+function _detectCurrency(raw) {
+  const s = String(raw == null ? '' : raw);
+  if (/€/.test(s) || /\bEUR\b/i.test(s)) return 'EUR';
+  if (/\$/.test(s) || /\bUSD\b/i.test(s)) return 'USD';
+  if (/£/.test(s) || /\bGBP\b/i.test(s)) return 'GBP';
+  if (/¥/.test(s) || /\bJPY\b/i.test(s)) return 'JPY';
+  if (/\bCHF\b/i.test(s)) return 'CHF';
+  return 'EUR';
+}
+
 async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   const errors   = {};  // col letter → error message
   const warnings = {};  // col letter → warning message
@@ -344,21 +356,27 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
     // Live nomenclatuur-check via douane.nl wordt async uitgevoerd na validatie
   }
 
-  // ── P: Value pc — required, numeric, USD→EUR conversion ──────────────────
-  let pVal = vn('P');
+  // ── P: Value pc — required, numeric, alleen EUR toegestaan (USD via toggle) ──
+  const pCur = _detectCurrency(v('P'));
+  let pVal = vn('P');   // altijd alleen de cijfers — valutatekens worden hier al genegeerd
   if (pVal === null) {
     errors['P'] = 'Value pc is verplicht en moet numeriek zijn';
-  } else if (isUSDPrice && usdRate) {
+  } else if (pCur === 'USD' && isUSDPrice && usdRate) {
     const pEur = +(pVal * usdRate).toFixed(2);
     computed['P_EUR'] = pEur;
     warnings['P'] = `USD ${pVal.toLocaleString('nl-NL')} = EUR ${pEur.toLocaleString('nl-NL')} (koers: ${usdRate})`;
     pVal = pEur; // use EUR value for Q cross-check
+  } else if (pCur !== 'EUR') {
+    errors['P'] = `Waarde staat in ${pCur} — verwacht EUR. Zet de waarde om naar EUR of vink USD-koers aan.`;
   }
 
-  // ── Q: Value total — warn if >1% off from P×F ─────────────────────────────
+  // ── Q: Value total — required, numeric, alleen EUR toegestaan; warn if >1% off from P×F ─
+  const qCur = _detectCurrency(v('Q'));
   const qVal = vn('Q');
   if (qVal === null) {
     errors['Q'] = 'Value total is verplicht en moet numeriek zijn';
+  } else if (qCur !== 'EUR' && !(qCur === 'USD' && isUSDPrice && usdRate)) {
+    errors['Q'] = `Waarde staat in ${qCur} — verwacht EUR. Zet de waarde om naar EUR of vink USD-koers aan.`;
   } else if (pVal !== null && qty !== null) {
     const expected = pVal * qty;
     const diff = Math.abs(qVal - expected);
