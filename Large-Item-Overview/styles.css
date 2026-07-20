@@ -30,6 +30,11 @@ html[data-theme="light"]{
 .lio-tab:hover{color:var(--lio-fg-strong)}
 .lio-tab.active{color:var(--lio-fg-strong);border-bottom-color:var(--ihc-red,#D91F2C)}
 .lio-tab-tools{margin-left:auto;display:flex;align-items:center;gap:.5rem}
+.lio-search{width:240px;background:#0A1628;border:1px solid rgba(127,150,190,.3);border-radius:6px;
+  padding:.35rem .6rem;color:var(--lio-fg-strong);font-size:.72rem;font-family:var(--mono,'JetBrains Mono',monospace);
+  margin-left:.75rem;transition:border-color .15s,width .15s}
+.lio-search::placeholder{color:var(--muted,#6b7a99)}
+.lio-search:focus{outline:none;border-color:var(--teal,#00B4D8);width:300px}
 .lio-thr{font-family:var(--mono,'JetBrains Mono',monospace);font-size:.68rem;color:var(--lio-fg)}
 .lio-thr input{width:80px;background:var(--lio-input-bg);border:1px solid rgba(127,150,190,.3);border-radius:5px;
   padding:.2rem .4rem;color:var(--lio-fg-strong);font-size:.7rem;margin:0 .2rem}

@@ -75,13 +75,32 @@
 
   // ── waarden ──────────────────────────────────────────────────────────────
   const val = (r, key) => (C[key] >= 0 && r[C[key]] != null) ? r[C[key]] : '';
+  // Robuuste datumconversie — overgenomen uit PO-Matcher/js/renderer.js zodat
+  // Large Item Overview en de Late Items-tab in PO-Matcher altijd dezelfde
+  // datum tonen voor hetzelfde item. Verankert Excel-seriegetallen op het
+  // MIDDEN van de dag (UTC-noon) vóór lokale reconstructie, en reconstrueert
+  // ISO-tijdstempels (met 'T') via lokale getters — anders kan een datum in
+  // een tijdzone áchter UTC één dag terugvallen (bv. 12/05 wordt 11/05).
   function toDate(v) {
-    if (v instanceof Date) return isNaN(v) ? null : v;
-    if (typeof v === 'number') { const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000); return isNaN(d) ? null : d; }
+    if (v === null || v === undefined) return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : new Date(v.getFullYear(), v.getMonth(), v.getDate());
     const s = trim(v); if (!s) return null;
-    const m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);      // DD-MM-JJJJ
-    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-    const d = new Date(s); return isNaN(d) ? null : d;
+    if (typeof v === 'number' || /^\d+([.,]\d+)?$/.test(s)) {
+      const n = parseFloat(s.replace(',', '.'));
+      if (!isNaN(n) && n > 1000) {
+        const d = new Date(Math.round((n - 25569 + 0.5) * 86400 * 1000));
+        return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+    }
+    const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) {
+      if (s.indexOf('T') > -1) { const dt = new Date(s); if (!isNaN(dt.getTime())) return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
+      return new Date(+iso[1], +iso[2] - 1, +iso[3]);
+    }
+    const eu = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (eu) return new Date(+eu[3], +eu[2] - 1, +eu[1]);
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
   const fmtDate = (v) => { const d = toDate(v); if (!d) return ''; 
     return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
@@ -394,13 +413,28 @@
     });
   }
 
+  // ── zoekbalk: combineert vrij over ALLE kolommen van het huidige tabblad ──
+  // Elk los woord moet ergens voorkomen (in willekeurig welke kolom) — zo
+  // vind je bv. "Alfa Laval YN1320" ook als leverancier en project in
+  // verschillende kolommen staan.
+  let SEARCHTERM = '';
+  window.lioSearch = function (v) { SEARCHTERM = v; render(); };
+  function applySearch(rows, defs) {
+    const terms = SEARCHTERM.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return rows;
+    return rows.filter(r => {
+      const hay = defs.map(d => String(d.f(r) ?? '')).join(' \u241F ').toLowerCase();
+      return terms.every(t => hay.includes(t));
+    });
+  }
+
   // ── rendering ────────────────────────────────────────────────────────────
   function render() {
     if (!ROWS.length) return;
     renderTools();
     const miss = NEEDED[TAB].filter(k => C[k] < 0);
     const defs = DEFS[TAB];
-    const rows = miss.length ? [] : sortRows(rowsFor(TAB), defs);
+    const rows = miss.length ? [] : sortRows(applySearch(rowsFor(TAB), defs), defs);
 
     const s = SORT[TAB];
     $('lio-thead').innerHTML = '<tr>' + defs.map(d => {
