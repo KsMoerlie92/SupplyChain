@@ -34,19 +34,37 @@ var EN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oc
 
 function parseDate(str){
   if(!str) return null;
+  if(str instanceof Date) return isNaN(str.getTime()) ? null : new Date(str.getFullYear(), str.getMonth(), str.getDate());
   var s = String(str).trim();
-  if(/^\d{5}$/.test(s)){
-    var d = new Date((parseInt(s) - 25569) * 86400000);
-    if(!isNaN(d.getTime())) return d;
+  if(!s) return null;
+  // Excel-seriegetal — vóór de Europese/ISO-checks, en verankerd op het
+  // MIDDEN van de dag (UTC-noon) zodat een tijdzone áchter UTC de datum
+  // niet één dag laat terugvallen (bv. 12-05 zou anders 11-05 worden).
+  if(/^\d+([.,]\d+)?$/.test(s)){
+    var n = parseFloat(s.replace(',', '.'));
+    if(!isNaN(n) && n > 1000){
+      var dExcel = new Date(Math.round((n - 25569 + 0.5) * 86400 * 1000));
+      if(!isNaN(dExcel.getTime())) return new Date(dExcel.getFullYear(), dExcel.getMonth(), dExcel.getDate());
+    }
   }
-  var d2 = new Date(s);
-  if(!isNaN(d2.getTime())) return d2;
-  var m = s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
+  // ISO JJJJ-MM-DD — bij een volledig tijdstempel (bevat 'T') lokaal reconstrueren
+  var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(iso){
+    if(s.indexOf('T') > -1){ var dIso = new Date(s); if(!isNaN(dIso.getTime())) return new Date(dIso.getFullYear(), dIso.getMonth(), dIso.getDate()); }
+    return new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]));
+  }
+  // Europees DD-MM-JJJJ of DD/MM/JJJJ — VÓÓR de generieke new Date(s), want
+  // die interpreteert "12-05-2026" als Amerikaans (MM-DD) en geeft dan
+  // stilzwijgend 5 december in plaats van 12 mei.
+  var m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
   if(m){
     var yr = parseInt(m[3]); if(yr < 100) yr += 2000;
     var d3 = new Date(yr, parseInt(m[2])-1, parseInt(m[1]));
     if(!isNaN(d3.getTime())) return d3;
   }
+  // Laatste redmiddel: generieke JS-datumherkenning (bv. "Fri Nov 22 2024 …")
+  var d2 = new Date(s);
+  if(!isNaN(d2.getTime())) return new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
   return null;
 }
 
