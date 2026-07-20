@@ -100,6 +100,7 @@ function wireEvents(){
   const sp = document.getElementById('subprojectSelect'); if (sp) sp.addEventListener('change', renderAll);
   const kp = document.getElementById('kpiSelect');        if (kp) kp.addEventListener('change', renderAll);
   const mm = document.getElementById('meetmomentSelect'); if (mm) mm.addEventListener('change', renderAll);
+  const ex = document.getElementById('exportBtn');          if (ex) ex.addEventListener('click', exportProjects);
   const dh = document.getElementById('downloadHistoryBtn'); if (dh) dh.addEventListener('click', downloadHistory);
   const rb = document.getElementById('resetBtn');           if (rb) rb.addEventListener('click', resetHistory);
 }
@@ -406,6 +407,45 @@ function resetHistory(){
   buildSubprojectSelect(); buildMeetmomentSelect(); renderAll();
   maybeAutoLoadCentral();   // na reset opnieuw de centrale lijst proberen
   setStatus('Teruggezet naar origineel meetmoment.', 'info-msg');
+}
+
+// ── Export: alle YN/EN-projecten van het huidige meetmoment naar Excel ────
+function exportProjects(){
+  const mm = currentMM();
+  if (!mm){ setStatus('Geen meetmoment om te exporteren.', 'err-msg'); return; }
+  if (typeof XLSX === 'undefined'){ setStatus('XLSX-bibliotheek niet geladen.', 'err-msg'); return; }
+
+  // Alle YN/EN Sub Project IDs in dit meetmoment (Bedrijfsbreed bovenaan)
+  const ids = Object.keys(mm.subprojects || {}).filter(keepProject).sort();
+  const scopes = ['__ALL__', ...ids];
+
+  const kpiCols = CONFIG.kpis.map(k => k.name + (k.unit && k.unit !== '#' ? ' (' + k.unit + ')' : ''));
+  const header = ['Sub Project ID','Omschrijving','Regels', ...kpiCols,
+    'Geleverd','Open','Expediteerbaar','Niet bevestigd','Admin niet bijgewerkt','Bevestigd (totaal)'];
+  const aoa = [header];
+
+  scopes.forEach(spid => {
+    const node = getNode(mm, spid);
+    if (!node) return;
+    const desc = spid === '__ALL__' ? 'Bedrijfsbreed (alle YN/EN-projecten)' : (node.description || '');
+    const row = [ spid === '__ALL__' ? 'Bedrijfsbreed' : spid, desc, node.total || 0 ];
+    CONFIG.kpis.forEach(k => { const v = getValue(mm, spid, k.id); row.push(v === null || v === undefined ? '' : v); });
+    const c = (node.kpis && node.kpis._counts) || {};
+    row.push(c.geleverd ?? '', c.open ?? '', c.expediteerbaar ?? '',
+             c.niet_bevestigd ?? '', c.admin_open ?? '', c.bevestigd_totaal ?? '');
+    aoa.push(row);
+  });
+
+  if (aoa.length < 2){ setStatus('Geen projecten om te exporteren in dit meetmoment.', 'err-msg'); return; }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = header.map((h, i) => ({ wch: i < 2 ? 30 : 18 }));   // eerste 2 kolommen breder
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };                         // headerrij vastzetten
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, ('KPI ' + mm.meetmoment.label).slice(0, 31));
+  const fname = 'Expediting-KPI_' + mm.meetmoment.label + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  setStatus('✓ Geëxporteerd: ' + fname + ' — ' + (scopes.length - 1) + ' projecten + Bedrijfsbreed.', 'ok-msg');
 }
 
 function currentMM(){ const d = document.getElementById('meetmomentSelect').value;
