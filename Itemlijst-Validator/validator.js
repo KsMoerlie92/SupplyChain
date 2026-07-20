@@ -167,7 +167,20 @@ function _remapColumns() {
   }
 }
 
-// ── parseHColumn: parse Mark/Label multi-value notation ────────────────────
+// ── HS-code normaliseren bij het inladen ────────────────────────────────────
+// Een ingeladen HS-code moet altijd 10 cijfers hebben. Bevat de bron 12 cijfers
+// (bv. een TARIC-code met 2 extra nationale subverdeling-cijfers), dan vallen
+// de laatste 2 cijfers weg zodat er 10 overblijven. Korter dan 10 blijft
+// ongewijzigd (dat vangt validateRow al af als fout).
+function _normalizeHSCode(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return v;
+  const digits = s.replace(/[\s.]/g, '');
+  if (!/^\d+$/.test(digits)) return v;          // geen zuiver cijferveld — met rust laten
+  return digits.length > 10 ? digits.slice(0, 10) : digits;
+}
+
+
 function parseHColumn(value) {
   if (!value || !String(value).trim()) return [];
   const s = String(value).trim();
@@ -531,7 +544,7 @@ function _fillRowFromExpediting(cells, expeditingData) {
     if (String(cells[ci] ?? '').trim()) continue;        // niet overschrijven
     const val = match[field];
     if (val === null || val === undefined || String(val).trim() === '') continue;
-    cells[ci] = String(val).trim();
+    cells[ci] = (colLetter === 'O') ? _normalizeHSCode(String(val).trim()) : String(val).trim();
     filled++;
   }
   return filled;
@@ -779,6 +792,36 @@ function _valHandleMoederUpload(ev) {
   reader.readAsArrayBuffer(file);
 }
 
+// ── Teambrede telling van validaties ───────────────────────────────────────
+// Stuurt een klein event naar /api/validaties (zie shared/validatie-log.js).
+// Vereist geen handeling van de gebruiker en mag nooit iets breken.
+function _valLogValidatie() {
+  try {
+    if (!window.ValidatieLog || !Array.isArray(_valRows) || !_valRows.length) return;
+    let fouten = 0, waarschuwingen = 0;
+    for (const r of _valRows) {
+      if (r && r.errors)   fouten += Object.keys(r.errors).length;
+      if (r && r.warnings) waarschuwingen += Object.keys(r.warnings).length;
+    }
+    const dom = (idx) => {                       // meest voorkomende waarde in een kolom
+      const t = {};
+      for (const r of _valRows) {
+        const v = String((r.cells && r.cells[idx]) || '').trim();
+        if (v) t[v] = (t[v] || 0) + 1;
+      }
+      return Object.keys(t).sort((a, b) => t[b] - t[a])[0] || '';
+    };
+    ValidatieLog.log({
+      tool: 'itemlijst-validator',
+      deliveryRef: dom(COL.A),
+      supplier: dom(COL.K),
+      bestand: (document.getElementById('val-filename')?.textContent || '').trim(),
+      regels: _valRows.length,
+      fouten, waarschuwingen,
+    });
+  } catch (e) { /* loggen mag de validatie nooit hinderen */ }
+}
+
 // ── AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen ─────
 function _valHighlightMailBtn() {
   const btn = document.getElementById('valmail-launch');
@@ -901,6 +944,7 @@ async function runValidation() {
     try { window.ValMailer.checkPrenotify(); } catch (e) {}
   }
   _valHighlightMailBtn();   // AFS/leverancier-mailknop laten oplichten bij fouten of afwijkingen
+  _valLogValidatie();       // teambrede telling (fire-and-forget, faalt stil)
 
   // Live HS-code check against douane.nl nomenclature (async, updates cells in place)
   checkHSCodesLive();
@@ -1177,14 +1221,21 @@ function handleValFile(fileOrEvent) {
     };
 
     // ── Dynamic header row detection ─────────────────────────────────────
-    // Scan rows 0–6: the row with the most non-empty cells is the header row.
-    // The row immediately before it (if any) is the owner/group row.
+    // Scan rows 0–6: de koprij wordt bepaald op het aantal UNIEKE niet-lege
+    // waarden, niet het ruwe aantal niet-lege cellen. Een "eigenaar"-rij
+    // (bv. 'Supplier'/'IHC' herhaald over tientallen kolommen) kan evenveel
+    // gevulde cellen hebben als de echte koprij, maar heeft veel minder
+    // UNIEKE waarden — elke kolom in een echte koprij heeft immers een eigen
+    // naam. Dit voorkomt dat de eigenaar-rij de koprij wint bij een
+    // gelijke-stand op ruw aantal (zoals eerder gebeurde: 27 gevuld in
+    // zowel de eigenaar-rij als de echte koprij, > koos dan de eerste).
     let hdrIdx = 0;
-    let hdrMax = 0;
+    let hdrMax = -1;
     const scanLimit = Math.min(raw.length, 7);
     for (let i = 0; i < scanLimit; i++) {
-      const count = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim()).length;
-      if (count > hdrMax) { hdrMax = count; hdrIdx = i; }
+      const cells = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim() !== '');
+      const uniq = new Set(cells.map(c => String(c).trim().toLowerCase()));
+      if (uniq.size > hdrMax) { hdrMax = uniq.size; hdrIdx = i; }
     }
     _valHdrIdx  = hdrIdx;
     _valOwners  = hdrIdx > 0 ? (raw[hdrIdx - 1] || []) : [];
@@ -1201,6 +1252,14 @@ function handleValFile(fileOrEvent) {
       // (val-crossref.js fills C and D in afterwards via the modal).
       .filter(r => hasVal(r[0]) && (hasVal(r[2]) || hasVal(r[7])))
       .map(r => ({ cells: r, errors: {}, warnings: {}, computed: {} }));
+
+    // HS-code (kolom O) altijd op 10 cijfers brengen — bv. een 12-cijferige
+    // TARIC-code uit het bestand verliest de laatste 2 cijfers.
+    for (const row of _valRows) {
+      const orig = row.cells[COL.O];
+      const norm = _normalizeHSCode(orig);
+      if (norm !== orig) { row.cells[COL.O] = norm; row._edited = true; }
+    }
 
     // Load country codes from Master tab
     _valCOO = new Set();
@@ -1631,13 +1690,13 @@ function toggleValHSMeasures(t10, badgeEl) {
       </div>`;
     }
 
-    const duties   = cached.measures || null;
+    const duties   = ('measures' in (cached || {})) ? cached.measures : undefined;
     const descHtml = cached.desc
       ? `<div style="color:var(--muted);font-size:.68rem;margin:.2rem 0 .5rem">${esc(cached.desc)}</div>` : '';
     const pageBtn  = `<a href="${esc(pageLink)}" target="_blank" class="hs-taric-btn">📋 tariffnumber.com ↗</a>`;
 
-    if (duties === null) {
-      // API not yet fetched or loading
+    if (duties === undefined) {
+      // Nog niet opgehaald — de async fetch hieronder is net gestart
       return `<div class="hs-measures-inner hs-clean">
         <span style="font-weight:700">✓ <code>${esc(t10)}</code></span> — geldig in EU CN 2026
         ${descHtml}
@@ -1645,6 +1704,20 @@ function toggleValHSMeasures(t10, badgeEl) {
           ${pageBtn}
           <span style="color:var(--muted);font-size:.65rem" id="hs-loading-${t10}">⏳ Maatregelen laden…</span>
         </div>
+      </div>`;
+    }
+
+    if (duties === null) {
+      // API onbereikbaar (CORS/netwerk) — NIET stilzwijgend als "geen maatregelen" tonen,
+      // dat zou exportcontrole/dual-use-restricties kunnen verbergen.
+      return `<div class="hs-measures-inner hs-unknown">
+        <span style="font-weight:700">? <code>${esc(t10)}</code></span> — geldig in EU CN 2026
+        ${descHtml}
+        <div style="margin-top:.5rem;color:#f59e0b;font-size:.7rem">
+          ⚠ Maatregelen (export/dual-use) konden niet worden opgehaald (netwerk/CORS).
+          Controleer handmatig op ${esc(pageLink)} vóór export.
+        </div>
+        <div style="margin-top:.5rem">${pageBtn}</div>
       </div>`;
     }
 
@@ -1718,7 +1791,7 @@ function toggleValHSMeasures(t10, badgeEl) {
   if (cached?.valid && !cached.measures) {
     (async () => {
       const duties = await _fetchMeasures(t10);
-      const newCached = { ..._hsCache.get(t10), measures: duties || [] };
+      const newCached = { ..._hsCache.get(t10), measures: duties };   // null = onbekend, [] = bevestigd leeg
       _hsCache.set(t10, newCached);
       // Update panel content in-place
       const panel = expTd.querySelector('.hs-measures-panel');
@@ -1742,7 +1815,7 @@ async function checkHSCodesLive() {
 
   for (const [t10, rowIdxs] of codeMap) {
     const local = _checkGNCodes(t10);
-    const cached = { valid: local?.valid ?? null, desc: local?.desc || '', measures: null };
+    const cached = { valid: local?.valid ?? null, desc: local?.desc || '' };   // measures: (nog) niet gezet = niet opgehaald
     _hsCache.set(t10, cached);
 
     let stateClass, badgeHtml;
@@ -1767,12 +1840,40 @@ async function checkHSCodesLive() {
 
     rowIdxs.forEach(ri => _setHSCellState(ri, stateClass, badgeHtml));
   }
+
+  // Ongeldige HS-codes worden pas hier (async) bekend — de samenvatting, de
+  // AFS/leverancier-mailknop en de validatie-log zijn vlak na runValidation()
+  // al vastgezet en missen deze fouten dus. Bijwerken zodra het klaar is.
+  const sumEl = document.getElementById('val-summary');
+  if (sumEl) {
+    let totalErrors = 0, totalWarnings = 0;
+    for (const r of _valRows) {
+      totalErrors   += Object.keys(r.errors || {}).length;
+      totalWarnings += Object.keys(r.warnings || {}).length;
+    }
+    const cls = totalErrors === 0 ? 'var(--green)' : 'var(--red)';
+    sumEl.innerHTML =
+      `<span style="color:${cls};font-weight:700">${totalErrors === 0 ? '✅' : '❌'} ${totalErrors} fout(en)</span>` +
+      `<span style="color:var(--amber)">  ⚠️ ${totalWarnings} waarschuwing(en)</span>` +
+      `<span style="color:var(--muted)">${_valRows.length} rijen gevalideerd</span>` +
+      `<span style="color:var(--teal)">  🔎 HS-nomenclatuur gecontroleerd</span>`;
+  }
+  if (typeof _valHighlightMailBtn === 'function') _valHighlightMailBtn();
+  // GEEN nieuwe _valLogValidatie()-aanroep hier: die telt elke aanroep als een
+  // aparte validatie (nieuw event-id). Die stond al vóór checkHSCodesLive() in
+  // runValidation() en blijft dus de bron voor de teller — dat telt correct,
+  // alleen mist die ene telling nog de HS-nomenclatuurfouten (bekende beperking).
 }
 
 function _setHSCellState(rowIdx, stateClass, badgeHtml) {
   const td = document.querySelector(`[data-row="${rowIdx}"][data-col="${COL.O}"]`)?.closest('td');
   if (!td) return;
-  td.className = `val-cell ${stateClass}`;
+  // Alleen de hs-* statusklasse vervangen, de rest (val-cell-err/-warn/-ihc/...) intact laten.
+  td.className = td.className
+    .split(/\s+/)
+    .filter(c => c && !/^hs-/.test(c) && c !== 'loading')
+    .concat(stateClass)
+    .join(' ');
   const iconEl = td.querySelector('.hs-icon');
   if (iconEl) iconEl.innerHTML = badgeHtml || '';
 }
