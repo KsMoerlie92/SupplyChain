@@ -1221,14 +1221,21 @@ function handleValFile(fileOrEvent) {
     };
 
     // ── Dynamic header row detection ─────────────────────────────────────
-    // Scan rows 0–6: the row with the most non-empty cells is the header row.
-    // The row immediately before it (if any) is the owner/group row.
+    // Scan rows 0–6: de koprij wordt bepaald op het aantal UNIEKE niet-lege
+    // waarden, niet het ruwe aantal niet-lege cellen. Een "eigenaar"-rij
+    // (bv. 'Supplier'/'IHC' herhaald over tientallen kolommen) kan evenveel
+    // gevulde cellen hebben als de echte koprij, maar heeft veel minder
+    // UNIEKE waarden — elke kolom in een echte koprij heeft immers een eigen
+    // naam. Dit voorkomt dat de eigenaar-rij de koprij wint bij een
+    // gelijke-stand op ruw aantal (zoals eerder gebeurde: 27 gevuld in
+    // zowel de eigenaar-rij als de echte koprij, > koos dan de eerste).
     let hdrIdx = 0;
-    let hdrMax = 0;
+    let hdrMax = -1;
     const scanLimit = Math.min(raw.length, 7);
     for (let i = 0; i < scanLimit; i++) {
-      const count = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim()).length;
-      if (count > hdrMax) { hdrMax = count; hdrIdx = i; }
+      const cells = (raw[i] || []).filter(c => c !== null && c !== undefined && String(c).trim() !== '');
+      const uniq = new Set(cells.map(c => String(c).trim().toLowerCase()));
+      if (uniq.size > hdrMax) { hdrMax = uniq.size; hdrIdx = i; }
     }
     _valHdrIdx  = hdrIdx;
     _valOwners  = hdrIdx > 0 ? (raw[hdrIdx - 1] || []) : [];
