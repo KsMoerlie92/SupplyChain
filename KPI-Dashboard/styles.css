@@ -53,12 +53,18 @@ select{appearance:none; -webkit-appearance:none; -moz-appearance:none;
 #subprojectSelect{min-width:260px}
 select:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(232,185,35,.35)}
 
-/* ── Sub Project ID-selectie (Validator-stijl in KPI-dashboard) ─────────── */
-.val-sp-wrap{display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin:0;}
-.val-sp-label{display:flex; align-items:center; gap:.5rem; font-family:var(--ihc-mono); font-size:.72rem;
-  font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--kpi-navy);}
-.val-sp-label .val-select{text-transform:none; letter-spacing:0;}
-.val-sp-status{font-family:var(--ihc-mono); font-size:.7rem; color:var(--blue);}
+/* ── Sub Project ID-selectie — Validator-look (donkere pill, teal accent) ── */
+.val-sp-wrap{display:inline-flex; align-items:center; gap:.7rem; flex-wrap:wrap;
+  background:var(--ihc-navy); border:1px solid #1E3A5F; border-radius:6px; padding:.5rem .8rem; margin:0;}
+.val-sp-label{display:flex; align-items:center; gap:.5rem; font-family:var(--ihc-mono);
+  font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#fff;}
+.val-sp-label .val-select{text-transform:none; letter-spacing:0; background:var(--ihc-mid); color:#fff;
+  border:1px solid #1E3A5F; border-radius:4px; padding:.35rem .6rem; font-family:var(--ihc-mono);
+  font-size:.75rem; cursor:pointer; appearance:auto; -webkit-appearance:menulist; min-width:auto;
+  background-image:none;}
+.val-sp-label .val-select:focus{outline:none; border-color:#00B4C8; box-shadow:0 0 0 3px rgba(0,180,200,.15);}
+.val-sp-label .val-select option{background:var(--ihc-navy); color:#fff;}
+.val-sp-status{font-family:var(--ihc-mono); font-size:.7rem; color:#00B4C8;}
 
 .legend{display:flex; gap:16px; margin-left:auto; flex-wrap:wrap; align-items:center}
 .legend-item{display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--muted)}
