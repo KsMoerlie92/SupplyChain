@@ -254,8 +254,24 @@ function computeSnapshot(headers, rows, meta){
   const warn = [];
   if (C.po < 0) warn.push("PO-nummerkolom niet gevonden — 'Administratie niet bijgewerkt' kan niet berekend worden.");
   if (C.pls < 0) warn.push("Kolom 'PO Line Status' niet gevonden — alle regels tellen als niet-bevestigd.");
+
+  // Zelfde projectfilter als shared/expediting-core.js (alleen YN/EN-scheepsprojecten):
+  // fail-open als ExpeditingCore niet geladen is, zodat een ontbrekend script niet
+  // stilzwijgend alle regels laat verdwijnen.
+  const keepProject = (window.ExpeditingCore && typeof ExpeditingCore.keepProject === 'function')
+    ? ExpeditingCore.keepProject : null;
+  let rowsIn = rows;
+  let uitgefilterd = 0;
+  if (keepProject) {
+    rowsIn = rows.filter(r => keepProject(r[C.sp]));
+    uitgefilterd = rows.length - rowsIn.length;
+    if (uitgefilterd > 0) warn.push(uitgefilterd + ' regel(s) buiten YN/EN-projecten weggelaten (niet onze scheepsprojecten).');
+  } else {
+    warn.push("ExpeditingCore niet geladen — projectfilter (alleen YN/EN) is NIET toegepast op deze upload.");
+  }
+
   const groups = {}; const descMap = {};
-  for (const r of rows){
+  for (const r of rowsIn){
     const sp = String((r[C.sp]!==undefined?r[C.sp]:'')||'').trim(); if (!sp) continue;
     (groups[sp] = groups[sp] || []).push(r);
     if (!(sp in descMap)) descMap[sp] = String((r[C.spdesc]!==undefined?r[C.spdesc]:'')||'').trim();
@@ -269,7 +285,7 @@ function computeSnapshot(headers, rows, meta){
   let date=null; const fn=(meta && meta.filename)||'';
   const m = fn.match(/(\d{2})-(\d{2})-(\d{4})/); if (m) date = m[3]+'-'+m[2]+'-'+m[1];
   if (!date) date = new Date().toISOString().slice(0,10);
-  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rows.length,warnings:warn}, aggregate, subprojects };
+  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,warnings:warn}, aggregate, subprojects };
 }
 
 function setStatus(msg, cls){ document.getElementById('uploadStatus').innerHTML =
@@ -304,8 +320,11 @@ function addMeetmoment(snap){
   document.getElementById('meetmomentSelect').value = snap.meetmoment.date; renderAll();
   const nSub = Object.keys(snap.subprojects).length;
   const warn = (snap.meetmoment.warnings||[]);
+  const totaalTxt = (snap.meetmoment.rowsTotaal && snap.meetmoment.rowsTotaal !== snap.meetmoment.rows)
+    ? snap.meetmoment.rows + ' van ' + snap.meetmoment.rowsTotaal + ' regels (YN/EN-projecten)'
+    : snap.meetmoment.rows + ' regels';
   setStatus('✓ Meetmoment ' + snap.meetmoment.label + ' toegevoegd — ' + nSub +
-    ' Sub Project ID\'s, ' + snap.meetmoment.rows + ' regels. Vergeet niet te downloaden en te committen.' +
+    ' Sub Project ID\'s, ' + totaalTxt + '. Vergeet niet te downloaden en te committen.' +
     (warn.length ? '<br><span class="err-msg">⚠ ' + warn.join(' ') + '</span>' : ''), 'ok-msg');
 }
 function downloadHistory(){
