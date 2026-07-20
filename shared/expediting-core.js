@@ -4,6 +4,10 @@
    prioriteringsscore en leverancier-bundeling.
    Gebruikt door: Admin (upload), Expediting Mailer, en elke
    pagina die de mailer-functie aanroept.
+
+   PROJECTFILTER: alleen Sub Project ID's die beginnen met YN of EN
+   gevolgd door een cijfer (de scheepsprojecten die wij beheren)
+   worden ingelezen. Pas PROJECT_PREFIXES aan om dit te wijzigen.
    ============================================================ */
 (function (global) {
   'use strict';
@@ -11,6 +15,15 @@
   const OPEN = ['Released', 'Confirmed', 'Planned'];
   const EU = new Set('NL BE DE FR IT ES PT PL RO CZ SK HU AT DK SE FI IE GR BG HR SI LT LV EE LU MT CY EU'.split(' '));
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Alleen deze project-prefixes worden ingelezen (Sub Project ID), gevolgd
+  // door een cijfer — zo telt "ENERGY-PROJECT" niet mee als EN-scheepsproject.
+  const PROJECT_PREFIXES = ['YN', 'EN'];
+  const _prefixRe = new RegExp('^(' + PROJECT_PREFIXES.join('|') + ')\\d');
+  function keepProject(sub){
+    const s = String(sub == null ? '' : sub).trim().toUpperCase();
+    return _prefixRe.test(s);
+  }
 
   // welke Excel-kolom hoort bij welk modelveld
   const COLS = {
@@ -63,14 +76,20 @@
   }
 
   // raw = array-of-arrays (XLSX sheet_to_json header:1). Geeft genormaliseerde OPEN regels.
+  // raw = array-of-arrays (XLSX sheet_to_json header:1). Geeft genormaliseerde OPEN regels.
+  // Alleen regels van projecten met prefix YN/EN worden meegenomen — TENZIJ de
+  // kolom 'Sub Project ID' niet gevonden wordt: dan filteren we niet (fail-open),
+  // want anders zou een ontbrekende kolom alle regels stilzwijgend laten verdwijnen.
   function normalizeFromRaw(raw){
     const h=detectHeader(raw);
     const header=(raw[h]||[]).map(x=>String(x==null?'':x).trim());
     const ix={}; header.forEach((c,i)=>{ if(!(c in ix)) ix[c]=i; }); // dedupe: eerste wint
     const g=(row,name)=>{ const i=ix[COLS[name]]; return i==null?null:row[i]; };
+    const heeftSubKolom = (COLS.sub in ix);
     const out=[];
     for(let r=h+1;r<raw.length;r++){
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
+      if(heeftSubKolom && !keepProject(g(row,'sub'))) continue;   // ← alleen YN/EN-projecten
       const status=g(row,'status'); if(!OPEN.includes(status)) continue;
       const o={
         po:g(row,'po'), orderNo:g(row,'orderNo'), sub:g(row,'sub'), subDesc:g(row,'subDesc'),
@@ -135,8 +154,12 @@
   // raw = array-of-arrays. Geeft { headers, rows } met ONTDUBBELDE headers en
   // rijen als objecten gekeyed op header (kolomvolgorde behouden) — exact het
   // formaat dat PO-Matcher (en andere tools) van een ingeladen lijst verwachten.
+  // Alleen regels van projecten met prefix YN/EN worden meegenomen — TENZIJ de
+  // kolom 'Sub Project ID' niet gevonden wordt (zelfde fail-open gedrag als
+  // normalizeFromRaw hierboven, zodat beide functies zich identiek gedragen).
   function rawTable(raw){
     const h=detectHeader(raw);
+    const subIdx=(raw[h]||[]).findIndex(c=>String(c==null?'':c).trim()===COLS.sub);
     const seen={};
     const headers=(raw[h]||[]).map((c,i)=>{
       let name=String(c==null?'':c).trim()||('__COL_'+i);
@@ -146,13 +169,14 @@
     const rows=[];
     for(let r=h+1;r<raw.length;r++){
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
+      if(subIdx>=0 && !keepProject(row[subIdx])) continue;   // ← alleen YN/EN-projecten
       const o={}; headers.forEach((hd,i)=>{ o[hd]=row[i]==null?'':row[i]; }); rows.push(o);
     }
     return { headers, rows };
   }
 
   global.ExpeditingCore = {
-    OPEN, EU, MONTHS, COLS,
+    OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject,
     toDate, num, dmy, shortD, esc, detectHeader,
     normalizeFromRaw, rawTable, score, aggregate, startOfToday
   };
