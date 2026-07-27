@@ -101,6 +101,7 @@ function wireEvents(){
   const kp = document.getElementById('kpiSelect');        if (kp) kp.addEventListener('change', renderAll);
   const mm = document.getElementById('meetmomentSelect'); if (mm) mm.addEventListener('change', renderAll);
   const ex = document.getElementById('exportBtn');          if (ex) ex.addEventListener('click', exportProjects);
+  const ep = document.getElementById('exportPdfBtn');       if (ep) ep.addEventListener('click', exportPDF);
   const dh = document.getElementById('downloadHistoryBtn'); if (dh) dh.addEventListener('click', downloadHistory);
   const rb = document.getElementById('resetBtn');           if (rb) rb.addEventListener('click', resetHistory);
 }
@@ -409,13 +410,16 @@ function resetHistory(){
   setStatus('Teruggezet naar origineel meetmoment.', 'info-msg');
 }
 
-// ── Export: alle YN/EN-projecten van het huidige meetmoment naar Excel ────
+// ══════════════════════════════════════════════════════════════════════════
+//  EXPORTS
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Export 1: alle YN/EN-projecten van het huidige meetmoment naar Excel ──
 function exportProjects(){
   const mm = currentMM();
   if (!mm){ setStatus('Geen meetmoment om te exporteren.', 'err-msg'); return; }
   if (typeof XLSX === 'undefined'){ setStatus('XLSX-bibliotheek niet geladen.', 'err-msg'); return; }
 
-  // Alle YN/EN Sub Project IDs in dit meetmoment (Bedrijfsbreed bovenaan)
   const ids = Object.keys(mm.subprojects || {}).filter(keepProject).sort();
   const scopes = ['__ALL__', ...ids];
 
@@ -439,13 +443,120 @@ function exportProjects(){
   if (aoa.length < 2){ setStatus('Geen projecten om te exporteren in dit meetmoment.', 'err-msg'); return; }
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = header.map((h, i) => ({ wch: i < 2 ? 30 : 18 }));   // eerste 2 kolommen breder
-  ws['!freeze'] = { xSplit: 0, ySplit: 1 };                         // headerrij vastzetten
+  ws['!cols'] = header.map((h, i) => ({ wch: i < 2 ? 30 : 18 }));
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, ('KPI ' + mm.meetmoment.label).slice(0, 31));
   const fname = 'Expediting-KPI_' + mm.meetmoment.label + '.xlsx';
   XLSX.writeFile(wb, fname);
   setStatus('✓ Geëxporteerd: ' + fname + ' — ' + (scopes.length - 1) + ' projecten + Bedrijfsbreed.', 'ok-msg');
+}
+
+// ── Export 2: volledig rapport (PDF) — KPI-kaarten + grafiek + tabel ──────
+// Bouwt een schone, print-vriendelijke weergave in een nieuw venster en opent
+// het printdialoog. De gebruiker kiest "Opslaan als PDF". De grafiek wordt als
+// PNG uit de canvas gehaald (Chart.js), zodat hij 1-op-1 in het rapport staat.
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function exportPDF(){
+  const mm = currentMM();
+  if (!mm){ setStatus('Geen meetmoment om te exporteren.', 'err-msg'); return; }
+  const spid = document.getElementById('subprojectSelect').value;
+  const kpiSel = document.getElementById('kpiSelect').value;
+  const scope = spid === '__ALL__' ? 'Bedrijfsbreed (alle YN/EN-projecten)' : spid;
+
+  // 1) Grafiek als afbeelding (witte achtergrond forceren voor de print)
+  let chartImg = '';
+  try {
+    const cv = document.getElementById('trendChart');
+    if (cv && cv.width){
+      const tmp = document.createElement('canvas');
+      tmp.width = cv.width; tmp.height = cv.height;
+      const cx = tmp.getContext('2d');
+      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, tmp.width, tmp.height);
+      cx.drawImage(cv, 0, 0);
+      chartImg = tmp.toDataURL('image/png', 1.0);
+    }
+  } catch(e){ console.warn('[KPI] chart->image:', e); }
+
+  // 2) KPI-kaarten
+  const cardsHtml = CONFIG.kpis.map(kpi => {
+    const v = getValue(mm, spid, kpi.id); const st = getStatus(kpi, v);
+    const unit = kpi.unit === '#' ? '' : ' ' + kpi.unit;
+    return '<div class="rp-card rp-' + st.cls + '">' +
+      '<div class="rp-card-name">' + esc(kpi.name) + '</div>' +
+      '<div class="rp-card-val">' + esc(fmt(kpi, v)) + unit + '</div>' +
+      '<div class="rp-card-norm">Norm: ' + esc(kpi.norm) + ' · ' + (kpi.auto ? 'automatisch' : 'handmatig') + '</div>' +
+      '</div>';
+  }).join('');
+
+  // 3) Detailtabel (meetmomenten × KPI) voor de gekozen scope
+  const kpiHead = CONFIG.kpis.map(k => '<th>' + esc(k.name) + '</th>').join('');
+  const rowsHtml = historyDesc().map(row => {
+    const tds = CONFIG.kpis.map(kpi => { const v = getValue(row, spid, kpi.id); const st = getStatus(kpi, v);
+      return '<td class="rp-' + st.cls + '">' + esc(fmt(kpi, v)) + '</td>'; }).join('');
+    return '<tr><td class="rp-name">' + esc(row.meetmoment.label) + '</td>' + tds + '</tr>';
+  }).join('');
+
+  // 4) Badge-opbouw (counts)
+  const node = getNode(mm, spid);
+  const c = node && node.kpis && node.kpis._counts;
+  const countsHtml = c ? ('<div class="rp-counts">' +
+    '<span>' + c.geleverd + ' geleverd</span>' +
+    '<span>' + c.open + ' open</span>' +
+    '<span>' + c.expediteerbaar + ' expediteerbaar</span>' +
+    '<span>' + c.niet_bevestigd + ' niet bevestigd</span>' +
+    '<span>' + c.admin_open + ' admin niet bijgewerkt</span>' +
+    '<span>' + c.bevestigd_totaal + ' bevestigd (volledige scope)</span>' +
+    '</div>') : '';
+
+  const genDate = new Date().toLocaleString('nl-NL');
+  const html =
+'<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8">' +
+'<title>Expediting KPI-rapport ' + esc(mm.meetmoment.label) + '</title><style>' +
+'*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;margin:0;padding:28px 32px}' +
+'h1{font-size:18px;margin:0 0 2px;color:#003366}.rp-meta{font-size:11px;color:#6b7280;margin-bottom:16px}' +
+'.rp-meta b{color:#1f2937}' +
+'h2{font-size:13px;color:#003366;border-left:4px solid #E8B923;padding-left:8px;margin:18px 0 10px}' +
+'.rp-counts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:10.5px;color:#374151;margin-bottom:6px}' +
+'.rp-counts span{background:#eef4fb;border-radius:10px;padding:2px 9px}' +
+'.rp-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}' +
+'.rp-card{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:8px;padding:10px 12px}' +
+'.rp-card-name{font-size:10.5px;font-weight:700;color:#003366}' +
+'.rp-card-val{font-size:22px;font-weight:800;color:#111827;line-height:1.1;margin:2px 0}' +
+'.rp-card-norm{font-size:9.5px;color:#6b7280}' +
+'.rp-card.rp-ok{border-left-color:#2e7d32}.rp-card.rp-warn{border-left-color:#8a6d00}' +
+'.rp-card.rp-bad{border-left-color:#C62828}.rp-card.rp-na{border-left-color:#94a3b8}' +
+'.rp-chart{margin:6px 0 4px}.rp-chart img{max-width:100%;height:auto;border:1px solid #e2e8f0;border-radius:8px}' +
+'.rp-note{font-size:10px;color:#6b7280;margin:0 0 8px}' +
+'table{border-collapse:collapse;width:100%;font-size:10.5px}' +
+'th,td{border:1px solid #e2e8f0;padding:5px 8px;text-align:center}' +
+'th{background:#003366;color:#fff;font-weight:600}' +
+'td.rp-name{text-align:left;font-weight:700;color:#003366;background:#eef4fb;white-space:nowrap}' +
+'td.rp-ok{background:#C6EFCE;color:#2e7d32;font-weight:600}td.rp-warn{background:#FFEB9C;color:#8a6d00;font-weight:600}' +
+'td.rp-bad{background:#FFC7CE;color:#C62828;font-weight:600}td.rp-na{background:#eef2f6;color:#94a3b8}' +
+'.rp-foot{margin-top:16px;font-size:9.5px;color:#9ca3af;border-top:1px solid #e2e8f0;padding-top:8px}' +
+'@media print{body{padding:0}.rp-cards{grid-template-columns:repeat(4,1fr)}}' +
+'</style></head><body>' +
+'<h1>Expediting KPI-rapport</h1>' +
+'<div class="rp-meta">Meetmoment <b>' + esc(mm.meetmoment.label) + '</b> · scope <b>' + esc(scope) + '</b>' +
+  ' · bron ' + esc(mm.meetmoment.filename || '—') + ' · gegenereerd ' + esc(genDate) + '</div>' +
+'<h2>KPI-overzicht</h2>' + countsHtml +
+'<div class="rp-cards">' + cardsHtml + '</div>' +
+'<h2>Trend over meetmomenten</h2>' +
+'<p class="rp-note">' + esc(document.getElementById('chartNote') ? document.getElementById('chartNote').textContent : '') + '</p>' +
+(chartImg ? '<div class="rp-chart"><img src="' + chartImg + '" alt="Trendgrafiek"></div>'
+          : '<p class="rp-note">(Grafiek niet beschikbaar — nog geen data of grafiek niet gerenderd.)</p>') +
+'<h2>Detailtabel (meetmomenten × KPI) — scope: ' + esc(scope) + '</h2>' +
+'<table><thead><tr><th>Meetmoment</th>' + kpiHead + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+'<div class="rp-foot">Expediting | Royal IHC · Supply Chain — automatisch gegenereerd uit de bedrijfsbrede expediting-lijst (alleen YN/EN-projecten).</div>' +
+'</body></html>';
+
+  const w = window.open('', '_blank');
+  if (!w){ setStatus('Pop-up geblokkeerd — sta pop-ups toe om het PDF-rapport te openen.', 'err-msg'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  // Wacht tot de grafiek-afbeelding geladen is, dan pas printen
+  w.onload = () => { setTimeout(() => { w.focus(); w.print(); }, 250); };
+  setStatus('✓ PDF-rapport geopend — kies in het printvenster "Opslaan als PDF".', 'ok-msg');
 }
 
 function currentMM(){ const d = document.getElementById('meetmomentSelect').value;
@@ -542,7 +653,7 @@ function renderChart(){
       (spid==='__ALL__'?'bedrijfsbreed':spid);
   }
   chart = new Chart(ctx, { type, data:{labels, datasets},
-    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+    options:{ responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:'index',intersect:false},
       plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true, title:{display:!!yTitle, text:yTitle}}} } });
 }
 function makeDataset(label, data, color, type){
