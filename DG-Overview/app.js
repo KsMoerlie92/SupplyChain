@@ -28,6 +28,39 @@ function escapeHtml(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Stoffenmanager-matching ──────────────────────────────────────────────
+// We hebben GEEN betrouwbare automatische koppeling (het interne Stoffenmanager
+// productnummer in de deel-link staat niet in onze export, alleen de YPID —
+// zie eerdere analyse). Dit is dus bewust een voorzichtige, brede signalering:
+// "dit zou een van de 740 geregistreerde stoffen kunnen zijn, controleer zelf
+// even" — geen harde bevestiging. Vandaar een ruime woordmatch i.p.v. exact.
+var STOFFENMANAGER_URL = 'https://app.stoffenmanager.com/publication/6d3bkxv67lkjfkruu442bi4igkiegvlr79ctr5v3q33ao6aeyugsicfdpiqbs5ys/?Culture=nl';
+var STOP_WORDS = {'and':1,'voor':1,'met':1,'van':1,'the':1,'part':1,'europe':1,'liter':1,'blik':1};
+
+function _normWords(s){
+  return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').split(' ')
+    .filter(function(w){ return w.length >= 4 && !STOP_WORDS[w]; });
+}
+
+var _substanceWordCache = null;
+function matchStoffenmanager(desc){
+  if(!window.STOFFENMANAGER_SUBSTANCES || !desc) return null;
+  if(!_substanceWordCache){
+    _substanceWordCache = STOFFENMANAGER_SUBSTANCES.map(function(s){
+      return { name: s.n, available: s.a, words: _normWords(s.n) };
+    });
+  }
+  var descWords = _normWords(desc);
+  if(!descWords.length) return null;
+  for(var i=0;i<_substanceWordCache.length;i++){
+    var s = _substanceWordCache[i];
+    for(var j=0;j<s.words.length;j++){
+      if(descWords.indexOf(s.words[j]) !== -1) return s;
+    }
+  }
+  return null;
+}
+
 // Kiest zwarte of witte tekst op basis van de relatieve helderheid van een
 // hex-kleur (WCAG-achtige benadering), zodat elke categoriekleur — licht of
 // donker — altijd leesbare tekst krijgt.
@@ -641,6 +674,15 @@ function renderResults(results){
           dateSpan.title = 'Last Expedited: ' + item.lastExp;
           li.appendChild(dateSpan);
         }
+        var sm = matchStoffenmanager(item.desc);
+        if(sm){
+          var smNote = document.createElement('div');
+          smNote.className = 'sm-note';
+          smNote.innerHTML = '\uD83E\uDDEA Komt mogelijk overeen met <b>' + escapeHtml(sm.name) + '</b> in het Stoffenmanager-register'
+            + (sm.available ? ' (daar is al een document voor bekend)' : ' (daar lijkt nog geen document voor te zijn)')
+            + ' — <a href="' + STOFFENMANAGER_URL + '" target="_blank">zelf opzoeken en bevestigen \u2197</a>';
+          li.appendChild(smNote);
+        }
         ul.appendChild(li);
       });
       sec4.appendChild(ul);
@@ -682,6 +724,33 @@ function renderTimeline(results){
     label.textContent = 'Filter op categorie:';
     filterBox.appendChild(label);
 
+    var btnAll = document.createElement('button');
+    btnAll.type = 'button';
+    btnAll.className = 'tl-bulk-btn';
+    btnAll.textContent = '\u2611 Alles selecteren';
+    btnAll.onclick = function(){
+      activeCats.forEach(function(c){ activeCategoryFilters[c.name] = true; });
+      chipEls.forEach(function(el){
+        el.classList.add('active'); el.classList.remove('inactive');
+      });
+      rebuildTimelineItems();
+    };
+    filterBox.appendChild(btnAll);
+
+    var btnNone = document.createElement('button');
+    btnNone.type = 'button';
+    btnNone.className = 'tl-bulk-btn';
+    btnNone.textContent = '\u2610 Selectie wissen';
+    btnNone.onclick = function(){
+      activeCats.forEach(function(c){ activeCategoryFilters[c.name] = false; });
+      chipEls.forEach(function(el){
+        el.classList.remove('active'); el.classList.add('inactive');
+      });
+      rebuildTimelineItems();
+    };
+    filterBox.appendChild(btnNone);
+
+    var chipEls = [];
     activeCats.forEach(function(cat){
       var chip = document.createElement('span');
       chip.className = 'tl-chip active risk-' + cat.risk;
@@ -696,6 +765,7 @@ function renderTimeline(results){
         rebuildTimelineItems();
       };
       filterBox.appendChild(chip);
+      chipEls.push(chip);
     });
   }
 
