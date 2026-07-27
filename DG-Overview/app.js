@@ -28,6 +28,19 @@ function escapeHtml(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Kiest zwarte of witte tekst op basis van de relatieve helderheid van een
+// hex-kleur (WCAG-achtige benadering), zodat elke categoriekleur — licht of
+// donker — altijd leesbare tekst krijgt.
+function contrastText(hex){
+  if(!hex) return '#fff';
+  var h = hex.replace('#','');
+  if(h.length === 3) h = h.split('').map(function(c){ return c+c; }).join('');
+  var r = parseInt(h.substr(0,2),16)/255, g = parseInt(h.substr(2,2),16)/255, b = parseInt(h.substr(4,2),16)/255;
+  var lin = [r,g,b].map(function(c){ return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); });
+  var lum = 0.2126*lin[0] + 0.7152*lin[1] + 0.0722*lin[2];
+  return lum > 0.45 ? '#04121f' : '#ffffff';
+}
+
 // Date helpers
 var NL_MONTHS = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
 var EN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -96,6 +109,8 @@ const DEFAULT_RULES = {
     ],
     "action": "SDS/MSDS opvragen bij leverancier. IMDG Klasse 3 controle.",
     "regulations": "IMDG Code Klasse 3, MARPOL Annex I"
+ ,
+    "color": "#E8383D"
   },
   "🔴 2. Koelmiddelen (F-gas)": {
     "risk": "high",
@@ -118,6 +133,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Koelmiddeltype bevestigen. F-gas registratie vereist. SDS opvragen.",
     "regulations": "EU F-gas Regulation 517/2014, CLP H280"
+ ,
+    "color": "#48CAE4"
   },
   "🔴 3. Batterijen & Energieopslag": {
     "risk": "high",
@@ -140,6 +157,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Batterijtype en State of Charge (SoC) bevestigen. IMDG Klasse 9 UN 3480/3481.",
     "regulations": "IMDG Code Klasse 9, UN 3480/3481/3536"
+ ,
+    "color": "#FFEA00"
   },
   "🔴 4. Brandblusmiddelen & Gassen": {
     "risk": "high",
@@ -153,6 +172,8 @@ const DEFAULT_RULES = {
     ],
     "action": "SDS opvragen. Drukvatveiligheid controleren. CO2 = Klasse 2.2.",
     "regulations": "IMDG Code Klasse 2.2, UN 1013, PED Directive"
+ ,
+    "color": "#FB8500"
   },
   "🟠 5. SCR/Ureum (uitlaatgas)": {
     "risk": "medium",
@@ -168,6 +189,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Katalysator bevat mogelijk V2O5 (giftig). Ureum = ammoniakvorming bij verhitting.",
     "regulations": "CLP: V2O5 = Carc. 2 / Repr. 2, AFS-40 urea handling"
+ ,
+    "color": "#A68A3C"
   },
   "🟠 6. Hydraulische systemen": {
     "risk": "medium",
@@ -182,6 +205,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Hydraulische olie type bevestigen. Milieugevaarlijk. Lekpreventie controleren.",
     "regulations": "CLP H304/H411, MARPOL Annex I"
+ ,
+    "color": "#3A86FF"
   },
   "🟠 7. Transformatoren": {
     "risk": "medium",
@@ -194,6 +219,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Controleer op PCB’s (IHM Table A). Isolatieolie/hars type verifiëren.",
     "regulations": "IHM Appendix 1 (PCBs), EU SRR, Stockholm Convention"
+ ,
+    "color": "#2A4494"
   },
   "🟠 8. Motoren & Verbranding": {
     "risk": "medium",
@@ -206,6 +233,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Smeerolie, koelvloeistof, RCF isolatie controleren. IHM Table B check.",
     "regulations": "IHM Appendix 2 (RCF), MARPOL Annex VI"
+ ,
+    "color": "#BC6C25"
   },
   "🟡 9. Lassen & Werkplaats": {
     "risk": "low",
@@ -219,6 +248,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Lasdampen bevatten zware metalen. Persoonlijke beschermingsmiddelen vereist.",
     "regulations": "EU OEL Directive, CLP bijlage VI"
+ ,
+    "color": "#E8B923"
   },
   "🟡 10. Rubber & Isolatie (IHM)": {
     "risk": "low",
@@ -230,6 +261,8 @@ const DEFAULT_RULES = {
     ],
     "action": "IHM Material Declaration opvragen. Check op asbest, RCF, HBCDD, cadmium, zware metalen.",
     "regulations": "IHM Table A (asbest) & Table B (cadmium, HBCDD, RCF)"
+ ,
+    "color": "#8D6E63"
   },
   "🟡 11. Overig gevaarlijk": {
     "risk": "low",
@@ -243,6 +276,8 @@ const DEFAULT_RULES = {
     ],
     "action": "Individuele beoordeling nodig. Xenon = gas onder druk, Gyro = mogelijk kwik.",
     "regulations": "Diverse – per item beoordelen"
+ ,
+    "color": "#6C757D"
   },
   "\ud83d\udd35 12. Computer Based Systems (cyberresilience)": {
     "risk": "medium",
@@ -255,7 +290,71 @@ const DEFAULT_RULES = {
     ],
     "action": "Bepaal of dit een Computer Based System (CBS) is onder IACS UR E26/E27. Toets tegen de laag-risico-uitzonderingscriteria (geïsoleerd/geen netwerk, geen bereikbare fysieke poorten, fysiek afgeschermde locatie, niet-geïntegreerd, geen categorie III-veiligheidsfunctie) — bij twijfel is een volledige cyberresilience-beoordeling vereist. Vul het volledige beoordelingsformulier in via de link hieronder.",
     "regulations": "IACS UR E26/E27, IACS Rec. 166 (Cyber Resilience), IACS Rec. 171 (mei 2022)",
-    "formLink": "../E27-Assessment/index.html"
+    "formLink": "../E27-Assessment/index.html",
+    "color": "#B24BF3"
+  },
+  "🔴 13. Explosieven & Pyrotechniek": {
+    "risk": "high",
+    "keywords": [
+      "Distress flare", "Signal flare", "Hand flare", "Smoke signal",
+      "Parachute flare", "Rocket line throwing", "Pyrotechnic",
+      "Cartridge actuated", "Explosive bolt", "Igniter cartridge"
+    ],
+    "action": "SDS opvragen. IMDG Klasse 1 subklasse en compatibiliteitsgroep bevestigen. Reddingsmiddelen (vuurpijlen/fakkels) vallen vaak onder deze klasse.",
+    "regulations": "IMDG Code Klasse 1, SOLAS Hoofdstuk III (reddingsmiddelen)",
+    "color": "#FF5A1F"
+  },
+  "🔴 14. Bijtende stoffen (Corrosieven)": {
+    "risk": "high",
+    "keywords": [
+      "Battery acid", "Sulphuric acid", "Sodium hydroxide", "Caustic soda",
+      "Hydrochloric acid", "Boiler descaler", "Corrosion inhibitor concentrate",
+      "Alkaline cleaner concentrate"
+    ],
+    "action": "SDS opvragen. pH en verpakkingsgroep (I/II/III) bevestigen. Corrosief voor huid/ogen — PBM vereist.",
+    "regulations": "IMDG Code Klasse 8, CLP Skin Corr. 1 / Eye Dam. 1",
+    "color": "#14B8A6"
+  },
+  "🔴 15. Toxische & Milieugevaarlijke stoffen": {
+    "risk": "high",
+    "keywords": [
+      "Pesticide", "Biocide", "Fumigant", "Antifouling paint", "TBT",
+      "Marine pollutant", "Methanol", "Toxic reagent", "Environmentally hazardous"
+    ],
+    "action": "SDS opvragen. Marine Pollutant-markering (IMDG) controleren. Blootstellingsrisico beoordelen.",
+    "regulations": "IMDG Code Klasse 6.1 / Marine Pollutant, MARPOL Annex III",
+    "color": "#2ECC71"
+  },
+  "🔴 16. Radioactieve bronnen (meetinstrumenten)": {
+    "risk": "high",
+    "keywords": [
+      "Nucleonic level gauge", "Radioactive source", "Density gauge",
+      "Gamma gauge", "Level detector caesium", "Americium source",
+      "Check source", "Radiometric gauge"
+    ],
+    "action": "Stralingsbeschermingsdeskundige (SBD) inschakelen. Vergunning/kennisgeving controleren — nucleonic density-/niveaumeters komen veel voor op baggerinstallaties (bv. slurriedichtheidsmeting).",
+    "regulations": "IMDG Code Klasse 7, Besluit basisveiligheidsnormen stralingsbescherming (ANVS)",
+    "color": "#FF3EA5"
+  },
+  "🟠 17. Oxiderende stoffen & Peroxiden": {
+    "risk": "medium",
+    "keywords": [
+      "Sodium hypochlorite", "Calcium hypochlorite", "Hydrogen peroxide",
+      "Oxidizing agent", "Chlorine dosing", "Bleach concentrate"
+    ],
+    "action": "SDS opvragen. Niet samen met brandbare stoffen opslaan (IMDG-segregatietabel).",
+    "regulations": "IMDG Code Klasse 5.1 / 5.2",
+    "color": "#CDDC39"
+  },
+  "🟠 18. Verven, coatings & Isocyanaten": {
+    "risk": "medium",
+    "keywords": [
+      "Two-component paint", "Isocyanate", "MDI", "TDI", "Epoxy coating",
+      "Polyurethane coating", "Primer concentrate", "Paint thinner"
+    ],
+    "action": "SDS + ademhalingsbescherming controleren. Isocyanaten zijn sensibiliserend (astma-risico) — ventilatie-eisen naleven.",
+    "regulations": "CLP Resp. Sens. 1, REACH Bijlage XVII entry 74 (diisocyanaten)",
+    "color": "#CE74D6"
   }
 };
 
@@ -452,6 +551,8 @@ function renderResults(results){
 
     var card = document.createElement('div');
     card.className = 'cat-card ' + riskClass;
+    card.style.setProperty('--cat-color', rule.color || 'var(--border)');
+    card.style.setProperty('--cat-text', contrastText(rule.color));
     card.dataset.search = (catName + ' ' + Array.from(data.descriptions).join(' ') + ' ' + Array.from(data.basePOs).join(' ')).toLowerCase();
 
     var uniquePOs = Array.from(data.basePOs).sort();
@@ -566,7 +667,7 @@ function renderTimeline(results){
   var activeCats = [];
   for(var cn in results){
     if(results[cn].items.length > 0){
-      activeCats.push({ name: cn, risk: currentRules[cn].risk, count: results[cn].items.length });
+      activeCats.push({ name: cn, risk: currentRules[cn].risk, color: currentRules[cn].color, count: results[cn].items.length });
     }
   }
 
@@ -584,6 +685,8 @@ function renderTimeline(results){
     activeCats.forEach(function(cat){
       var chip = document.createElement('span');
       chip.className = 'tl-chip active risk-' + cat.risk;
+      chip.style.setProperty('--cat-color', cat.color || 'var(--border)');
+      chip.style.setProperty('--cat-text', contrastText(cat.color));
       chip.dataset.cat = cat.name;
       chip.textContent = cat.name.replace(/^[^\d]*/, '').substring(0,30) + ' (' + cat.count + ')';
       chip.onclick = function(){
@@ -619,6 +722,7 @@ function rebuildTimelineItems(){
         po: item.po, desc: item.desc,
         category: item.category || catName,
         risk: item.risk || 'low',
+        color: (currentRules[item.category || catName] || {}).color,
         lastExp: item.lastExp
       });
     });
@@ -669,6 +773,7 @@ function rebuildTimelineItems(){
     items.forEach(function(item){
       var row = document.createElement('div');
       row.className = 'tl-item risk-' + item.risk;
+      row.style.setProperty('--cat-color', item.color || 'var(--border)');
 
       var dateSpan = document.createElement('span');
       dateSpan.className = 'tl-date';
@@ -685,6 +790,8 @@ function rebuildTimelineItems(){
 
       var catSpan = document.createElement('span');
       catSpan.className = 'tl-cat ' + item.risk;
+      catSpan.style.setProperty('--cat-color', item.color || 'var(--border)');
+      catSpan.style.setProperty('--cat-text', contrastText(item.color));
       catSpan.textContent = item.category.replace(/^[^\d]*/, '').substring(0,25);
 
       row.appendChild(dateSpan);
