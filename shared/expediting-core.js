@@ -179,9 +179,23 @@
     return { headers, rows };
   }
 
+  // Defensieve filter op een reeds opgebouwde { headers, rows(objecten) }-tabel.
+  // Wordt gebruikt door expediting-data.js bij het LEZEN, zodat een oudere
+  // (nog niet opnieuw gecommitte) expediting-data.json alsnog X-parts en
+  // niet-YN/EN-projecten weglaat. Idempotent — dubbel filteren is onschadelijk.
+  function filterTable(table){
+    if(!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) return table;
+    const rows = table.rows.filter(o => {
+      if(!keepProject(o[COLS.sub])) return false;
+      if(isXPart(o[COLS.part])) return false;
+      return true;
+    });
+    return { headers: table.headers, rows };
+  }
+
   global.ExpeditingCore = {
     OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject, isXPart,
     toDate, num, dmy, shortD, esc, detectHeader,
-    normalizeFromRaw, rawTable, score, aggregate, startOfToday
+    normalizeFromRaw, rawTable, filterTable, score, aggregate, startOfToday
   };
 })(window);
