@@ -11,30 +11,37 @@ function escapeHtml(str){
 
 // De 5 verplichte UR E26 §6.4-criteria — ALLE moeten JA zijn voor vrijstelling
 var MANDATORY = [
-  { id: 1, req: 'The CBS shall be isolated.',
-    measure: 'The CBS shall not have any IP-network connection to other systems or networks.',
+  { id: 1, req: 'Het CBS moet geïsoleerd zijn.',
+    reqEn: 'The CBS shall be isolated.',
+    measure: 'Het CBS mag geen IP-netwerkverbinding hebben met andere systemen of netwerken.',
     hint: 'bv. naam van topologiediagram dat dit aantoont' },
-  { id: 2, req: 'The CBS shall have no accessible physical interface ports.',
-    measure: 'Unused interfaces shall be logically disabled. It shall not be possible to connect unauthorized devices to the CBS.',
+  { id: 2, req: 'Het CBS mag geen bereikbare fysieke interfacepoorten hebben.',
+    reqEn: 'The CBS shall have no accessible physical interface ports.',
+    measure: 'Ongebruikte interfaces moeten logisch uitgeschakeld zijn. Het mag niet mogelijk zijn om onbevoegde apparaten op het CBS aan te sluiten.',
     hint: 'bv. model van de port blocker' },
-  { id: 3, req: 'The CBS must be located in areas to which physical access is controlled.',
-    measure: 'The CBS is located in a physically access controlled area or inside a control box with door locks.',
+  { id: 3, req: 'Het CBS moet zich bevinden in ruimtes waar de fysieke toegang gecontroleerd wordt.',
+    reqEn: 'The CBS must be located in areas to which physical access is controlled.',
+    measure: 'Het CBS bevindt zich in een fysiek toegangsgecontroleerde ruimte of in een schakelkast met deursloten.',
     hint: 'bv. installatiehandleiding met locatie-aanbeveling' },
-  { id: 4, req: 'The CBS shall not be an integrated control system serving multiple ship functions as specified in the scope of applicability of this UR.',
-    measure: 'The system is not an integrated control system that provides multiple important functions.',
+  { id: 4, req: 'Het CBS mag geen geïntegreerd besturingssysteem zijn dat meerdere scheepsfuncties bedient, zoals gespecificeerd in het toepassingsgebied van deze UR.',
+    reqEn: 'The CBS shall not be an integrated control system serving multiple ship functions as specified in the scope of applicability of this UR.',
+    measure: 'Het systeem is geen geïntegreerd besturingssysteem dat meerdere belangrijke functies verzorgt.',
     hint: 'bv. productdocumentatie' },
-  { id: 5, req: 'CBS should not serve ship functions of category III.',
-    measure: 'The system is not classified as a cat. III safety system according to IACS UR E22.',
+  { id: 5, req: 'Het CBS mag geen scheepsfuncties van categorie III bedienen.',
+    reqEn: 'CBS should not serve ship functions of category III.',
+    measure: 'Het systeem is niet geclassificeerd als een categorie III-veiligheidssysteem volgens IACS UR E22.',
     hint: 'bv. productdocumentatie' },
 ];
 
 // De 2 niet-verplichte aanvullende overwegingen
 var OPTIONAL = [
-  { id: 6, req: 'Known vulnerabilities, threats, potential impacts deriving from a cyber incident affecting the CBS have been duly considered in the risk assessment.',
-    measure: 'Non mandatory',
+  { id: 6, req: 'Bekende kwetsbaarheden, dreigingen en mogelijke gevolgen van een cyberincident dat het CBS treft, zijn afdoende meegenomen in de risicobeoordeling.',
+    reqEn: 'Known vulnerabilities, threats, potential impacts deriving from a cyber incident affecting the CBS have been duly considered in the risk assessment.',
+    measure: 'Niet verplicht',
     hint: 'bv. risicobeoordeling op kwetsbaarheden' },
-  { id: 7, req: 'The attack surface for the CBS is minimized, having considered its complexity, connectivity, physical and logical access points, including wireless access points.',
-    measure: 'Non mandatory',
+  { id: 7, req: 'Het aanvalsoppervlak van het CBS is geminimaliseerd, rekening houdend met de complexiteit, connectiviteit, en fysieke en logische toegangspunten, inclusief draadloze toegangspunten.',
+    reqEn: 'The attack surface for the CBS is minimized, having considered its complexity, connectivity, physical and logical access points, including wireless access points.',
+    measure: 'Niet verplicht',
     hint: 'bv. risicobeoordeling op kwetsbaarheden' },
 ];
 
@@ -49,6 +56,7 @@ function renderCriteria(list, containerId){
     return '' +
       '<div class="crit-row" data-crit="' + c.id + '">' +
         '<div class="crit-req"><b>' + c.id + '.</b> ' + escapeHtml(c.req) + '</div>' +
+        (c.reqEn ? '<div class="crit-req-en">' + escapeHtml(c.reqEn) + '</div>' : '') +
         '<div class="crit-measure">' + escapeHtml(c.measure) + '</div>' +
         '<div class="crit-answer">' +
           '<label class="radio-yes"><input type="radio" name="crit-' + c.id + '" value="YES" onchange="onCriteriaChange()"> JA</label>' +
