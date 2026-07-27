@@ -1,8 +1,207 @@
 {
   "meta": {
-    "bijgewerkt": null,
-    "events": 0,
-    "toelichting": "Teller van itemlijst-validaties. Download de bijgewerkte log via de knop in de Itemlijst-Validator en commit dit bestand als shared/validatie-log.json."
+    "bijgewerkt": "2026-07-27T11:38:49.346Z",
+    "events": 18,
+    "toelichting": "Teller van itemlijst-validaties. Commit dit bestand als shared/validatie-log.json."
   },
-  "events": []
+  "events": [
+    {
+      "id": "mrovb02e-jg1xqs",
+      "ts": "2026-07-17T11:41:42.806Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-010",
+      "supplier": "Alfa Laval",
+      "bestand": "1321-010 ITEMLIJST Alfa Laval.xlsx — 8 rijen",
+      "regels": 8,
+      "fouten": 0,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "mrt11397-y7qgew",
+      "ts": "2026-07-20T09:33:02.779Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 4
+    },
+    {
+      "id": "mrt19fws-clydwm",
+      "ts": "2026-07-20T09:39:32.428Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 2
+    },
+    {
+      "id": "mrt19h2b-n9iyvm",
+      "ts": "2026-07-20T09:39:33.923Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 2
+    },
+    {
+      "id": "mrt3y9js-81wokp",
+      "ts": "2026-07-20T10:54:49.816Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 7
+    },
+    {
+      "id": "mrt3yagj-m39vvn",
+      "ts": "2026-07-20T10:54:50.995Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 7
+    },
+    {
+      "id": "mrt5o9kz-5otslm",
+      "ts": "2026-07-20T11:43:02.531Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 45 rijen",
+      "regels": 45,
+      "fouten": 11,
+      "waarschuwingen": 2
+    },
+    {
+      "id": "mrt5qs8d-rit683",
+      "ts": "2026-07-20T11:45:00.013Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6ayxk-36bb2q",
+      "ts": "2026-07-20T12:00:41.816Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6be2k-fevpgw",
+      "ts": "2026-07-20T12:01:01.436Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6c1cv-dlvgeo",
+      "ts": "2026-07-20T12:01:31.615Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6c2br-6halut",
+      "ts": "2026-07-20T12:01:32.871Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6mcbb-jhv294",
+      "ts": "2026-07-20T12:09:32.375Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 164,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6ncts-7hvvmn",
+      "ts": "2026-07-20T12:10:19.696Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6yzs5-yogxtv",
+      "ts": "2026-07-20T12:19:22.661Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt6zhyw-m2mdik",
+      "ts": "2026-07-20T12:19:46.232Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt75ulb-pji4c2",
+      "ts": "2026-07-20T12:24:42.527Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "mrt75vuh-clmh3v",
+      "ts": "2026-07-20T12:24:44.153Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    }
+  ]
 }
