@@ -13,17 +13,72 @@ const PALETTE = ['#003366','#E8B923','#4A90C2','#2e7d32','#C62828','#7B4FA0','#F
 function kpiLineColor(idx){ return PALETTE[idx % PALETTE.length]; }
 
 // Projectfilter — alleen YN/EN-scheepsprojecten (zelfde prefixes als shared/expediting-core.js).
-// Lokale fallback zodat het dashboard óók filtert als expediting-core.js niet geladen is.
 const PROJECT_PREFIXES = ['YN', 'EN'];
 function keepProject(id){
   if (id === '__ALL__') return true;
   const s = String(id == null ? '' : id).trim().toUpperCase();
   return PROJECT_PREFIXES.some(p => s.startsWith(p));
 }
-
-// X-parts (Part No / kolom K beginnend met 'X') zijn dummy/placeholder-regels en
-// worden UITGEFILTERD — ze geven anders een vertekend beeld in de KPI's.
+// X-parts (Part No / kolom K beginnend met 'X') = dummy/placeholder → uitfilteren.
 function isXPart(v){ return String(v == null ? '' : v).trim().toUpperCase().startsWith('X'); }
+
+// ── Validatie-log (Itemlijst-Validator) ───────────────────────────────────
+// Elke gebruiker heeft een eigen validatie-log.json (zelfde naam). Meerdere
+// worden samengevoegd en ONTDUBBELD op event-id, zodat overlappende/dubbele
+// uploads nooit dubbel tellen. Voedt de KPI "Itemlijsten gevalideerd".
+const VLKEY = 'validatieLogMerged';
+let VALLOG = [];
+function mergeEvents(...lists){
+  const m = new Map();
+  lists.flat().forEach(e => { if (e && e.id != null) m.set(e.id, e); else if (e) m.set(JSON.stringify(e), e); });
+  return [...m.values()];
+}
+async function initValLog(){
+  let base = [];
+  for (const url of ['../shared/validatie-log.json', 'validatie-log.json']){
+    try { const r = await fetch(url, {cache:'no-store'}); if (r.ok){ const j = await r.json();
+      if (j && Array.isArray(j.events)){ base = j.events; break; } } } catch(e){}
+  }
+  let override = [];
+  try { override = JSON.parse(localStorage.getItem(VLKEY) || '[]'); } catch(e){}
+  VALLOG = mergeEvents(base, override);
+}
+function projNum(id){ return String(id == null ? '' : id).replace(/\D/g, ''); }   // YN1321 -> 1321
+// Aantal UNIEKE itemlijsten (op deliveryRef) — herhaalde validaties tellen 1×.
+function validationCount(spid){
+  if (!VALLOG || !VALLOG.length) return 0;
+  const wantNum = (spid && spid !== '__ALL__') ? projNum(spid) : null;
+  const lists = new Set();
+  for (const e of VALLOG){
+    if (wantNum){
+      const refNum = String(e.deliveryRef || '').split('-')[0].replace(/\D/g, '');
+      if (refNum !== wantNum) continue;
+    }
+    lists.add(e.deliveryRef || e.bestand || e.id);
+  }
+  return lists.size;
+}
+function validationRuns(spid){
+  if (!VALLOG || !VALLOG.length) return 0;
+  const wantNum = (spid && spid !== '__ALL__') ? projNum(spid) : null;
+  if (!wantNum) return VALLOG.length;
+  return VALLOG.filter(e => String(e.deliveryRef || '').split('-')[0].replace(/\D/g,'') === wantNum).length;
+}
+
+// Config aanpassen ná het laden: milestones weg + KPI "schedule_adherence"
+// vervangen door "Itemlijsten gevalideerd" (bron: validatie-log). Zo hoeft
+// kpi-config.json niet handmatig aangepast te worden.
+function patchConfig(){
+  if (!CONFIG) return;
+  if (CONFIG.meta) CONFIG.meta.milestones = [];
+  const def = { id:'itemlists_validated', name:'Itemlijsten gevalideerd', kind:'vallog',
+    definition:'Aantal unieke itemlijsten dat met de Itemlijst-Validator is gecontroleerd (op deliveryRef; herhaalde validaties van dezelfde lijst tellen één keer). Bron: samengevoegde validatie-log(s).',
+    formula:'# unieke itemlijsten (deliveryRef)', source:'validatie-log.json', owner:'Expediter',
+    unit:'#', direction:'count_only', green:0, yellow:0, norm:'—', auto:false };
+  const idx = CONFIG.kpis.findIndex(k => k.id === 'schedule_adherence');
+  if (idx >= 0) CONFIG.kpis[idx] = def;
+  else if (!CONFIG.kpis.some(k => k.id === 'itemlists_validated')) CONFIG.kpis.push(def);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -33,8 +88,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetch('subprojects.json', {cache:'no-store'}).then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
     CONFIG = cfg; BASE_HISTORY = hist; SUBPROJECTS = subs;
+    patchConfig();
     const stored = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     HISTORY = stored || JSON.parse(JSON.stringify(BASE_HISTORY));
+    await initValLog();
     init();
     warnIfStale();
   } catch (err) {
@@ -47,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Een meetmoment is "verouderd" als het berekend is met een oudere versie van
 // deze app, waarin een inmiddels toegevoegde automatische KPI nog niet bestond.
-// Die sleutel ontbreekt dan in de opgeslagen snapshot -> de kaart toont "—".
 function missingAutoKpis(mm) {
   const auto = CONFIG.kpis.filter(k => k.auto).map(k => k.id);
   const k = (mm && mm.aggregate && mm.aggregate.kpis) || {};
@@ -72,11 +128,7 @@ function init() {
   try {
     document.getElementById('appTitle').textContent = CONFIG.meta.title;
     document.getElementById('appSubtitle').textContent = CONFIG.meta.subtitle;
-    const ms = document.getElementById('milestones'); ms.innerHTML = '';
-    (CONFIG.meta.milestones || []).forEach(m => {
-      const s = document.createElement('span'); s.className='pill'; s.textContent=m; ms.appendChild(s);
-    });
-  } catch(e){ console.warn('[KPI] header/milestones:', e); }
+  } catch(e){ console.warn('[KPI] header:', e); }
 
   // 2) Event listeners EERST — zo werkt de upload-knop altijd
   wireEvents();
@@ -86,6 +138,7 @@ function init() {
   try { buildKpiSelect(); }        catch(e){ console.error('[KPI] buildKpiSelect:', e); }
   try { buildMeetmomentSelect(); } catch(e){ console.error('[KPI] buildMeetmomentSelect:', e); }
   try { renderAll(); }             catch(e){ console.error('[KPI] renderAll:', e); }
+  try { showValLogStatus(); }      catch(e){ console.error('[KPI] showValLogStatus:', e); }
 
   // 4) Geen projectdata? Automatisch de centrale Admin-lijst laden.
   maybeAutoLoadCentral();
@@ -113,14 +166,20 @@ function wireEvents(){
   const ep = document.getElementById('exportPdfBtn');       if (ep) ep.addEventListener('click', exportPDF);
   const dh = document.getElementById('downloadHistoryBtn'); if (dh) dh.addEventListener('click', downloadHistory);
   const rb = document.getElementById('resetBtn');           if (rb) rb.addEventListener('click', resetHistory);
+
+  // Validatie-log
+  const vlInput = document.getElementById('valLogInput');
+  const vlBtn   = document.getElementById('valLogBtn');
+  if (vlBtn && vlInput) vlBtn.addEventListener('click', () => vlInput.click());
+  if (vlInput) vlInput.addEventListener('change', e => { handleValLogFiles(e.target.files); e.target.value=''; });
+  const vlDl = document.getElementById('valLogDownloadBtn'); if (vlDl) vlDl.addEventListener('click', downloadValLog);
+  const vlRs = document.getElementById('valLogResetBtn');    if (vlRs) vlRs.addEventListener('click', resetValLog);
 }
 
 // ── Centrale lijst (Admin) automatisch ophalen ────────────────────────────
 function hasProjectData(){
   return HISTORY.some(mm => Object.keys(mm.subprojects||{}).length > 0);
 }
-// ExpeditingData.loadRaw() geeft { headers, rows } met rows als OBJECTEN
-// (gekeyed op header). computeSnapshot leest POSITIONEEL → deze brug lijnt uit.
 function toPositionalRows(headers, rows){
   if (!rows || !rows.length) return rows || [];
   if (Array.isArray(rows[0])) return rows;              // al positioneel
@@ -157,13 +216,11 @@ function buildSubprojectSelect() {
   const sel = document.getElementById('subprojectSelect');
   const prev = sel.value; sel.innerHTML = '';
   const seen = new Set(); const list = [];
-  // Alleen YN/EN-projecten in de dropdown (Bedrijfsbreed/__ALL__ blijft altijd staan)
   (SUBPROJECTS || []).forEach(sp => { if (keepProject(sp.id)) { list.push(sp); seen.add(sp.id); } });
   HISTORY.forEach(mm => Object.keys(mm.subprojects || {}).forEach(id => {
     if (!seen.has(id) && keepProject(id)) { seen.add(id);
       list.push({id, description:(mm.subprojects[id].description||''), total:mm.subprojects[id].total||0}); }
   }));
-  // Zorg dat "Bedrijfsbreed" altijd bovenaan beschikbaar is
   if (!seen.has('__ALL__')) { list.unshift({id:'__ALL__', description:'Bedrijfsbreed (alle projecten)', total:0}); seen.add('__ALL__'); }
   list.forEach(sp => {
     const o = document.createElement('option'); o.value = sp.id;
@@ -202,8 +259,12 @@ function historyDesc(){ return [...HISTORY].sort((a,b)=> a.meetmoment.date > b.m
 function getNode(mm, spid){ if (!mm) return null;
   if (spid === '__ALL__') return mm.aggregate || null;
   return (mm.subprojects && mm.subprojects[spid]) ? mm.subprojects[spid] : null; }
-function getValue(mm, spid, kpiId){ const n = getNode(mm, spid);
-  if (!n || !n.kpis) return null; const v = n.kpis[kpiId]; return (v===undefined)?null:v; }
+function getValue(mm, spid, kpiId){
+  const kpi = kpiById(kpiId);
+  if (kpi && kpi.kind === 'vallog') return validationCount(spid);   // uit validatie-log, niet uit de expediting-snapshot
+  const n = getNode(mm, spid);
+  if (!n || !n.kpis) return null; const v = n.kpis[kpiId]; return (v===undefined)?null:v;
+}
 function getStatus(kpi, value){
   if (value===null || value===undefined || value==='') return {label:'—', cls:'na'};
   if (kpi.direction==='count_only') return {label:String(value), cls:'na'};
@@ -230,7 +291,6 @@ function toDate(v){
 }
 function isEmpty(v){ return v===null||v===undefined||(typeof v==='string'&&v.trim()===''); }
 function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
-// name mag een string zijn of een lijst met alternatieve kolomnamen
 function findCol(headers, name){
   const names = Array.isArray(name) ? name : [name];
   for (const n of names){
@@ -261,23 +321,17 @@ function computeKpisForLines(lines, C, rules){
   const stat = r => String(r[C.pls]||'').trim().toLowerCase();
   const isConfirmed = r => stat(r)===CONF;
 
-  // 0. Al geleverd → buiten de rapportage (anders tellen ze als 'niet bevestigd')
   const geleverd = lines.filter(r => DELIV.includes(stat(r)));
   const open = lines.filter(r => !DELIV.includes(stat(r)));
   const total = open.length;
-  // Bevestigd (Confirmed) — VOLLEDIGE scope: alle regels in scope, incl. geleverde.
-  // Komt overeen met het aandeel Confirmed in kolom E (bv. 55,6%).
   const confirmedAll = lines.filter(isConfirmed).length;
   const confirmed_pct = lines.length ? round1(100*confirmedAll/lines.length) : null;
   if (!total) return { late_pct:null, avg_delay:null, critical_delay:null, not_yet_expedited:null,
     not_confirmed_pct:null, stale_admin_pct:null, confirmed_pct, schedule_adherence:null, field_visits:null, ncr:null,
     _counts:{ totaal:lines.length, geleverd:geleverd.length, open:0, expediteerbaar:0, niet_bevestigd:0, admin_open:0, bevestigd_totaal:confirmedAll } };
 
-  // 1. Niet bevestigd — zonder leveranciersbevestiging valt er niets te valideren
   const notConfirmed = open.filter(r => !isConfirmed(r));
 
-  // 2. PO's met alles bevestigd, identieke datums, in het verleden.
-  //    Minimaal MINL regels: bij één regel is 'alle datums identiek' triviaal waar.
   const today = startOfToday();
   const byPo = {};
   for (const r of open){
@@ -289,18 +343,17 @@ function computeKpisForLines(lines, C, rules){
   if (C.po >= 0){
     for (const po in byPo){
       const grp = byPo[po];
-      if (grp.length < MINL) continue;                               // te weinig regels om te vergelijken
+      if (grp.length < MINL) continue;
       if (!grp.every(isConfirmed)) continue;
       const ds = grp.map(r => toDate(r[C.stale])).filter(Boolean);
-      if (ds.length !== grp.length) continue;                        // niet elke regel heeft een datum
+      if (ds.length !== grp.length) continue;
       const t0 = ds[0].getTime();
-      if (!ds.every(d => d.getTime()===t0)) continue;                // datums niet identiek
-      if (ds[0] >= today) continue;                                  // niet in het verleden
+      if (!ds.every(d => d.getTime()===t0)) continue;
+      if (ds[0] >= today) continue;
       grp.forEach(r => stale.add(r));
     }
   }
 
-  // 3. Wat overblijft is expediteerbaar
   const expediteerbaar = open.filter(r => isConfirmed(r) && !stale.has(r));
   const n = expediteerbaar.length;
 
@@ -334,9 +387,7 @@ function computeSnapshot(headers, rows, meta){
     pls:findCol(headers,cols.po_line_status), ds:findCol(headers,cols.delivery_status),
     wanted:findCol(headers,cols.latest_wanted_receipt_date), planned:findCol(headers,cols.planned_delivery_date),
     lastexp:findCol(headers,cols.last_expedited) };
-  // kolom waarop de 'administratie niet bijgewerkt'-check draait
   C.stale = C[ (rules.stale_date_column === 'latest_wanted_receipt_date') ? 'wanted' : 'planned' ];
-  // Part No (kolom K) — voor de X-part-filter. Zoek op naam, val terug op index 10 (kolom K).
   C.part = findCol(headers, (cols.part_no || ['Part No','Part Number','Partnr','Part No.','Onderdeelnr']));
   if (C.part < 0 && headers.length > 10) C.part = 10;   // fallback: Excel-kolom K = 0-based index 10
   if (C.sp < 0) throw new Error("Kolom 'Sub Project ID' niet gevonden in het bestand.");
@@ -345,11 +396,9 @@ function computeSnapshot(headers, rows, meta){
   if (C.pls < 0) warn.push("Kolom 'PO Line Status' niet gevonden — alle regels tellen als niet-bevestigd.");
   if (C.part < 0) warn.push("Part No-kolom (kolom K) niet gevonden — X-parts konden NIET worden uitgefilterd.");
 
-  // Projectfilter (alleen YN/EN). ExpeditingCore indien geladen, anders lokale keepProject.
   const keep = (window.ExpeditingCore && typeof ExpeditingCore.keepProject === 'function')
     ? ExpeditingCore.keepProject : keepProject;
 
-  // Filter 1: alleen YN/EN-projecten.  Filter 2: X-parts (Part No begint met 'X') eruit.
   let xUit = 0;
   const rowsIn = rows.filter(r => {
     if (!keep(r[C.sp])) return false;
@@ -381,6 +430,8 @@ function computeSnapshot(headers, rows, meta){
 
 function setStatus(msg, cls){ document.getElementById('uploadStatus').innerHTML =
   '<span class="'+(cls||'info-msg')+'">'+msg+'</span>'; }
+function setValStatus(msg, cls){ const el=document.getElementById('valLogStatus'); if(el)
+  el.innerHTML = '<span class="'+(cls||'info-msg')+'">'+msg+'</span>'; }
 function handleFiles(list){
   if (!list || !list.length) return; const file = list[0]; const name = file.name.toLowerCase();
   setStatus('Bezig met verwerken van ' + file.name + ' …', 'info-msg');
@@ -388,7 +439,6 @@ function handleFiles(list){
     const rd = new FileReader();
     rd.onload = () => { try { const obj = JSON.parse(rd.result);
       if (!obj.headers || !obj.rows) throw new Error("JSON mist 'headers' of 'rows'.");
-      // JSON-rijen kunnen objecten zijn (commit-formaat) → naar positioneel
       const rows = toPositionalRows(obj.headers, obj.rows);
       addMeetmoment(computeSnapshot(obj.headers, rows, obj.meta || {filename:file.name}));
     } catch(err){ setStatus('Fout: '+err.message,'err-msg'); } };
@@ -406,6 +456,54 @@ function handleFiles(list){
     rd.onerror = () => setStatus('Kon bestand niet lezen.','err-msg'); rd.readAsArrayBuffer(file);
   } else { setStatus('Niet-ondersteund bestandstype. Gebruik .xlsx of .json.','err-msg'); }
 }
+
+// ── Validatie-log: meerdere bestanden laden + samenvoegen op id ────────────
+function handleValLogFiles(list){
+  if (!list || !list.length) return;
+  setValStatus('Bezig met samenvoegen van ' + list.length + ' log(s)…', 'info-msg');
+  const readers = [...list].map(f => new Promise(res => {
+    const rd = new FileReader();
+    rd.onload = () => { try { const j = JSON.parse(rd.result); res((j && Array.isArray(j.events)) ? j.events : []); }
+      catch(e){ res([]); } };
+    rd.onerror = () => res([]);
+    rd.readAsText(f);
+  }));
+  Promise.all(readers).then(lists => {
+    const before = VALLOG.length;
+    VALLOG = mergeEvents(VALLOG, lists.flat());
+    try { localStorage.setItem(VLKEY, JSON.stringify(VALLOG)); } catch(e){}
+    renderAll();
+    const added = VALLOG.length - before;
+    const runs = VALLOG.length;
+    const uniek = new Set(VALLOG.map(e => e.deliveryRef || e.bestand || e.id)).size;
+    setValStatus('✓ ' + list.length + ' log(s) samengevoegd — ' + added + ' nieuwe event(s). ' +
+      'Totaal: <b>' + uniek + '</b> unieke itemlijsten uit ' + runs + ' validatie-runs. ' +
+      'Download de samengevoegde log en commit als <code>shared/validatie-log.json</code>.', 'ok-msg');
+  });
+}
+function downloadValLog(){
+  const out = { meta:{ bijgewerkt:new Date().toISOString(), events:VALLOG.length,
+    toelichting:'Teller van itemlijst-validaties (samengevoegd, ontdubbeld op id). Commit als shared/validatie-log.json.' },
+    events: VALLOG };
+  const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href=url; a.download='validatie-log.json'; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  setValStatus('validatie-log.json (samengevoegd) gedownload. Commit naar shared/ om het voor iedereen te tonen.', 'info-msg');
+}
+function resetValLog(){
+  localStorage.removeItem(VLKEY);
+  initValLog().then(() => { renderAll(); showValLogStatus('Lokale samenvoeging gewist — terug naar de gecommitte validatie-log.'); });
+}
+function showValLogStatus(prefix){
+  const runs = VALLOG.length;
+  const uniek = new Set(VALLOG.map(e => e.deliveryRef || e.bestand || e.id)).size;
+  const msg = (prefix ? prefix + ' ' : '') +
+    (runs ? ('Actief: <b>' + uniek + '</b> unieke itemlijsten uit ' + runs + ' validatie-runs.')
+          : 'Nog geen validatie-log geladen. Laad één of meer <code>validatie-log.json</code>-bestanden.');
+  setValStatus(msg, 'info-msg');
+}
+
 function addMeetmoment(snap){
   HISTORY = HISTORY.filter(mm => mm.meetmoment.date !== snap.meetmoment.date);
   HISTORY.push(snap); localStorage.setItem(LS_KEY, JSON.stringify(HISTORY));
@@ -430,15 +528,13 @@ function downloadHistory(){
 function resetHistory(){
   localStorage.removeItem(LS_KEY); HISTORY = JSON.parse(JSON.stringify(BASE_HISTORY));
   buildSubprojectSelect(); buildMeetmomentSelect(); renderAll();
-  maybeAutoLoadCentral();   // na reset opnieuw de centrale lijst proberen
+  maybeAutoLoadCentral();
   setStatus('Teruggezet naar origineel meetmoment.', 'info-msg');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
 //  EXPORTS
 // ══════════════════════════════════════════════════════════════════════════
-
-// ── Export 1: alle YN/EN-projecten van het huidige meetmoment naar Excel ──
 function exportProjects(){
   const mm = currentMM();
   if (!mm){ setStatus('Geen meetmoment om te exporteren.', 'err-msg'); return; }
@@ -476,11 +572,6 @@ function exportProjects(){
   setStatus('✓ Geëxporteerd: ' + fname + ' — ' + (scopes.length - 1) + ' projecten + Bedrijfsbreed.', 'ok-msg');
 }
 
-// ── Export 2: volledig rapport (PDF) — KPI-kaarten + grafiek + tabel ──────
-// Bouwt een schone, print-vriendelijke weergave in een nieuw venster en opent
-// het printdialoog. De gebruiker kiest "Opslaan als PDF". De grafiek wordt als
-// PNG uit de canvas gehaald (Chart.js), zodat hij 1-op-1 in het rapport staat.
-// KPI-kaarten krijgen de kleur van hun grafieklijn (40% dekking).
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function exportPDF(){
   const mm = currentMM();
@@ -488,7 +579,6 @@ function exportPDF(){
   const spid = document.getElementById('subprojectSelect').value;
   const scope = spid === '__ALL__' ? 'Bedrijfsbreed (alle YN/EN-projecten)' : spid;
 
-  // 1) Grafiek als afbeelding (witte achtergrond forceren voor de print)
   let chartImg = '';
   try {
     const cv = document.getElementById('trendChart');
@@ -502,7 +592,6 @@ function exportPDF(){
     }
   } catch(e){ console.warn('[KPI] chart->image:', e); }
 
-  // 2) KPI-kaarten — achtergrond = grafieklijnkleur op 40% dekking
   const cardsHtml = CONFIG.kpis.map((kpi, idx) => {
     const v = getValue(mm, spid, kpi.id); const st = getStatus(kpi, v);
     const unit = kpi.unit === '#' ? '' : ' ' + kpi.unit;
@@ -511,11 +600,10 @@ function exportPDF(){
     return '<div class="rp-card" style="background:' + bg + ';border-left-color:' + color + '">' +
       '<div class="rp-card-name">' + esc(kpi.name) + '</div>' +
       '<div class="rp-card-val">' + esc(fmt(kpi, v)) + unit + '</div>' +
-      '<div class="rp-card-norm">Norm: ' + esc(kpi.norm) + ' · ' + esc(st.label) + ' · ' + (kpi.auto ? 'automatisch' : 'handmatig') + '</div>' +
+      '<div class="rp-card-norm">Norm: ' + esc(kpi.norm) + ' · ' + esc(st.label) + '</div>' +
       '</div>';
   }).join('');
 
-  // 3) Detailtabel (meetmomenten × KPI) voor de gekozen scope
   const kpiHead = CONFIG.kpis.map(k => '<th>' + esc(k.name) + '</th>').join('');
   const rowsHtml = historyDesc().map(row => {
     const tds = CONFIG.kpis.map(kpi => { const v = getValue(row, spid, kpi.id); const st = getStatus(kpi, v);
@@ -523,7 +611,6 @@ function exportPDF(){
     return '<tr><td class="rp-name">' + esc(row.meetmoment.label) + '</td>' + tds + '</tr>';
   }).join('');
 
-  // 4) Badge-opbouw (counts)
   const node = getNode(mm, spid);
   const c = node && node.kpis && node.kpis._counts;
   const countsHtml = c ? ('<div class="rp-counts">' +
@@ -579,7 +666,6 @@ function exportPDF(){
   const w = window.open('', '_blank');
   if (!w){ setStatus('Pop-up geblokkeerd — sta pop-ups toe om het PDF-rapport te openen.', 'err-msg'); return; }
   w.document.open(); w.document.write(html); w.document.close();
-  // Wacht tot de grafiek-afbeelding geladen is, dan pas printen
   w.onload = () => { setTimeout(() => { w.focus(); w.print(); }, 250); };
   setStatus('✓ PDF-rapport geopend — kies in het printvenster "Opslaan als PDF".', 'ok-msg');
 }
@@ -610,20 +696,18 @@ function renderCards(mm){
   CONFIG.kpis.forEach((kpi, idx) => {
     const value = getValue(mm, spid, kpi.id); const st = getStatus(kpi, value);
     const node = getNode(mm, spid);
-    // onderscheid: nooit berekend (oude snapshot) vs. wel berekend maar leeg
     const nietBerekend = kpi.auto && value === null && node && node.kpis && !(kpi.id in node.kpis);
     const card = document.createElement('div');
     card.className = 'card ' + st.cls + (kpi.id===kpiSel ? ' active' : '');
-    // Kaartkleur = kleur van de grafieklijn voor deze KPI, op 40% dekking.
-    // De statusdot rechtsboven blijft de norm-status (groen/geel/rood) tonen.
     const lineColor = kpiLineColor(idx);
     card.style.background = hexAlpha(lineColor, 0.4);
     card.style.borderLeftColor = lineColor;
     card.title = nietBerekend
       ? 'Niet berekend in dit meetmoment (oudere versie) — upload de lijst opnieuw.'
       : kpi.definition;
-    const autoTag = kpi.auto ? '<span class="card-auto auto">automatisch</span>'
-      : '<span class="card-auto manual">handmatig</span>';
+    const autoTag = kpi.kind==='vallog' ? '<span class="card-auto auto">validatie-log</span>'
+      : (kpi.auto ? '<span class="card-auto auto">automatisch</span>'
+                  : '<span class="card-auto manual">handmatig</span>');
     card.innerHTML =
       '<div class="card-head"><span class="card-name">' + kpi.name + '</span>' +
       '<span class="status-dot ' + st.cls + '"></span></div>' +
@@ -634,7 +718,7 @@ function renderCards(mm){
         ? '<span style="color:var(--bad)">⚠ Niet berekend in dit meetmoment — upload de lijst opnieuw.</span>'
         : kpi.definition) + '</div>';
     card.addEventListener('click', () => {
-      if (kpi.auto){ document.getElementById('kpiSelect').value = kpi.id; renderAll(); }
+      if (kpi.kind==='vallog' || kpi.auto){ document.getElementById('kpiSelect').value = kpi.id; renderAll(); }
       else { editManual(kpi.id); }
     });
     wrap.appendChild(card);
@@ -664,7 +748,6 @@ function renderChart(){
   const asc = historyAsc(); const labels = asc.map(mm => mm.meetmoment.label);
   let datasets = []; let type = 'line'; let yTitle = '';
   if (kpiSel !== 'Alle'){
-    // Enkele KPI geselecteerd → gebruik de kleur die deze KPI ook in de "Alle"-weergave heeft
     const kpi = kpiById(kpiSel); const idx = kpiIndex(kpiSel);
     type = (kpi.direction==='count_only')?'bar':'line'; yTitle = kpi.unit;
     const vals = asc.map(mm => getValue(mm, spid, kpi.id));
