@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal IHC — UR E27 Laag-risicobeoordeling</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="header">
+    <div class="title-row">
+      <h1>UR E27 — Laag-risicobeoordeling <span class="version">v1.0</span></h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="newAssessment()">➕ Nieuwe beoordeling</button>
+        <button class="btn btn-secondary" onclick="printAssessment()">🖨️ Afdrukken / PDF</button>
+      </div>
+    </div>
+    <p class="sub">Beoordeling of een Computer Based System (CBS) is vrijgesteld van de volledige
+      cyberresilience-eisen van IACS UR E26 — op basis van de zes acceptatiecriteria in UR E26 §6.4,
+      aangevuld met twee niet-verplichte risico-overwegingen (UR E27).</p>
+  </header>
+
+  <section class="card ident-card">
+    <h3>📌 Identificatie</h3>
+    <div class="ident-grid">
+      <label>Systeem / item omschrijving
+        <input type="text" id="f-desc" placeholder="bv. ECDIS Furuno FEA-2xx">
+      </label>
+      <label>PO-regel / referentie
+        <input type="text" id="f-po" placeholder="bv. 3156018409-1-1">
+      </label>
+      <label>Sub Project ID
+        <input type="text" id="f-sp" placeholder="bv. YN1321">
+      </label>
+      <label>Beoordelaar
+        <input type="text" id="f-assessor" placeholder="naam">
+      </label>
+      <label>Datum
+        <input type="date" id="f-date">
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>✅ UR E26 §6.4 — Acceptatiecriteria voor vrijstelling (alle 5 moeten JA zijn)</h3>
+    <div id="criteria-mandatory"></div>
+  </section>
+
+  <section class="card">
+    <h3>ℹ️ Aanvullende risico-overwegingen (niet verplicht voor vrijstelling)</h3>
+    <div id="criteria-optional"></div>
+  </section>
+
+  <section class="card result-card" id="result-card">
+    <h3>📋 Uitkomst</h3>
+    <div id="result-text" class="result-text">Vul de criteria hierboven in.</div>
+  </section>
+
+  <section class="card">
+    <h3>🗂️ Opgeslagen beoordelingen</h3>
+    <div id="saved-list" class="saved-list"></div>
+  </section>
+
+  <footer class="footer">
+    <p>Gebaseerd op: Low-risk assessments for non-applicability of UR E27 (template) ·
+      IACS UR E26/E27 · IACS Rec. 171 (mei 2022)</p>
+  </footer>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
