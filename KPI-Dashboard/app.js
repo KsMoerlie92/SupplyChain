@@ -7,6 +7,11 @@ let CONFIG = null, HISTORY = null, BASE_HISTORY = null, SUBPROJECTS = null, char
 const LS_KEY = 'kpiHistoryOverride';
 const PALETTE = ['#003366','#E8B923','#4A90C2','#2e7d32','#C62828','#7B4FA0','#F9A825'];
 
+// Kleur van een KPI in de grafiek (op index in CONFIG.kpis) — zelfde mapping
+// als renderChart in de "Alle KPI's"-weergave. Zo krijgt elke kaart de kleur
+// van de lijn die eronder in de grafiek terugkomt.
+function kpiLineColor(idx){ return PALETTE[idx % PALETTE.length]; }
+
 // Projectfilter — alleen YN/EN-scheepsprojecten (zelfde prefixes als shared/expediting-core.js).
 // Lokale fallback zodat het dashboard óók filtert als expediting-core.js niet geladen is.
 const PROJECT_PREFIXES = ['YN', 'EN'];
@@ -15,6 +20,10 @@ function keepProject(id){
   const s = String(id == null ? '' : id).trim().toUpperCase();
   return PROJECT_PREFIXES.some(p => s.startsWith(p));
 }
+
+// X-parts (Part No / kolom K beginnend met 'X') zijn dummy/placeholder-regels en
+// worden UITGEFILTERD — ze geven anders een vertekend beeld in de KPI's.
+function isXPart(v){ return String(v == null ? '' : v).trim().toUpperCase().startsWith('X'); }
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -139,7 +148,7 @@ async function maybeAutoLoadCentral(force){
     const rows = toPositionalRows(raw.headers, raw.rows);
     const m = (meta && meta.filename) ? meta : {filename:'centrale lijst (Admin)'};
     addMeetmoment(computeSnapshot(raw.headers, rows, m));
-    setStatus('✓ Centrale lijst automatisch geladen (' + rows.length + ' regels, YN/EN-filter toegepast).', 'ok-msg');
+    setStatus('✓ Centrale lijst automatisch geladen (' + rows.length + ' regels, YN/EN- en X-part-filter toegepast).', 'ok-msg');
   } catch(e){ console.error('[KPI] centrale lijst verwerken:', e);
     setStatus('Kon centrale lijst niet verwerken: ' + e.message, 'err-msg'); }
 }
@@ -187,6 +196,7 @@ function buildMeetmomentSelect() {
 function shortName(n){ return n.length>28 ? n.slice(0,25)+'…' : n; }
 
 function kpiById(id){ return CONFIG.kpis.find(k=>k.id===id); }
+function kpiIndex(id){ return CONFIG.kpis.findIndex(k=>k.id===id); }
 function historyAsc(){ return [...HISTORY].sort((a,b)=> a.meetmoment.date < b.meetmoment.date ? -1 : 1); }
 function historyDesc(){ return [...HISTORY].sort((a,b)=> a.meetmoment.date > b.meetmoment.date ? -1 : 1); }
 function getNode(mm, spid){ if (!mm) return null;
@@ -235,7 +245,8 @@ function findCol(headers, name){
 /*  Rapportagestructuur
  *  ───────────────────
  *  Alle regels
- *    ├─ Al geleverd (Received/Arrived)      → buiten de rapportage
+ *    ├─ X-parts (Part No / kolom K begint met 'X')  → UITGEFILTERD (dummy-regels)
+ *    ├─ Al geleverd (Received/Arrived)              → buiten de rapportage
  *    └─ OPEN regels  = noemer van de KPI's hieronder
  *         ├─ Niet bevestigd (≠ Confirmed)   → not_confirmed_pct
  *         ├─ Administratie niet bijgewerkt  → stale_admin_pct
@@ -325,17 +336,30 @@ function computeSnapshot(headers, rows, meta){
     lastexp:findCol(headers,cols.last_expedited) };
   // kolom waarop de 'administratie niet bijgewerkt'-check draait
   C.stale = C[ (rules.stale_date_column === 'latest_wanted_receipt_date') ? 'wanted' : 'planned' ];
+  // Part No (kolom K) — voor de X-part-filter. Zoek op naam, val terug op index 10 (kolom K).
+  C.part = findCol(headers, (cols.part_no || ['Part No','Part Number','Partnr','Part No.','Onderdeelnr']));
+  if (C.part < 0 && headers.length > 10) C.part = 10;   // fallback: Excel-kolom K = 0-based index 10
   if (C.sp < 0) throw new Error("Kolom 'Sub Project ID' niet gevonden in het bestand.");
   const warn = [];
   if (C.po < 0) warn.push("PO-nummerkolom niet gevonden — 'Administratie niet bijgewerkt' kan niet berekend worden.");
   if (C.pls < 0) warn.push("Kolom 'PO Line Status' niet gevonden — alle regels tellen als niet-bevestigd.");
+  if (C.part < 0) warn.push("Part No-kolom (kolom K) niet gevonden — X-parts konden NIET worden uitgefilterd.");
 
   // Projectfilter (alleen YN/EN). ExpeditingCore indien geladen, anders lokale keepProject.
   const keep = (window.ExpeditingCore && typeof ExpeditingCore.keepProject === 'function')
     ? ExpeditingCore.keepProject : keepProject;
-  const rowsIn = rows.filter(r => keep(r[C.sp]));
+
+  // Filter 1: alleen YN/EN-projecten.  Filter 2: X-parts (Part No begint met 'X') eruit.
+  let xUit = 0;
+  const rowsIn = rows.filter(r => {
+    if (!keep(r[C.sp])) return false;
+    if (C.part >= 0 && isXPart(r[C.part])) { xUit++; return false; }
+    return true;
+  });
   const uitgefilterd = rows.length - rowsIn.length;
-  if (uitgefilterd > 0) warn.push(uitgefilterd + ' regel(s) buiten YN/EN-projecten weggelaten (niet onze scheepsprojecten).');
+  const projUit = uitgefilterd - xUit;
+  if (projUit > 0) warn.push(projUit + ' regel(s) buiten YN/EN-projecten weggelaten (niet onze scheepsprojecten).');
+  if (xUit > 0)    warn.push(xUit + ' X-part-regel(s) uitgefilterd (Part No begint met X — dummy/placeholder).');
 
   const groups = {}; const descMap = {};
   for (const r of rowsIn){
@@ -352,7 +376,7 @@ function computeSnapshot(headers, rows, meta){
   let date=null; const fn=(meta && meta.filename)||'';
   const m = fn.match(/(\d{2})-(\d{2})-(\d{4})/); if (m) date = m[3]+'-'+m[2]+'-'+m[1];
   if (!date) date = new Date().toISOString().slice(0,10);
-  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,warnings:warn}, aggregate, subprojects };
+  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,xUitgefilterd:xUit,warnings:warn}, aggregate, subprojects };
 }
 
 function setStatus(msg, cls){ document.getElementById('uploadStatus').innerHTML =
@@ -390,7 +414,7 @@ function addMeetmoment(snap){
   const nSub = Object.keys(snap.subprojects).length;
   const warn = (snap.meetmoment.warnings||[]);
   const totaalTxt = (snap.meetmoment.rowsTotaal && snap.meetmoment.rowsTotaal !== snap.meetmoment.rows)
-    ? snap.meetmoment.rows + ' van ' + snap.meetmoment.rowsTotaal + ' regels (YN/EN-projecten)'
+    ? snap.meetmoment.rows + ' van ' + snap.meetmoment.rowsTotaal + ' regels (YN/EN, excl. X-parts)'
     : snap.meetmoment.rows + ' regels';
   setStatus('✓ Meetmoment ' + snap.meetmoment.label + ' toegevoegd — ' + nSub +
     ' Sub Project ID\'s, ' + totaalTxt + '. Vergeet niet te downloaden en te committen.' +
@@ -456,12 +480,12 @@ function exportProjects(){
 // Bouwt een schone, print-vriendelijke weergave in een nieuw venster en opent
 // het printdialoog. De gebruiker kiest "Opslaan als PDF". De grafiek wordt als
 // PNG uit de canvas gehaald (Chart.js), zodat hij 1-op-1 in het rapport staat.
+// KPI-kaarten krijgen de kleur van hun grafieklijn (40% dekking).
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function exportPDF(){
   const mm = currentMM();
   if (!mm){ setStatus('Geen meetmoment om te exporteren.', 'err-msg'); return; }
   const spid = document.getElementById('subprojectSelect').value;
-  const kpiSel = document.getElementById('kpiSelect').value;
   const scope = spid === '__ALL__' ? 'Bedrijfsbreed (alle YN/EN-projecten)' : spid;
 
   // 1) Grafiek als afbeelding (witte achtergrond forceren voor de print)
@@ -478,14 +502,16 @@ function exportPDF(){
     }
   } catch(e){ console.warn('[KPI] chart->image:', e); }
 
-  // 2) KPI-kaarten
-  const cardsHtml = CONFIG.kpis.map(kpi => {
+  // 2) KPI-kaarten — achtergrond = grafieklijnkleur op 40% dekking
+  const cardsHtml = CONFIG.kpis.map((kpi, idx) => {
     const v = getValue(mm, spid, kpi.id); const st = getStatus(kpi, v);
     const unit = kpi.unit === '#' ? '' : ' ' + kpi.unit;
-    return '<div class="rp-card rp-' + st.cls + '">' +
+    const color = kpiLineColor(idx);
+    const bg = hexAlpha(color, 0.4);
+    return '<div class="rp-card" style="background:' + bg + ';border-left-color:' + color + '">' +
       '<div class="rp-card-name">' + esc(kpi.name) + '</div>' +
       '<div class="rp-card-val">' + esc(fmt(kpi, v)) + unit + '</div>' +
-      '<div class="rp-card-norm">Norm: ' + esc(kpi.norm) + ' · ' + (kpi.auto ? 'automatisch' : 'handmatig') + '</div>' +
+      '<div class="rp-card-norm">Norm: ' + esc(kpi.norm) + ' · ' + esc(st.label) + ' · ' + (kpi.auto ? 'automatisch' : 'handmatig') + '</div>' +
       '</div>';
   }).join('');
 
@@ -523,9 +549,7 @@ function exportPDF(){
 '.rp-card{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:8px;padding:10px 12px}' +
 '.rp-card-name{font-size:10.5px;font-weight:700;color:#003366}' +
 '.rp-card-val{font-size:22px;font-weight:800;color:#111827;line-height:1.1;margin:2px 0}' +
-'.rp-card-norm{font-size:9.5px;color:#6b7280}' +
-'.rp-card.rp-ok{border-left-color:#2e7d32}.rp-card.rp-warn{border-left-color:#8a6d00}' +
-'.rp-card.rp-bad{border-left-color:#C62828}.rp-card.rp-na{border-left-color:#94a3b8}' +
+'.rp-card-norm{font-size:9.5px;color:#374151}' +
 '.rp-chart{margin:6px 0 4px}.rp-chart img{max-width:100%;height:auto;border:1px solid #e2e8f0;border-radius:8px}' +
 '.rp-note{font-size:10px;color:#6b7280;margin:0 0 8px}' +
 'table{border-collapse:collapse;width:100%;font-size:10.5px}' +
@@ -535,7 +559,8 @@ function exportPDF(){
 'td.rp-ok{background:#C6EFCE;color:#2e7d32;font-weight:600}td.rp-warn{background:#FFEB9C;color:#8a6d00;font-weight:600}' +
 'td.rp-bad{background:#FFC7CE;color:#C62828;font-weight:600}td.rp-na{background:#eef2f6;color:#94a3b8}' +
 '.rp-foot{margin-top:16px;font-size:9.5px;color:#9ca3af;border-top:1px solid #e2e8f0;padding-top:8px}' +
-'@media print{body{padding:0}.rp-cards{grid-template-columns:repeat(4,1fr)}}' +
+'@media print{body{padding:0}.rp-card{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+'td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
 '</style></head><body>' +
 '<h1>Expediting KPI-rapport</h1>' +
 '<div class="rp-meta">Meetmoment <b>' + esc(mm.meetmoment.label) + '</b> · scope <b>' + esc(scope) + '</b>' +
@@ -548,7 +573,7 @@ function exportPDF(){
           : '<p class="rp-note">(Grafiek niet beschikbaar — nog geen data of grafiek niet gerenderd.)</p>') +
 '<h2>Detailtabel (meetmomenten × KPI) — scope: ' + esc(scope) + '</h2>' +
 '<table><thead><tr><th>Meetmoment</th>' + kpiHead + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
-'<div class="rp-foot">Expediting | Royal IHC · Supply Chain — automatisch gegenereerd uit de bedrijfsbrede expediting-lijst (alleen YN/EN-projecten).</div>' +
+'<div class="rp-foot">Expediting | Royal IHC · Supply Chain — automatisch gegenereerd uit de bedrijfsbrede expediting-lijst (alleen YN/EN-projecten, excl. X-parts).</div>' +
 '</body></html>';
 
   const w = window.open('', '_blank');
@@ -582,13 +607,18 @@ function renderCards(mm){
   const spid = document.getElementById('subprojectSelect').value;
   const kpiSel = document.getElementById('kpiSelect').value;
   const wrap = document.getElementById('kpiCards'); wrap.innerHTML = '';
-  CONFIG.kpis.forEach(kpi => {
+  CONFIG.kpis.forEach((kpi, idx) => {
     const value = getValue(mm, spid, kpi.id); const st = getStatus(kpi, value);
     const node = getNode(mm, spid);
     // onderscheid: nooit berekend (oude snapshot) vs. wel berekend maar leeg
     const nietBerekend = kpi.auto && value === null && node && node.kpis && !(kpi.id in node.kpis);
     const card = document.createElement('div');
     card.className = 'card ' + st.cls + (kpi.id===kpiSel ? ' active' : '');
+    // Kaartkleur = kleur van de grafieklijn voor deze KPI, op 40% dekking.
+    // De statusdot rechtsboven blijft de norm-status (groen/geel/rood) tonen.
+    const lineColor = kpiLineColor(idx);
+    card.style.background = hexAlpha(lineColor, 0.4);
+    card.style.borderLeftColor = lineColor;
     card.title = nietBerekend
       ? 'Niet berekend in dit meetmoment (oudere versie) — upload de lijst opnieuw.'
       : kpi.definition;
@@ -634,9 +664,11 @@ function renderChart(){
   const asc = historyAsc(); const labels = asc.map(mm => mm.meetmoment.label);
   let datasets = []; let type = 'line'; let yTitle = '';
   if (kpiSel !== 'Alle'){
-    const kpi = kpiById(kpiSel); type = (kpi.direction==='count_only')?'bar':'line'; yTitle = kpi.unit;
+    // Enkele KPI geselecteerd → gebruik de kleur die deze KPI ook in de "Alle"-weergave heeft
+    const kpi = kpiById(kpiSel); const idx = kpiIndex(kpiSel);
+    type = (kpi.direction==='count_only')?'bar':'line'; yTitle = kpi.unit;
     const vals = asc.map(mm => getValue(mm, spid, kpi.id));
-    datasets.push(makeDataset(kpi.name, vals, PALETTE[0], type));
+    datasets.push(makeDataset(kpi.name, vals, kpiLineColor(idx), type));
     if (kpi.direction !== 'count_only'){
       datasets.push(thresholdLine('Groen-grens ('+kpi.green+')', kpi.green, labels.length, '#2e7d32'));
       datasets.push(thresholdLine('Geel-grens ('+kpi.yellow+')', kpi.yellow, labels.length, '#8a6d00'));
@@ -647,7 +679,7 @@ function renderChart(){
     type = 'line';
     CONFIG.kpis.forEach((kpi, idx) => {
       const vals = asc.map(mm => getValue(mm, spid, kpi.id));
-      if (vals.some(v => v!==null && v!==undefined)) datasets.push(makeDataset(kpi.name, vals, PALETTE[idx%PALETTE.length], 'line'));
+      if (vals.some(v => v!==null && v!==undefined)) datasets.push(makeDataset(kpi.name, vals, kpiLineColor(idx), 'line'));
     });
     note.textContent = "Alle KPI's — let op: eenheden verschillen (%, dagen, #). Scope: " +
       (spid==='__ALL__'?'bedrijfsbreed':spid);
