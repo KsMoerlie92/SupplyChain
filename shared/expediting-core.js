@@ -5,9 +5,12 @@
    Gebruikt door: Admin (upload), Expediting Mailer, en elke
    pagina die de mailer-functie aanroept.
 
-   PROJECTFILTER: alleen Sub Project ID's die beginnen met YN of EN
-   gevolgd door een cijfer (de scheepsprojecten die wij beheren)
-   worden ingelezen. Pas PROJECT_PREFIXES aan om dit te wijzigen.
+   FILTERS (centraal, gelden voor ALLE tools):
+   1) PROJECTFILTER: alleen Sub Project ID's met prefix YN of EN
+      (de enige projecten die wij beheren). Pas PROJECT_PREFIXES aan.
+   2) X-PART-FILTER: regels waarvan Part No (kolom K) met 'X' begint
+      zijn dummy/placeholder-regels en worden UITGEFILTERD — ze geven
+      anders een vertekend beeld in de KPI's en overzichten.
    ============================================================ */
 (function (global) {
   'use strict';
@@ -16,13 +19,16 @@
   const EU = new Set('NL BE DE FR IT ES PT PL RO CZ SK HU AT DK SE FI IE GR BG HR SI LT LV EE LU MT CY EU'.split(' '));
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // Alleen deze project-prefixes worden ingelezen (Sub Project ID), gevolgd
-  // door een cijfer — zo telt "ENERGY-PROJECT" niet mee als EN-scheepsproject.
+  // Alleen deze project-prefixes worden ingelezen (Sub Project ID).
   const PROJECT_PREFIXES = ['YN', 'EN'];
-  const _prefixRe = new RegExp('^(' + PROJECT_PREFIXES.join('|') + ')\\d');
   function keepProject(sub){
     const s = String(sub == null ? '' : sub).trim().toUpperCase();
-    return _prefixRe.test(s);
+    return PROJECT_PREFIXES.some(p => s.startsWith(p));
+  }
+
+  // X-parts: Part No begint met 'X' → dummy/placeholder → uitfilteren.
+  function isXPart(part){
+    return String(part == null ? '' : part).trim().toUpperCase().startsWith('X');
   }
 
   // welke Excel-kolom hoort bij welk modelveld
@@ -76,20 +82,17 @@
   }
 
   // raw = array-of-arrays (XLSX sheet_to_json header:1). Geeft genormaliseerde OPEN regels.
-  // raw = array-of-arrays (XLSX sheet_to_json header:1). Geeft genormaliseerde OPEN regels.
-  // Alleen regels van projecten met prefix YN/EN worden meegenomen — TENZIJ de
-  // kolom 'Sub Project ID' niet gevonden wordt: dan filteren we niet (fail-open),
-  // want anders zou een ontbrekende kolom alle regels stilzwijgend laten verdwijnen.
+  // Alleen regels van projecten met prefix YN/EN, en zonder X-part, worden meegenomen.
   function normalizeFromRaw(raw){
     const h=detectHeader(raw);
     const header=(raw[h]||[]).map(x=>String(x==null?'':x).trim());
     const ix={}; header.forEach((c,i)=>{ if(!(c in ix)) ix[c]=i; }); // dedupe: eerste wint
     const g=(row,name)=>{ const i=ix[COLS[name]]; return i==null?null:row[i]; };
-    const heeftSubKolom = (COLS.sub in ix);
     const out=[];
     for(let r=h+1;r<raw.length;r++){
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
-      if(heeftSubKolom && !keepProject(g(row,'sub'))) continue;   // ← alleen YN/EN-projecten
+      if(!keepProject(g(row,'sub'))) continue;              // ← alleen YN/EN-projecten
+      if(isXPart(g(row,'part'))) continue;                  // ← X-parts uitfilteren
       const status=g(row,'status'); if(!OPEN.includes(status)) continue;
       const o={
         po:g(row,'po'), orderNo:g(row,'orderNo'), sub:g(row,'sub'), subDesc:g(row,'subDesc'),
@@ -154,14 +157,14 @@
   // raw = array-of-arrays. Geeft { headers, rows } met ONTDUBBELDE headers en
   // rijen als objecten gekeyed op header (kolomvolgorde behouden) — exact het
   // formaat dat PO-Matcher (en andere tools) van een ingeladen lijst verwachten.
-  // Alleen regels van projecten met prefix YN/EN worden meegenomen — TENZIJ de
-  // kolom 'Sub Project ID' niet gevonden wordt (zelfde fail-open gedrag als
-  // normalizeFromRaw hierboven, zodat beide functies zich identiek gedragen).
+  // Alleen regels van projecten met prefix YN/EN, en zonder X-part, worden meegenomen.
   function rawTable(raw){
     const h=detectHeader(raw);
-    const subIdx=(raw[h]||[]).findIndex(c=>String(c==null?'':c).trim()===COLS.sub);
+    const headerRow=(raw[h]||[]);
+    const subIdx  = headerRow.findIndex(c=>String(c==null?'':c).trim()===COLS.sub);
+    const partIdx = headerRow.findIndex(c=>String(c==null?'':c).trim()===COLS.part);
     const seen={};
-    const headers=(raw[h]||[]).map((c,i)=>{
+    const headers=headerRow.map((c,i)=>{
       let name=String(c==null?'':c).trim()||('__COL_'+i);
       if(seen[name]){ seen[name]++; name=name+'_'+seen[name]; } else seen[name]=1;
       return name;
@@ -170,13 +173,14 @@
     for(let r=h+1;r<raw.length;r++){
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
       if(subIdx>=0 && !keepProject(row[subIdx])) continue;   // ← alleen YN/EN-projecten
+      if(partIdx>=0 && isXPart(row[partIdx])) continue;      // ← X-parts uitfilteren
       const o={}; headers.forEach((hd,i)=>{ o[hd]=row[i]==null?'':row[i]; }); rows.push(o);
     }
     return { headers, rows };
   }
 
   global.ExpeditingCore = {
-    OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject,
+    OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject, isXPart,
     toDate, num, dmy, shortD, esc, detectHeader,
     normalizeFromRaw, rawTable, score, aggregate, startOfToday
   };
