@@ -10,7 +10,36 @@ const INSP_OPTIONS = ["Foto's en Steekproef", "Foto's", "Fysiek controleren", "T
 const VL_INSP = new Set(INSP_OPTIONS);
 const VL_INSP_LC = new Set(INSP_OPTIONS.map(s => s.toLowerCase())); // tolerant matchen op casing
 // 250 ISO-2 country codes (abbreviated — full set checked at runtime from file)
-const VL_COO_FALLBACK = new Set(['NL','DE','FR','GB','US','CN','JP','KR','IT','ES','VN','IN','SG','AE','BE','SE','FI','NO','DK','PL','CZ','HU','RO','PT','AT','CH','TR','RU','UA','BY']);
+// Volledige ISO 3166-1 alpha-2 landcodelijst — gebruikt als vangnet wanneer
+// het bestand geen Master-tabblad heeft (of dat tabblad geen landcodes bevat).
+// Eerder stond hier een lijst van maar 30 landen, waardoor volkomen geldige
+// codes (bv. 'MY' voor Maleisië) onterecht als fout werden gemeld zodra er
+// geen Master-tabblad aanwezig was.
+const VL_COO_FALLBACK = new Set(['AD','AE','AF','AG','AI','AL','AM','AO','AQ','AR','AS','AT','AU','AW','AX','AZ',
+  'BA','BB','BD','BE','BF','BG','BH','BI','BJ','BL','BM','BN','BO','BQ','BR','BS','BT','BV','BW','BY','BZ',
+  'CA','CC','CD','CF','CG','CH','CI','CK','CL','CM','CN','CO','CR','CU','CV','CW','CX','CY','CZ',
+  'DE','DJ','DK','DM','DO','DZ',
+  'EC','EE','EG','EH','ER','ES','ET','EU',
+  'FI','FJ','FK','FM','FO','FR',
+  'GA','GB','GD','GE','GF','GG','GH','GI','GL','GM','GN','GP','GQ','GR','GS','GT','GU','GW','GY',
+  'HK','HM','HN','HR','HT','HU',
+  'ID','IE','IL','IM','IN','IO','IQ','IR','IS','IT',
+  'JE','JM','JO','JP',
+  'KE','KG','KH','KI','KM','KN','KP','KR','KW','KY','KZ',
+  'LA','LB','LC','LI','LK','LR','LS','LT','LU','LV','LY',
+  'MA','MC','MD','ME','MF','MG','MH','MK','ML','MM','MN','MO','MP','MQ','MR','MS','MT','MU','MV','MW','MX','MY','MZ',
+  'NA','NC','NE','NF','NG','NI','NL','NO','NP','NR','NU','NZ',
+  'OM',
+  'PA','PE','PF','PG','PH','PK','PL','PM','PN','PR','PS','PT','PW','PY',
+  'QA',
+  'RE','RO','RS','RU','RW',
+  'SA','SB','SC','SD','SE','SG','SH','SI','SJ','SK','SL','SM','SN','SO','SR','SS','ST','SV','SX','SY','SZ',
+  'TC','TD','TF','TG','TH','TJ','TK','TL','TM','TN','TO','TR','TT','TV','TW','TZ',
+  'UA','UG','UM','US','UY','UZ',
+  'VA','VC','VE','VG','VI','VN','VU',
+  'WF','WS',
+  'YE','YT',
+  'ZA','ZM','ZW']);
 
 // ── Landnaam / alpha-3 → ISO 3166-1 alpha-2 code ────────────────────────────
 // Zet volledige landnamen (NL + EN) en 3-letter codes om naar de 2-letter code.
@@ -168,16 +197,19 @@ function _remapColumns() {
 }
 
 // ── HS-code normaliseren bij het inladen ────────────────────────────────────
-// Een ingeladen HS-code moet altijd 10 cijfers hebben. Bevat de bron 12 cijfers
-// (bv. een TARIC-code met 2 extra nationale subverdeling-cijfers), dan vallen
-// de laatste 2 cijfers weg zodat er 10 overblijven. Korter dan 10 blijft
-// ongewijzigd (dat vangt validateRow al af als fout).
+// Een ingeladen HS-code moet altijd 8 cijfers hebben (EU Combined Nomenclature-
+// standaard). Bevat de bron 10 of 12 cijfers (bv. een TARIC-code met 2 of 4
+// extra nationale/EU-subverdelingscijfers), dan vallen de laatste cijfers weg
+// zodat er 8 overblijven. Korter dan 8 blijft ongewijzigd (dat vangt
+// validateRow al af als fout). Let op: dit is een ANDER doel dan _toTaric10
+// hieronder, die juist naar 10 cijfers opvult/kort t.b.v. de live opzoeking
+// bij tariffnumber.com — dat systeem verwacht wél 10 cijfers (TARIC).
 function _normalizeHSCode(v) {
   const s = String(v == null ? '' : v).trim();
   if (!s) return v;
   const digits = s.replace(/[\s.]/g, '');
   if (!/^\d+$/.test(digits)) return v;          // geen zuiver cijferveld — met rust laten
-  return digits.length > 10 ? digits.slice(0, 10) : digits;
+  return digits.length > 8 ? digits.slice(0, 8) : digits;
 }
 
 
@@ -350,8 +382,8 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
     errors['O'] = 'HS-code is verplicht';
   } else {
     const hsClean = hsVal.replace(/\s+/g,'').trim();
-    if (!/^\d{8,10}$/.test(hsClean)) {
-      errors['O'] = `HS-code moet 8–10 cijfers zijn (was: '${hsClean}')`;
+    if (!/^\d{8}$/.test(hsClean)) {
+      errors['O'] = `HS-code moet 8 cijfers zijn (EU Combined Nomenclature) — was: '${hsClean}'`;
     }
     // Live nomenclatuur-check via douane.nl wordt async uitgevoerd na validatie
   }
