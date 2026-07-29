@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IFS Migration Tool</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ======= HEADER ======= -->
+<header class="app-header">
+  <div class="app-header__brand">
+    <span class="app-header__icon">⚙️</span>
+    <h1>IFS Migration Tool</h1>
+  </div>
+  <span class="app-header__sub">Web Port · Royal IHC</span>
+</header>
+
+<!-- ======= TOOLBAR ======= -->
+<div class="toolbar">
+  <button id="btn-import" class="btn btn--primary">📋 Import from Clipboard</button>
+  <button id="btn-export" class="btn btn--success">📤 Export to Clipboard</button>
+  <button id="btn-clear"  class="btn btn--danger">🗑️ Clear</button>
+</div>
+
+<!-- ======= STATUS BAR ======= -->
+<div id="status-bar" class="status-bar" role="status" aria-live="polite"></div>
+
+<!-- ======= DATA TABLE AREA ======= -->
+<main id="table-container" class="table-container">
+  <!-- Rendered dynamically by TableManager -->
+  <div class="empty-state">
+    <div class="empty-state__icon">📂</div>
+    <p>No data imported yet.</p>
+    <p>Copy IFS data to clipboard, then click <strong>Import</strong>.</p>
+  </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
