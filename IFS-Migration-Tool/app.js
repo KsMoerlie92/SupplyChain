@@ -213,15 +213,17 @@ const Parser = {
     const techHeader = token.slice(colonPos + 1, equalsPos);
     let cellValue = token.slice(equalsPos + 1);
 
-    // Strip a protective leading quote (Excel/IFS convention: a leading
-    // apostrophe forces text interpretation, e.g. to preserve a leading
-    // zero like '01234 or to stop a formula-looking value from being
-    // evaluated). It is not part of the real data, so it is removed here.
-    // The Exporter re-applies it symmetrically for values that need it
-    // (see Exporter._needsProtectiveQuote) so a round trip doesn't
-    // silently corrupt the value.
+    // Protective leading quote — VERIFIED against the real VBA source
+    // (DEMO_L-Parts.xlsm): "If Left(Value, 1) = "'" Then Value = "'" + Value".
+    // On import, a value that already starts with a single quote gets a
+    // SECOND quote prepended (doubled), not stripped. This mirrors IFS's
+    // own escaping convention for values that must keep a literal leading
+    // apostrophe. The real Export() sub does NOT reverse this — it passes
+    // the (now doubled) value straight through unchanged, so the doubling
+    // must happen here, once, on import — and never again on export
+    // (see Exporter.build below, which intentionally does nothing here).
     if (cellValue.startsWith("'")) {
-      cellValue = cellValue.slice(1);
+      cellValue = "'" + cellValue;
     }
 
     return { colIndex, techHeader, cellValue };
@@ -233,28 +235,6 @@ const Parser = {
 // Maps to: Sub Export() buffer assembly loop
 // ============================================================
 const Exporter = {
-
-  /**
-   * Decide whether a value needs a protective leading quote when written
-   * back into IFS/Excel — mirrors the same convention the Parser strips
-   * on import (Block 5, _parseFieldToken). Without this, values that
-   * originally arrived as e.g. '01234 (leading zero) or '=SOMETHING
-   * (formula-looking text) would round-trip back as a plain number or
-   * a live formula, silently corrupting the data on re-import into IFS.
-   *
-   * @param {string} value
-   * @returns {boolean}
-   */
-  _needsProtectiveQuote(value) {
-    if (value === '' || value == null) return false;
-    // Purely numeric text with a leading zero (length > 1) would lose
-    // that leading zero if pasted back in as a real number.
-    if (/^0\d+$/.test(value)) return true;
-    // Values starting with a formula-trigger character would be
-    // executed as a formula instead of read as plain text.
-    if (/^[=+\-@]/.test(value)) return true;
-    return false;
-  },
 
   /**
    * Reconstruct the IFS clipboard string from an ImportBlock.
@@ -280,14 +260,19 @@ const Exporter = {
           // have no IFS-side column and would corrupt the paste if written
           // with an empty ':' segment).
           if (!techCol) return;
+          // Skip computed/read-only fields — some IFS views (confirmed in
+          // DEMO_L-Parts.xlsm, view C_PARTS_WITHOUT_PURCH_ORD) include
+          // derived columns whose "technical name" is actually an API
+          // function call, e.g.
+          //   C_PARTS_WITHOUT_PURCH_ORD_API.GET_PO_LINE_NO(SEQ_NO,...)
+          // These are computed by IFS on read and cannot be assigned a
+          // value on paste-back — writing them out would corrupt the
+          // import into IFS, so any technical header shaped like a
+          // function call (contains both '(' and '.') is never exported.
+          if (techCol.includes('(') && techCol.includes('.')) return;
           // Convert newlines back to '--' IFS multiline markers
           // Maps to: Replace(Value, Chr(10), Chr(10) + "--")
-          let ifsValue = String(cellValue).replace(/\n/g, '\n--');
-          // Re-apply the protective leading quote symmetrically with
-          // the strip performed on import (see Parser._parseFieldToken).
-          if (this._needsProtectiveQuote(ifsValue)) {
-            ifsValue = "'" + ifsValue;
-          }
+          const ifsValue = String(cellValue).replace(/\n/g, '\n--');
           buffer += `\n-$${colIdx}:${techCol}=${ifsValue}`;
         }
       });
@@ -336,21 +321,33 @@ const Store = {
 };
 
 // ============================================================
-// BLOCK 7b — ITEMLIJST ⇄ IFS COLUMN MAP (for pasted !IFS.COPYOBJECT data)
-// Best-effort match between a technical IFS column name (as pasted from
-// IFS) and the corresponding Itemlijst-template column, shown as a hint
-// under each technical header. Not exhaustive — many Itemlijst columns
-// (packaging, DG, inspection level, serial number, etc.) have no
-// IFS-side equivalent by design.
+// BLOCK 7b — ITEMLIJST ⇄ IFS COLUMN MAP
+// Best-effort match between the supplier Itemlijst template columns
+// (Delivery ref., Project, IHC PO, Item, Item description, Quantity,
+// Unit of measure, Supplier, Country of origin, Hs-code,
+// Weight nett/gross (collo), ...) and the technical IFS column names
+// found in pasted !IFS.COPYOBJECT data. Shown as a hint under each
+// technical header so the two worlds are visually connected.
+// Not exhaustive — many Itemlijst columns (packaging, DG, inspection
+// level, serial number, etc.) have no IFS-side equivalent by design.
+//
+// ⚠ ORDER_NO, VENDOR_PART_NO, VENDOR_PART_DESC and BUY_UNIT_MEAS are
+// VERIFIED against the real VBA source and DEMO_L-Parts.xlsm (view
+// C_PARTS_WITHOUT_PURCH_ORD). The remaining alternatives in each regex
+// (PURCHASE_ORDER_NO, CATALOG_NO, DESCRIPTION, PURCH_UOM, SUB_PROJECT,
+// SUPPLIER_*, COUNTRY_OF_ORIGIN, *WEIGHT*, CUSTOMS_STAT_NO/HS_CODE) are
+// UNVERIFIED guesses kept only in case a different IFS view/LU happens
+// to use those names — that view carried no supplier/weight/HS data at
+// all, so those specific labels have not been confirmed anywhere yet.
 // ============================================================
 const COLUMN_MAP = [
   { test: /SUB.?PROJECT/i,                              label: 'Project' },
-  { test: /^PURCH(ASE)?_ORDER_NO$|^PO_NO$/i,            label: 'IHC PO' },
-  { test: /^(LINE_NO|CATALOG_NO|PART_NO)$/i,            label: 'Item' },
-  { test: /DESCRIPTION/i,                                label: 'Item description' },
+  { test: /^ORDER_NO$|^PURCH(ASE)?_ORDER_NO$|^PO_NO$/i, label: 'IHC PO' },
+  { test: /^VENDOR_PART_NO$|^(LINE_NO|CATALOG_NO|PART_NO)$/i, label: 'Item' },
+  { test: /^VENDOR_PART_DESC$|DESCRIPTION/i,            label: 'Item description' },
   { test: /^QTY$|QUANTITY/i,                             label: 'Quantity' },
   { test: /WEIGHT_UOM/i,                                  label: null }, // exclude before generic UOM rule
-  { test: /UOM$/i,                                        label: 'Unit of measure' },
+  { test: /^BUY_UNIT_MEAS$|UOM$/i,                        label: 'Unit of measure' },
   { test: /SUPPLIER_(NAME|NO)/i,                          label: 'Supplier' },
   { test: /COUNTRY_OF_ORIGIN/i,                           label: 'Country of origin' },
   { test: /^NET_WEIGHT$/i,                                label: 'Weight nett (collo)' },
@@ -374,233 +371,89 @@ function mapToItemlistColumn(techHeader) {
 }
 
 // ============================================================
-// BLOCK 7c — ITEMLIJST HEADER MATCHER (supplier-variation tolerant)
-// Translates a supplier Itemlijst-template column header — which may
-// be renamed, abbreviated, reordered, or partly translated to Dutch by
-// the supplier — into the canonical technical IFS column code.
-//
-// Matching strategy (in order, most confident first):
-//   1. Exact match against a normalized alias list per field
-//      (handles known synonyms: "Qty"/"Aantal"/"Quantity", "PO"/
-//      "Purchase Order"/"Inkooporder", "HS code"/"Tariff code", ...).
-//   2. Fuzzy keyword match: header must contain at least one word from
-//      EVERY required keyword-group for a field (order-independent,
-//      handles "Net Wt (kg)", "Origin Country", "Weight - Nett", ...),
-//      while excluding fields with a conflicting keyword (e.g. a
-//      "gross" header must never match the "nett" field).
-//   3. No match → header is kept in the table for visibility, but
-//      flagged as "unrecognized" and excluded from the IFS export
-//      (never silently dropped).
+// BLOCK 7c — REVERSE MAP: ITEMLIJST COLUMN NAME → IFS TECHNICAL CODE
+// Used by the "📥 Import Itemlijst (.xlsx)" button to translate a
+// supplier Itemlijst-template column header into the canonical
+// technical IFS column code, so the rows can be turned into
+// $RECORD=!/-$n:COL=value tokens ready for IFS import.
 //
 // ⚠ Two mappings carry a known semantic caveat (see original analysis):
 //   - "Weight gross (collo)" → TOTAL_NET_WEIGHT (naming differs)
 //   - "Hs-code"              → CUSTOMS_STAT_NO   (HS-code vs. customs
 //                              statistics no. — verify per destination)
+// Columns with no `code` are Itemlijst-only (logistics/supplier data)
+// and are intentionally NOT translated into IFS tokens.
 // ============================================================
-
-/**
- * Normalize a header string for robust comparison:
- * lowercase, strip accents, unify separators/punctuation to spaces,
- * collapse whitespace.
- * @param {string} h
- * @returns {string}
- */
-function normalizeHeader(h) {
-  return String(h ?? '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents (é, ë, ...)
-    .replace(/[?():.,;]/g, ' ')
-    .replace(/[_/\\-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const FIELD_DEFINITIONS = [
-  {
-    label: 'Delivery ref.', code: null,
-    aliases: ['delivery ref', 'delivery reference', 'delivery no', 'delivery nr', 'delivery number', 'levering ref', 'leverreferentie', 'referentie'],
-    anyWords: [['delivery', 'levering'], ['ref', 'reference', 'referentie', 'no', 'nr', 'number']],
-  },
-  {
-    label: 'Project', code: 'SUB_PROJECT_ID',
-    aliases: ['project', 'project no', 'project nr', 'project number', 'projectnummer', 'yard no', 'yard nr', 'yardno', 'yard number', 'yn', 'newbuilding no', 'newbuilding number', 'hull no', 'hull nr', 'hull number'],
-    anyWords: [['project', 'yard', 'yn', 'newbuilding', 'hull']],
-  },
-  {
-    label: 'IHC PO', code: 'PURCHASE_ORDER_NO',
-    aliases: ['ihc po', 'po', 'po no', 'po nr', 'po number', 'purchase order', 'purchase order no', 'purchase order number', 'purchaseorderno', 'order no', 'order nr', 'order number', 'inkooporder', 'inkoopordernummer', 'bestelnummer', 'bestelnr'],
-    anyWords: [['po', 'purchase', 'order', 'inkooporder', 'bestelnummer', 'bestelnr'], ['no', 'nr', 'number', 'order', 'po']],
-    excludeWords: ['line', 'item', 'regel'],
-  },
-  {
-    label: 'Item', code: 'LINE_NO',
-    aliases: ['item', 'item no', 'item nr', 'item number', 'itemno', 'line', 'line no', 'line nr', 'line number', 'lineno', 'part no', 'part number', 'partno', 'catalog no', 'positie', 'regel', 'regelnummer', 'positienummer'],
-    anyWords: [['item', 'line', 'part', 'catalog', 'positie', 'regel']],
-    excludeWords: ['description', 'omschrijving', 'desc'],
-  },
-  {
-    label: 'Item description', code: 'DESCRIPTION',
-    aliases: ['item description', 'description', 'desc', 'omschrijving', 'item omschrijving', 'productomschrijving', 'artikelomschrijving'],
-    anyWords: [['description', 'desc', 'omschrijving']],
-  },
-  {
-    label: 'Quantity', code: 'QTY',
-    aliases: ['quantity', 'qty', 'aantal', 'hoeveelheid', 'aantal stuks'],
-    anyWords: [['quantity', 'qty', 'aantal', 'hoeveelheid']],
-  },
-  {
-    label: 'Unit of measure', code: 'PURCH_UOM',
-    aliases: ['unit of measure', 'uom', 'unit', 'units', 'eenheid', 'meeteenheid', 'unit measure'],
-    anyWords: [['unit', 'uom', 'eenheid', 'meeteenheid']],
-    excludeWords: ['weight', 'gewicht'], // avoid clashing with a "weight unit" style header
-  },
-  {
-    label: 'Component (Mark/Label)', code: null,
-    aliases: ['component mark label', 'component', 'mark', 'label', 'markering', 'merkteken'],
-    anyWords: [['component', 'mark', 'label', 'markering', 'merkteken']],
-  },
-  {
-    label: 'Code supplier', code: null,
-    aliases: ['code supplier', 'supplier code', 'leverancierscode', 'artikelcode leverancier', 'vendor code'],
-    anyWords: [['code'], ['supplier', 'vendor', 'leverancier']],
-  },
-  {
-    label: 'Serial number', code: null,
-    aliases: ['serial number', 'serial no', 'serial nr', 'serienummer', 'serienr'],
-    anyWords: [['serial', 'serie']],
-  },
-  {
-    label: 'Supplier', code: 'SUPPLIER_NAME',
-    aliases: ['supplier', 'vendor', 'leverancier', 'supplier name', 'vendor name'],
-    anyWords: [['supplier', 'vendor', 'leverancier']],
-    excludeWords: ['code'], // "supplier code" must go to Code supplier, not here
-  },
-  {
-    label: 'Make', code: null,
-    aliases: ['make', 'brand', 'merk', 'fabrikant', 'manufacturer'],
-    anyWords: [['make', 'brand', 'merk', 'fabrikant', 'manufacturer']],
-  },
-  {
-    label: 'Material', code: null,
-    aliases: ['material', 'materiaal'],
-    anyWords: [['material', 'materiaal']],
-  },
-  {
-    label: 'Country of origin', code: 'COUNTRY_OF_ORIGIN',
-    aliases: ['country of origin', 'origin', 'origin country', 'coo', 'land van herkomst', 'herkomstland', 'oorsprongsland', 'land herkomst'],
-    anyWords: [['country', 'land', 'coo'], ['origin', 'herkomst', 'oorsprong', 'coo']],
-  },
-  {
-    label: 'Hs-code', code: 'CUSTOMS_STAT_NO',
-    aliases: ['hs code', 'hscode', 'hs', 'hs-code', 'tariff code', 'customs code', 'harmonized code', 'harmonised code', 'harmonized system code', 'commodity code', 'goederencode', 'tariefcode'],
-    anyWords: [['hs', 'tariff', 'tarief', 'customs', 'harmonized', 'harmonised', 'commodity', 'goederencode']],
-  },
-  {
-    label: 'Value pc (EUR)', code: null,
-    aliases: ['value pc', 'value pc eur', 'unit value', 'price pc', 'price per piece', 'prijs per stuk', 'value per piece', 'unit price'],
-    anyWords: [['value', 'price', 'prijs'], ['pc', 'piece', 'unit', 'per', 'stuk']],
-  },
-  {
-    label: 'Value total', code: null,
-    aliases: ['value total', 'total value', 'totale waarde', 'totaalwaarde', 'total price'],
-    anyWords: [['value', 'price', 'waarde'], ['total', 'totaal', 'totale']],
-  },
-  {
-    label: 'Collo', code: null,
-    aliases: ['collo', 'colli', 'package no', 'package nr', 'pallet no', 'pallet nr', 'pallet number', 'colli nummer'],
-    anyWords: [['collo', 'colli', 'pallet', 'package']],
-  },
-  {
-    label: 'Type of packaging', code: null,
-    aliases: ['type of packaging', 'packaging type', 'packaging', 'verpakking', 'verpakkingstype', 'type verpakking'],
-    anyWords: [['packaging', 'verpakking']],
-  },
-  {
-    label: 'Length cm', code: null,
-    aliases: ['length cm', 'length', 'lengte', 'lengte cm', 'l cm'],
-    anyWords: [['length', 'lengte']],
-  },
-  {
-    label: 'Width cm', code: null,
-    aliases: ['width cm', 'width', 'breedte', 'breedte cm', 'w cm'],
-    anyWords: [['width', 'breedte']],
-  },
-  {
-    label: 'Height cm', code: null,
-    aliases: ['height cm', 'height', 'hoogte', 'hoogte cm', 'h cm'],
-    anyWords: [['height', 'hoogte']],
-  },
-  {
-    label: 'Volume m3', code: null,
-    aliases: ['volume m3', 'volume', 'inhoud', 'volume m³', 'cbm'],
-    anyWords: [['volume', 'inhoud', 'cbm']],
-  },
-  {
-    label: 'Weight gross (collo)', code: 'TOTAL_NET_WEIGHT',
-    aliases: ['weight gross collo', 'weight gross', 'gross weight', 'bruto gewicht', 'brutogewicht', 'gross wt', 'weight bruto'],
-    anyWords: [['weight', 'wt', 'gewicht'], ['gross', 'bruto']],
-  },
-  {
-    label: 'Weight nett (collo)', code: 'NET_WEIGHT',
-    aliases: ['weight nett collo', 'weight nett', 'weight net', 'net weight', 'nett weight', 'netto gewicht', 'nettogewicht', 'net wt', 'weight netto'],
-    anyWords: [['weight', 'wt', 'gewicht'], ['net', 'nett', 'netto']],
-    excludeWords: ['gross', 'bruto'],
-  },
-  {
-    label: 'Dangerous Goods?', code: null,
-    aliases: ['dangerous goods', 'dg', 'gevaarlijke stoffen', 'gevaarlijke goederen', 'dangerous good'],
-    anyWords: [['dangerous', 'gevaarlijke', 'dg']],
-  },
-  {
-    label: 'Inspection Level', code: null,
-    aliases: ['inspection level', 'inspectieniveau', 'keuringsniveau', 'inspection', 'keuring'],
-    anyWords: [['inspection', 'inspectie', 'keuring']],
-  },
+// ============================================================
+// BLOCK 7c — REVERSE MAP: ITEMLIJST COLUMN NAME → IFS TECHNICAL CODE
+// ⚠ REBUILT against VERIFIED data — DEMO_L-Parts.xlsm, sheet "List",
+// row 6 (technical headers) for LU=CPartsWithoutPurchOrd /
+// VIEW=C_PARTS_WITHOUT_PURCH_ORD:
+//   LINE_SEQ, ORDER_NO, LINE_NO, RELEASE_NO, CONTRACT, VENDOR_PART_NO,
+//   VENDOR_PART_DESC, QTY, BUY_UNIT_MEAS, CREATION, EXECUTED_DATE,
+//   SEQ_NO, + 4 computed API-call fields (read-only, never exported —
+//   see Exporter.build's '(' + '.' check).
+//
+// The PREVIOUS version of this table (PURCHASE_ORDER_NO, DESCRIPTION,
+// PURCH_UOM, SUPPLIER_NAME, COUNTRY_OF_ORIGIN, CUSTOMS_STAT_NO,
+// NET_WEIGHT, TOTAL_NET_WEIGHT, SUB_PROJECT_ID) was an unverified guess
+// and did NOT match this view — only "QTY" happened to be correct.
+// This view is specifically "Parts without Purchase Order" (loose
+// vendor parts not yet tied to a PO line): it does not carry supplier,
+// country-of-origin, HS-code, or weight data at all, so those Itemlijst
+// columns have NO IFS-side equivalent here and are intentionally left
+// unmapped (code: null) — same treatment as the other reference-only
+// columns below. If a different IFS view/LU is used for those fields,
+// this table will need its own, separately-verified mapping.
+// ============================================================
+const ITEMLIST_TO_IFS = [
+  { test: /^ihc\s*po$/i,                          code: 'ORDER_NO' },
+  { test: /^item$/i,                              code: 'VENDOR_PART_NO' },
+  { test: /^item\s*description$/i,                code: 'VENDOR_PART_DESC' },
+  { test: /^quantity$/i,                          code: 'QTY' },
+  { test: /^unit\s*of\s*measure$/i,               code: 'BUY_UNIT_MEAS' },
+  // "Project" has no confirmed equivalent in this view. CONTRACT exists
+  // as a field but was empty in every sample row of the demo file, so
+  // the match is unverified — left unmapped rather than guessed.
+  { test: /^project$/i,                           code: null },
+  // No IFS equivalent in THIS view — kept in the table for reference,
+  // not exported (this view carries no supplier/customs/weight data):
+  { test: /^supplier$/i,                          code: null },
+  { test: /^country\s*of\s*origin$/i,             code: null },
+  { test: /^hs-?\s*code$/i,                       code: null },
+  { test: /^weight\s*nett\s*\(collo\)$/i,         code: null },
+  { test: /^weight\s*gross\s*\(collo\)$/i,        code: null },
+  { test: /^delivery\s*ref\.?$/i,                 code: null },
+  { test: /^component\s*\(mark\/label\)$/i,       code: null },
+  { test: /^code\s*supplier$/i,                   code: null },
+  { test: /^serial\s*number$/i,                   code: null },
+  { test: /^make$/i,                              code: null },
+  { test: /^material$/i,                          code: null },
+  { test: /^value\s*pc\s*\(eur\)$/i,              code: null },
+  { test: /^value\s*total$/i,                     code: null },
+  { test: /^collo$/i,                             code: null },
+  { test: /^type\s*of\s*packaging$/i,             code: null },
+  { test: /^length\s*cm$/i,                       code: null },
+  { test: /^width\s*cm$/i,                        code: null },
+  { test: /^height\s*cm$/i,                       code: null },
+  { test: /^volume\s*m3$/i,                       code: null },
+  { test: /^dangerous\s*goods\?$/i,               code: null },
+  { test: /^inspection\s*level$/i,                code: null },
 ];
-
-/**
- * Match a raw (possibly supplier-modified) Itemlijst header against the
- * known field definitions.
- * @param {string} headerRaw
- * @returns {{label:string, code:string|null}|null} the matched field
- *   definition, or null if nothing matches at all.
- */
-function matchItemlistField(headerRaw) {
-  const norm = normalizeHeader(headerRaw);
-  if (!norm) return null;
-
-  // 1. Exact alias match (normalized) — highest confidence
-  for (const def of FIELD_DEFINITIONS) {
-    if (def.aliases.some(a => normalizeHeader(a) === norm)) return def;
-  }
-
-  // 2. Fuzzy keyword match — every required word-group must have a hit,
-  //    unless an excluded word is present.
-  const words = norm.split(' ').filter(Boolean);
-  const wordSet = new Set(words);
-  for (const def of FIELD_DEFINITIONS) {
-    if (!def.anyWords) continue;
-    if (def.excludeWords && def.excludeWords.some(w => wordSet.has(w))) continue;
-    const allGroupsMatch = def.anyWords.every(group => group.some(w => wordSet.has(w)));
-    if (allGroupsMatch) return def;
-  }
-
-  // 3. Nothing matched
-  return null;
-}
 
 /**
  * Look up the canonical IFS technical column code for a given
  * Itemlijst-template header name.
  * @param {string} itemlistHeader
- * @returns {string|null|undefined} technical code (string), null if the
- *   column is a recognized Itemlijst-only field with no IFS equivalent
- *   by design, or undefined if the header could not be recognized at all.
+ * @returns {string|null} technical code, or null if there is no known
+ *   IFS-side equivalent (or the header itself is unrecognized).
  */
 function findIfsCodeForHeader(itemlistHeader) {
-  const def = matchItemlistField(itemlistHeader);
-  if (!def) return undefined;
-  return def.code;
+  const clean = String(itemlistHeader ?? '').trim();
+  for (const rule of ITEMLIST_TO_IFS) {
+    if (rule.test.test(clean)) return rule.code;
+  }
+  return undefined; // unrecognized header entirely (not in the template)
 }
 
 // ============================================================
@@ -686,17 +539,11 @@ const TableManager = {
     const thCorner2 = document.createElement('th');
     thCorner2.textContent = '';
     trTechnical.appendChild(thCorner2);
-    block.technicalHeaders.forEach((h, idx) => {
+    block.technicalHeaders.forEach(h => {
       const th = document.createElement('th');
-      if (block.source === 'xlsx' && Array.isArray(block.unrecognizedHeaders) &&
-          block.unrecognizedHeaders.includes(block.friendlyHeaders[idx]) && !h) {
-        // Column came from an xlsx import but the matcher didn't recognize it at all
-        th.innerHTML = '<span class="tech-map-hint" style="color:var(--color-danger)">⚠ unrecognized</span>';
-      } else {
-        const hint = mapToItemlistColumn(h);
-        th.innerHTML = escapeHtml(h) +
-          (hint ? `<span class="tech-map-hint">${escapeHtml(hint)}</span>` : '');
-      }
+      const hint = mapToItemlistColumn(h);
+      th.innerHTML = escapeHtml(h) +
+        (hint ? `<span class="tech-map-hint">${escapeHtml(hint)}</span>` : '');
       trTechnical.appendChild(th);
     });
     thead.appendChild(trTechnical);
@@ -756,20 +603,12 @@ const TableManager = {
 
     wrapper.appendChild(table);
 
-    // ── Reference-only note (known Itemlijst columns, no IFS code by design) ──
+    // ── Unmapped-column note (xlsx-sourced blocks only) ─────
     if (block.source === 'xlsx' && Array.isArray(block.unmappedHeaders) && block.unmappedHeaders.length) {
       const note = document.createElement('div');
       note.className = 'import-note';
-      note.innerHTML = `ℹ️ <strong>${block.unmappedHeaders.length} column(s)</strong> have no IFS equivalent by design and were kept for reference only (not included in the exported tokens): ${block.unmappedHeaders.map(escapeHtml).join(', ')}.`;
+      note.innerHTML = `⚠️ <strong>${block.unmappedHeaders.length} column(s)</strong> have no IFS equivalent and were kept for reference only (not included in the exported tokens): ${block.unmappedHeaders.map(escapeHtml).join(', ')}.`;
       wrapper.appendChild(note);
-    }
-
-    // ── Unrecognized-column warning (supplier renamed a column we don't know) ──
-    if (block.source === 'xlsx' && Array.isArray(block.unrecognizedHeaders) && block.unrecognizedHeaders.length) {
-      const warn = document.createElement('div');
-      warn.className = 'import-note import-note--warning';
-      warn.innerHTML = `⚠️ <strong>${block.unrecognizedHeaders.length} column(s)</strong> could not be automatically recognized (likely a supplier-specific column name) and were imported as-is, but are <strong>excluded from the IFS export</strong> — please check manually: ${block.unrecognizedHeaders.map(escapeHtml).join(', ')}.`;
-      wrapper.appendChild(warn);
     }
 
     return wrapper;
@@ -831,14 +670,13 @@ const Reset = {
 };
 
 // ============================================================
-// BLOCK 11 — ITEMLIJST (.xlsx) IMPORTER
+// BLOCK 11 — ITEMLIJST (.xlsx) IMPORTER  ★ NEW
 // Reads a supplier Itemlijst-template workbook (SheetJS/XLSX in the
-// browser), matches its column headers against FIELD_DEFINITIONS
-// (tolerant of supplier-introduced naming variations), and builds an
-// ImportBlock identical in shape to what Parser.parse() produces from a
-// pasted !IFS.COPYOBJECT payload — so it can be stored, rendered,
-// edited (add/remove row) and exported exactly the same way as any
-// other import (including the protective-quote round trip from Block 6).
+// browser), matches its column headers against ITEMLIST_TO_IFS, and
+// builds an ImportBlock identical in shape to what Parser.parse()
+// produces from a pasted !IFS.COPYOBJECT payload — so it can be
+// stored, rendered, edited (add/remove row) and exported exactly the
+// same way as any other import.
 // ============================================================
 const ItemlistImporter = {
 
@@ -896,33 +734,24 @@ const ItemlistImporter = {
     const dataRows = rows2d.slice(headerRowIdx + 1)
       .filter(r => r.some(cell => String(cell ?? '').trim() !== ''));
 
-    // Build friendly/technical headers + track reference-only vs. unrecognized columns
+    // Build friendly/technical headers + track unmapped columns
     const friendlyHeaders = [];
     const technicalHeaders = [];
-    const unmappedHeaders = [];       // known Itemlijst-only field, no IFS code by design
-    const unrecognizedHeaders = [];   // header didn't match anything at all
+    const unmappedHeaders = [];
     const colIndexesToKeep = [];
 
     headerRow.forEach((h, idx) => {
       if (!h) return; // skip blank/spacer columns
-      const def = matchItemlistField(h);
-
+      const code = findIfsCodeForHeader(h);
+      if (code === undefined) return; // header not part of the known template at all — ignore column
       friendlyHeaders.push(h);
+      technicalHeaders.push(code || ''); // '' = known Itemlijst-only column, no IFS code
+      if (!code) unmappedHeaders.push(h);
       colIndexesToKeep.push(idx);
-
-      if (!def) {
-        // Completely unrecognized — keep the column (never silently drop
-        // supplier data), but flag it and exclude it from export.
-        technicalHeaders.push('');
-        unrecognizedHeaders.push(h);
-      } else {
-        technicalHeaders.push(def.code || '');
-        if (!def.code) unmappedHeaders.push(h); // known, but no IFS equivalent by design
-      }
     });
 
     if (!friendlyHeaders.length) {
-      StatusBar.show('❌ No columns found to import.', 'error');
+      StatusBar.show('❌ No recognizable Itemlijst columns found to import.', 'error');
       return;
     }
 
@@ -940,8 +769,7 @@ const ItemlistImporter = {
       technicalHeaders,
       rows,
       source: 'xlsx',
-      unmappedHeaders,
-      unrecognizedHeaders
+      unmappedHeaders
     };
 
     Store.append(importBlock);
@@ -949,10 +777,9 @@ const ItemlistImporter = {
 
     const mappedCount = technicalHeaders.filter(Boolean).length;
     StatusBar.show(
-      `✅ Itemlijst imported: ${rows.length} row(s), ${friendlyHeaders.length} column(s) — ` +
-      `${mappedCount} mapped to IFS, ${unmappedHeaders.length} reference-only, ` +
-      `${unrecognizedHeaders.length} unrecognized (check manually).`,
-      unrecognizedHeaders.length ? 'warning' : 'success'
+      `✅ Itemlijst imported: ${rows.length} row(s), ${friendlyHeaders.length} column(s) ` +
+      `(${mappedCount} mapped to IFS, ${unmappedHeaders.length} reference-only).`,
+      'success'
     );
   },
 
@@ -973,7 +800,7 @@ const ItemlistImporter = {
       let score = 0;
       row.forEach(cell => {
         const val = String(cell ?? '').trim();
-        if (val && matchItemlistField(val) !== null) score++;
+        if (val && findIfsCodeForHeader(val) !== undefined) score++;
       });
       if (score > bestScore) {
         bestScore = score;
@@ -1025,7 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
     });
 
-  // ── IMPORT ITEMLIJST (.xlsx) ─────────────────────────────
+  // ── IMPORT ITEMLIJST (.xlsx) ─────────────────────────────  ★ NEW
   const itemlistInput = document.getElementById('itemlist-file-input');
   const itemlistBtn = document.getElementById('btn-import-itemlist');
   if (itemlistBtn && itemlistInput) {
