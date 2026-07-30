@@ -494,8 +494,12 @@ const TableManager = {
     // ── Block metadata header ──────────────────────────────
     const header = document.createElement('div');
     header.className = 'block-header';
-    const labelClass = block.source === 'xlsx' ? 'block-label block-label--xlsx' : 'block-label';
-    const labelText = block.source === 'xlsx' ? `📥 Itemlijst #${blockIdx + 1}` : `Import #${blockIdx + 1}`;
+    const labelClass = block.source === 'xlsx' ? 'block-label block-label--xlsx'
+                      : block.source === 'quickadd' ? 'block-label block-label--quickadd'
+                      : 'block-label';
+    const labelText = block.source === 'xlsx' ? `📥 Itemlijst #${blockIdx + 1}`
+                     : block.source === 'quickadd' ? `➕ Nieuw (Validator) #${blockIdx + 1}`
+                     : `Import #${blockIdx + 1}`;
     header.innerHTML = `
       <span class="${labelClass}">${labelText}</span>
       <span>LU: <strong>${escapeHtml(block.lu)}</strong></span>
@@ -815,11 +819,49 @@ const ItemlistImporter = {
 // ============================================================
 // MAIN CONTROLLER — Wire all blocks together
 // ============================================================
+// ============================================================
+// BLOCK 11 — QUICK ADD QUEUE (handoff from Itemlijst-Validator)
+// Reads items queued by val-manual-match.js (Itemlijst-Validator) via
+// localStorage when a row couldn't be matched to any existing PO line
+// and the user chose "Nieuw registreren". Consumed once on load, then
+// cleared so the same items aren't re-added on a later visit.
+// ============================================================
+const QuickAddQueue = {
+  KEY: 'ihcQuickAddQueue',
+
+  consume() {
+    let queue;
+    try { queue = JSON.parse(localStorage.getItem(this.KEY) || '[]'); }
+    catch (e) { queue = []; }
+    if (!Array.isArray(queue) || !queue.length) return;
+
+    const friendlyHeaders = ['IHC PO', 'Item', 'Item description', 'Quantity', 'Unit of measure', 'Supplier'];
+    // Reuse the SAME verified Itemlijst -> IFS technical-code mapping as
+    // the "Import Itemlijst (.xlsx)" feature (ITEMLIST_TO_IFS), so a
+    // quick-added row is translated identically either way.
+    const technicalHeaders = friendlyHeaders.map(h => findIfsCodeForHeader(h) || '');
+    const rows = queue.map(q => [q.po || '', q.item || '', q.description || '', q.qty || '', q.uom || '', q.supplier || '']);
+
+    const lu = window.prompt('IFS Logical Unit (LU) voor deze nieuwe regel(s) — bv. CPartsWithoutPurchOrd:', '') || '';
+    const view = window.prompt('IFS View-naam voor deze nieuwe regel(s):', '') || '';
+
+    Store.append({ lu, view, friendlyHeaders, technicalHeaders, rows, source: 'quickadd' });
+    localStorage.removeItem(this.KEY);
+
+    StatusBar.show(
+      `✅ ${rows.length} nieuwe regel(s) overgenomen vanuit de Itemlijst-Validator — controleer en exporteer naar IFS.`,
+      'success'
+    );
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize UI components
   StatusBar.init();
   TableManager.init();
   TableManager.render(); // Show empty state on load
+  QuickAddQueue.consume();
+  if (Store.imports.length) TableManager.render();
 
   // ── IMPORT ──────────────────────────────────────────────
   document.getElementById('btn-import')
