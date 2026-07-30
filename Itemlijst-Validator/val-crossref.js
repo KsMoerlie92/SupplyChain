@@ -357,6 +357,11 @@
       try {
         const buf     = await file.arrayBuffer();
         const lookups = buildLookups(buf);
+        // Cache zodat een eventueel later stap (bv. handmatige koppeling
+        // voor rijen die geen automatische match kregen) dezelfde
+        // ingeladen Expediting-lijst kan hergebruiken zonder opnieuw te
+        // hoeven vragen om het bestand.
+        window.ValCrossref._lastLookups = lookups;
 
         statusEl.textContent =
           `✓ ${lookups.total} regels geladen uit Expediting lijst. Koppelen…`;
@@ -422,6 +427,11 @@
     // Laag-niveau API voor testen
     buildLookups,
     enrichRows,
+    // Herbruikbaar voor uitbreidingen (bv. handmatige koppeling) — zodat
+    // die niet dezelfde kolomnamen/vul-logica hoeven te dupliceren.
+    applyMatch,
+    IL,
+    EXP,
   };
 
 })();
