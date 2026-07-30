@@ -590,12 +590,13 @@ async function _valCrossrefEnrich(expeditingData) {
 
   const lookups = window.ValCrossref.buildLookupsFromRows(expeditingData);
 
-  // Vóór Strategie A+B: welke rijen hadden nog geen Component/Mark, en wat
-  // was hun ORIGINELE Item-waarde (kolom D)? Beide nodig om zo meteen te
-  // herkennen wat de auto-fallback zojuist heeft ingevuld/gebruikt, i.p.v.
-  // wat al in het bestand stond — anders parsen we straks de waarde die de
-  // fallback er ZELF net heeft ingezet, wat een circulaire "match" oplevert.
-  const hWasEmpty = adapted.map(o => !trim(o[IL.H]));
+  // Vóór Strategie A+B: welke velden waren nog leeg, en wat was de
+  // ORIGINELE Item-waarde (kolom D)? Nodig om zo meteen exact te herkennen
+  // wat de auto-fallback zojuist heeft ingevuld/gebruikt, i.p.v. wat al in
+  // het bestand stond — per veld apart, want de fallback kan bv. alléén D
+  // vullen terwijl H toevallig al een eigen, echte waarde had (of andersom).
+  const wasEmpty = {};
+  for (const L of ['D', 'E', 'F', 'G', 'H', 'K']) wasEmpty[L] = adapted.map(o => !trim(o[IL[L]]));
   const dOriginal = adapted.map(o => o[IL.D]);
 
   // Strategie A (al gedekt door _fillRowFromExpediting) + Strategie B
@@ -603,30 +604,36 @@ async function _valCrossrefEnrich(expeditingData) {
   window.ValCrossref.enrichRows(adapted, lookups);
 
   // De bestaande "Strategie B – PO-only fallback" in val-crossref.js pakt,
-  // als er geen EXACTE PO+Line+Release-match is, gewoon de eerste regel
-  // met dezelfde PO. Bij een PO met meerdere regels (zoals meerdere
-  // artikelen op één order) kan dat een VERKEERDE koppeling opleveren
-  // zonder dat iemand dit ziet. Voor zulke ambigue gevallen draaien we
-  // die gok terug, zodat de rij alsnog bij de handmatige stap terechtkomt
-  // — de mens kiest dan zelf uit alle kandidaten voor die PO.
+  // als er geen EXACTE PO+Line+Release-match is, gewoon de eerste (of
+  // enige) regel met dezelfde PO — zelfs als die maar één andere,
+  // niet-verwante regel betreft. Zo'n gok wordt hier ALTIJD teruggedraaid,
+  // ongeacht hoeveel kandidaten er voor die PO bestaan: alleen een echte
+  // PO+Line+Release-match (Strategie B, ondubbelzinnig) wordt vertrouwd.
+  // De rij komt dan alsnog bij de handmatige stap terecht — de mens kiest
+  // dan zelf uit alle kandidaten voor die PO.
   adapted.forEach((o, i) => {
-    if (!hWasEmpty[i]) return;                      // was al gevuld vóór deze stap — met rust laten
+    const anyWasEmpty = ['D', 'E', 'F', 'G', 'H', 'K'].some(L => wasEmpty[L][i]);
+    if (!anyWasEmpty) return;                          // alles al gevuld vóór deze stap — met rust laten
     const ihcPo = trim(o[IL.C]);
     if (!ihcPo) return;
     const candidates = lookups.mapByOrder[ihcPo];
-    if (!candidates || candidates.length < 2) return; // niet ambigu — niets aan de hand
+    // Geen enkele kandidaat voor deze PO -> kan sowieso niets fout gaan.
+    if (!candidates || !candidates.length) return;
 
     // Gebruik de ORIGINELE D-waarde (vóór enrichRows) — niet o[IL.D], die
     // kan zojuist door de PO-only-fallback zelf zijn overschreven.
     const parsed = window.ValCrossref.parseItem(dOriginal[i]);
     const exactKey = parsed ? window.ValCrossref.poKey(ihcPo, parsed.line, parsed.release) : null;
     const hasExactMatch = exactKey && lookups.mapByPO[exactKey];
-    if (hasExactMatch) return;                        // exacte match — betrouwbaar, laten staan
+    if (hasExactMatch) return;                          // exacte match — betrouwbaar, laten staan
 
-    // Geen exacte match op de ORIGINELE Item-waarde, maar wel (stilzwijgend)
-    // iets ingevuld -> was de onbetrouwbare PO-only-fallback. Terugdraaien,
-    // inclusief D zelf (die was leeg/onparseerbaar en hoort dat te blijven).
-    for (const L of ['D', 'E', 'F', 'G', 'H', 'K']) o[IL[L]] = '';
+    // Geen exacte match op de ORIGINELE Item-waarde -> wat er nu instaat
+    // komt van de onbetrouwbare PO-only-fallback. Terugdraaien, maar per
+    // veld apart: een veld dat al een eigen, echte waarde had (dus niet in
+    // wasEmpty) blijft altijd onaangeroerd.
+    for (const L of ['D', 'E', 'F', 'G', 'H', 'K']) {
+      if (wasEmpty[L][i]) o[IL[L]] = '';
+    }
   });
 
   // Terugschrijven naar cells[COL.X], alleen waar er echt iets bij is gevuld.
