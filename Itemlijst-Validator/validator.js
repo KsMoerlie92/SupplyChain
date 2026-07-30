@@ -569,6 +569,89 @@ const _EXP_FILL_MAP = [
 // Kolomletters die automatisch aangevuld kunnen worden (voor de header-markering)
 const _FILL_COLS = new Set(_EXP_FILL_MAP.map(x => x[1]));
 
+// ── Cross-referentie + handmatige koppeling (val-crossref.js / val-manual-match.js) ──
+// _valRows gebruikt cells[COL.X] (positie), terwijl ValCrossref/ValManualMatch
+// rijen als platte { 'IHC PO': ..., 'Item': ... }-objecten verwachten (kolomnaam
+// als sleutel). Deze functie vertaalt heen en terug, bouwt de opzoekkaarten
+// rechtstreeks uit de al-geladen expeditingData (geen los uploadscherm),
+// draait eerst de bestaande Strategie A/B-aanvulling, en laat de gebruiker
+// daarna zelf koppelen (of "Nieuw registreren") voor wat overblijft.
+async function _valCrossrefEnrich(expeditingData) {
+  const trim = v => String(v ?? '').trim();
+  const IL = window.ValCrossref.IL;                 // { B:'Project', C:'IHC PO', ... }
+  const letters = Object.keys(IL);                  // ['B','C','D','E','F','G','H','K']
+
+  // cells[COL.X] -> plat object, met een terugverwijzing naar de echte rij
+  const adapted = _valRows.map(row => {
+    const obj = { __row: row };
+    for (const L of letters) obj[IL[L]] = String(row.cells[COL[L]] ?? '').trim();
+    return obj;
+  });
+
+  const lookups = window.ValCrossref.buildLookupsFromRows(expeditingData);
+
+  // Vóór Strategie A+B: welke rijen hadden nog geen Component/Mark?
+  // (nodig om zo meteen te herkennen wat de auto-fallback zojuist heeft
+  // ingevuld, i.p.v. wat al in het bestand stond.)
+  const hWasEmpty = adapted.map(o => !trim(o[IL.H]));
+
+  // Strategie A (al gedekt door _fillRowFromExpediting) + Strategie B
+  // (IHC PO + Item → Order/Line/Release) — vult nooit een niet-lege cel.
+  window.ValCrossref.enrichRows(adapted, lookups);
+
+  // De bestaande "Strategie B – PO-only fallback" in val-crossref.js pakt,
+  // als er geen EXACTE PO+Line+Release-match is, gewoon de eerste regel
+  // met dezelfde PO. Bij een PO met meerdere regels (zoals meerdere
+  // artikelen op één order) kan dat een VERKEERDE koppeling opleveren
+  // zonder dat iemand dit ziet. Voor zulke ambigue gevallen draaien we
+  // die gok terug, zodat de rij alsnog bij de handmatige stap terechtkomt
+  // — de mens kiest dan zelf uit alle kandidaten voor die PO.
+  adapted.forEach((o, i) => {
+    if (!hWasEmpty[i]) return;                      // was al gevuld vóór deze stap — met rust laten
+    const ihcPo = trim(o[IL.C]);
+    if (!ihcPo) return;
+    const candidates = lookups.mapByOrder[ihcPo];
+    if (!candidates || candidates.length < 2) return; // niet ambigu — niets aan de hand
+
+    const parsed = window.ValCrossref.parseItem(o[IL.D]);
+    const exactKey = parsed ? window.ValCrossref.poKey(ihcPo, parsed.line, parsed.release) : null;
+    const hasExactMatch = exactKey && lookups.mapByPO[exactKey];
+    if (hasExactMatch) return;                        // exacte match — betrouwbaar, laten staan
+
+    // Geen exacte match, wel (stilzwijgend) iets ingevuld -> was de
+    // onbetrouwbare PO-only-fallback. Terugdraaien.
+    for (const L of ['E', 'F', 'G', 'H', 'K']) o[IL[L]] = '';
+  });
+
+  // Terugschrijven naar cells[COL.X], alleen waar er echt iets bij is gevuld.
+  function writeBack(objRow) {
+    const row = objRow.__row;
+    for (const L of letters) {
+      const val = objRow[IL[L]];
+      if (val && String(row.cells[COL[L]] ?? '').trim() !== val) {
+        row.cells[COL[L]] = val;
+        row._edited = true;
+      }
+    }
+  }
+  adapted.forEach(writeBack);
+
+  // Rijen die na Strategie A+B nog steeds geen Component/Mark hebben,
+  // terwijl het PO-nummer wél bekend is — laat de gebruiker zelf kiezen.
+  if (window.ValManualMatch) {
+    const unresolved = adapted.filter(o => trim(o[IL.C]) && !trim(o[IL.H]));
+    if (unresolved.length) {
+      await new Promise(resolve => {
+        window.ValManualMatch.showManualMatchModal(adapted, unresolved, lookups, () => {
+          adapted.forEach(writeBack);
+          resolve();
+        });
+      });
+    }
+  }
+}
+
+
 function _fillRowFromExpediting(cells, expeditingData) {
   if (!expeditingData || !expeditingData.length) return 0;
   const idx = _buildExpIndex(expeditingData);
@@ -744,6 +827,33 @@ function _valLoadMailgen() {
 document.addEventListener('DOMContentLoaded', _valConnectExpediting);
 document.addEventListener('DOMContentLoaded', _valLoadMailgen);
 if (document.readyState !== 'loading') _valLoadMailgen();
+
+// Laadt de cross-referentiemodule (val-crossref.js) en de handmatige-
+// koppelmodule (val-manual-match.js) — zelfde zelfladend patroon als
+// _valLoadMailgen hierboven. val-manual-match.js moet ná val-crossref.js
+// laden (die vouwt zich om ValCrossref.runIfNeeded heen), vandaar de
+// onload-keten.
+function _valLoadCrossref() {
+  if (!document.querySelector('.val-toolbar')) return;                    // alleen validatorpagina
+  if (window.ValCrossref || document.querySelector('script[data-valcrossref]')) return;
+  var s = document.createElement('script');
+  s.src = 'val-crossref.js';
+  s.setAttribute('data-valcrossref', '1');
+  s.onerror = function () { console.warn('val-crossref.js kon niet geladen worden'); };
+  s.onload = function () { _valLoadManualMatch(); };
+  document.head.appendChild(s);
+}
+function _valLoadManualMatch() {
+  if (window.ValManualMatch || document.querySelector('script[data-valmanualmatch]')) return;
+  var s = document.createElement('script');
+  s.src = 'val-manual-match.js';
+  s.setAttribute('data-valmanualmatch', '1');
+  s.onerror = function () { console.warn('val-manual-match.js kon niet geladen worden'); };
+  document.head.appendChild(s);
+}
+
+document.addEventListener('DOMContentLoaded', _valLoadCrossref);
+if (document.readyState !== 'loading') _valLoadCrossref();
 
 // ── Export → mail naar Wendels (val-export-mail.js) ────────────────────────
 // Bestandsnaam én onderwerp: "{Delivery ref} ITEMLIJST {Supplier}"
@@ -946,6 +1056,19 @@ async function runValidation() {
       const n = _fillRowFromExpediting(row.cells, expeditingData);
       if (n) { filledFields += n; filledRows++; row._edited = true; }   // meenemen in export
     }
+  }
+
+  // Cross-referentie (val-crossref.js) + handmatige koppeling (val-manual-match.js).
+  // _fillRowFromExpediting hierboven dekt alleen de voorwaartse richting
+  // (H → Unified Reference Code). Deze stap voegt de omgekeerde richting
+  // toe (IHC PO + Item → Order/Line/Release, "Strategie B") én, voor
+  // rijen die daarna nog steeds geen Component/Mark hebben terwijl het
+  // PO-nummer wél bekend is, een popup waarin de gebruiker zelf een
+  // kandidaat kiest uit de Expediting-lijst (of een nieuwe regel laat
+  // registreren via de IFS Migration Tool). Draait rechtstreeks op de
+  // AL GELADEN expeditingData hierboven — geen apart uploadscherm nodig.
+  if (window.ValCrossref && expeditingData && expeditingData.length) {
+    await _valCrossrefEnrich(expeditingData);
   }
 
   // Landnaam → ISO 3166-1 alpha-2 code (Country of Origin, kolom N)

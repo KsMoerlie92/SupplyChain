@@ -250,6 +250,12 @@
   };
 
   // Publieke API — vooral handig voor testen
-  window.ValManualMatch = { rankCandidates, similarity, queueQuickAdd, QUICK_ADD_KEY };
+  window.ValManualMatch = {
+    rankCandidates, similarity, queueQuickAdd, QUICK_ADD_KEY,
+    // Rechtstreeks aan te roepen met al-gebouwde lookups (bv. vanuit de
+    // centrale expeditinglijst die de validatorpagina al heeft geladen),
+    // zonder de upload-gedreven ValCrossref.runIfNeeded-flow te doorlopen.
+    showManualMatchModal,
+  };
 
 })();

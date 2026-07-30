@@ -73,12 +73,14 @@
   /* ─── Lookup-tabellen bouwen ─────────────────────────────────────────── */
 
   /**
-   * Leest het Expediting-bestand (ArrayBuffer) en bouwt:
-   *   mapByMark  : { "2236-012" : expRowObject }   (Strategie A)
-   *   mapByPO    : { "3156010690|1|1" : expRowObject } (Strategie B – vol)
-   *   mapByOrder : { "3156010690" : [expRowObjects] }  (Strategie B – PO-only fallback)
+   * Leest een Expediting-bestand (ArrayBuffer) en zet het om naar een
+   * platte lijst rij-objecten (kolomnaam → waarde). Los van het bouwen
+   * van de opzoekkaarten, zodat een AL INGELADEN lijst (bv. de centrale
+   * bedrijfsbrede expeditinglijst die de Itemlijst-Validator al gebruikt
+   * voor _fillRowFromExpediting) rechtstreeks bij buildLookupsFromRows
+   * kan worden aangeleverd, zonder opnieuw te hoeven inlezen/uploaden.
    */
-  function buildLookups(arrayBuffer) {
+  function parseExpeditingWorkbook(arrayBuffer) {
     const wb  = XLSX.read(arrayBuffer, { type: 'array' });
     const ws  = wb.Sheets[wb.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
@@ -113,12 +115,24 @@
 
     // Converteer rijen naar objecten met kolomnamen als sleutel
     const headerRow  = raw[headerIdx];
-    const expObjects = raw.slice(headerIdx + 1).map(arr => {
+    return raw.slice(headerIdx + 1).map(arr => {
       const obj = {};
       headerRow.forEach((h, i) => { if (trim(h)) obj[trim(h)] = arr[i]; });
       return obj;
     }).filter(obj => trim(obj[EXP.ORDER]) || trim(obj[EXP.UREF]));
+  }
 
+  /**
+   * Bouwt mapByMark / mapByPO / mapByOrder uit een array rij-objecten
+   * (kolomnaam → waarde) die AL geparsed zijn — of afkomstig van
+   * parseExpeditingWorkbook(), of rechtstreeks van fileData.expediting.data
+   * (de centrale bedrijfsbrede lijst, al in exact dezelfde vorm).
+   *
+   *   mapByMark  : { "2236-012" : expRowObject }   (Strategie A)
+   *   mapByPO    : { "3156010690|1|1" : expRowObject } (Strategie B – vol)
+   *   mapByOrder : { "3156010690" : [expRowObjects] }  (Strategie B – PO-only fallback)
+   */
+  function buildLookupsFromRows(expObjects) {
     const mapByMark  = {};   // mark → eerste expRow
     const mapByPO    = {};   // "order|line|release" → expRow
     const mapByOrder = {};   // "order" → [expRows]
@@ -139,6 +153,11 @@
     }
 
     return { mapByMark, mapByPO, mapByOrder, total: expObjects.length };
+  }
+
+  /** Ongewijzigd publiek gedrag: xlsx inlezen én kaarten bouwen in één stap. */
+  function buildLookups(arrayBuffer) {
+    return buildLookupsFromRows(parseExpeditingWorkbook(arrayBuffer));
   }
 
   /* ─── Rijen verrijken ────────────────────────────────────────────────── */
@@ -426,10 +445,13 @@
 
     // Laag-niveau API voor testen
     buildLookups,
+    buildLookupsFromRows,
     enrichRows,
     // Herbruikbaar voor uitbreidingen (bv. handmatige koppeling) — zodat
     // die niet dezelfde kolomnamen/vul-logica hoeven te dupliceren.
     applyMatch,
+    parseItem,
+    poKey,
     IL,
     EXP,
   };
