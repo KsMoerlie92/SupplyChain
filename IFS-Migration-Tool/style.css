@@ -326,6 +326,9 @@ tfoot td {
 .block-label.block-label--xlsx {
   background: rgba(39,174,96,0.25);
 }
+.block-label.block-label--quickadd {
+  background: rgba(217,31,44,0.25);
+}
 
 /* Small unmapped-column note under the table, listing Itemlijst columns
    that have no IFS technical equivalent and were therefore not exported. */
