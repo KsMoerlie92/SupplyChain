@@ -590,10 +590,13 @@ async function _valCrossrefEnrich(expeditingData) {
 
   const lookups = window.ValCrossref.buildLookupsFromRows(expeditingData);
 
-  // Vóór Strategie A+B: welke rijen hadden nog geen Component/Mark?
-  // (nodig om zo meteen te herkennen wat de auto-fallback zojuist heeft
-  // ingevuld, i.p.v. wat al in het bestand stond.)
+  // Vóór Strategie A+B: welke rijen hadden nog geen Component/Mark, en wat
+  // was hun ORIGINELE Item-waarde (kolom D)? Beide nodig om zo meteen te
+  // herkennen wat de auto-fallback zojuist heeft ingevuld/gebruikt, i.p.v.
+  // wat al in het bestand stond — anders parsen we straks de waarde die de
+  // fallback er ZELF net heeft ingezet, wat een circulaire "match" oplevert.
   const hWasEmpty = adapted.map(o => !trim(o[IL.H]));
+  const dOriginal = adapted.map(o => o[IL.D]);
 
   // Strategie A (al gedekt door _fillRowFromExpediting) + Strategie B
   // (IHC PO + Item → Order/Line/Release) — vult nooit een niet-lege cel.
@@ -613,14 +616,17 @@ async function _valCrossrefEnrich(expeditingData) {
     const candidates = lookups.mapByOrder[ihcPo];
     if (!candidates || candidates.length < 2) return; // niet ambigu — niets aan de hand
 
-    const parsed = window.ValCrossref.parseItem(o[IL.D]);
+    // Gebruik de ORIGINELE D-waarde (vóór enrichRows) — niet o[IL.D], die
+    // kan zojuist door de PO-only-fallback zelf zijn overschreven.
+    const parsed = window.ValCrossref.parseItem(dOriginal[i]);
     const exactKey = parsed ? window.ValCrossref.poKey(ihcPo, parsed.line, parsed.release) : null;
     const hasExactMatch = exactKey && lookups.mapByPO[exactKey];
     if (hasExactMatch) return;                        // exacte match — betrouwbaar, laten staan
 
-    // Geen exacte match, wel (stilzwijgend) iets ingevuld -> was de
-    // onbetrouwbare PO-only-fallback. Terugdraaien.
-    for (const L of ['E', 'F', 'G', 'H', 'K']) o[IL[L]] = '';
+    // Geen exacte match op de ORIGINELE Item-waarde, maar wel (stilzwijgend)
+    // iets ingevuld -> was de onbetrouwbare PO-only-fallback. Terugdraaien,
+    // inclusief D zelf (die was leeg/onparseerbaar en hoort dat te blijven).
+    for (const L of ['D', 'E', 'F', 'G', 'H', 'K']) o[IL[L]] = '';
   });
 
   // Terugschrijven naar cells[COL.X], alleen waar er echt iets bij is gevuld.
