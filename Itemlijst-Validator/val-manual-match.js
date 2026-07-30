@@ -125,6 +125,10 @@
 
   function showManualMatchModal(rows, unresolved, lookups, onComplete) {
     let idx = 0;
+    // Verzamelt "Nieuw registreren"-keuzes tijdens de hele doorloop. Pas ná
+    // de laatste rij wordt dit in één keer weggeschreven en de IFS
+    // Migration Tool ÉÉN keer geopend — niet per item een eigen tabblad.
+    const queuedForAdd = [];
 
     const overlay = css(document.createElement('div'), {
       position: 'fixed', inset: '0', background: 'rgba(10,22,40,0.88)',
@@ -145,17 +149,65 @@
       onComplete(rows);
     }
 
+    /** Toont, ná de laatste rij, een samenvatting van alles wat voor
+     * "Nieuw registreren" is gemarkeerd — met ÉÉN knop om ze in één keer
+     * naar de IFS Migration Tool te sturen. */
+    function renderSummary() {
+      if (!queuedForAdd.length) return finish();
+
+      const listHtml = queuedForAdd.map(({ row, itemNo }, i) => `
+        <div style="display:flex;gap:10px;align-items:baseline;padding:8px 10px;
+                    border-bottom:1px solid var(--ihc-steel,#1e3a6e);font-size:0.82rem">
+          <b style="color:var(--ihc-teal,#00B4D8);min-width:90px">${escapeHtml(trim(row[IL.C]) || '(geen PO)')}</b>
+          <span style="color:#e8edf5;min-width:70px">${escapeHtml(itemNo)}</span>
+          <span style="color:#a0b0c8;flex:1">${escapeHtml(row[IL.E] || '(geen omschrijving)')}</span>
+        </div>`).join('');
+
+      card.innerHTML = `
+        <h3 style="margin:0 0 4px;font-size:1.02rem;color:var(--ihc-teal,#00B4D8);font-weight:700;">
+          ➕ Nieuw te registreren (${queuedForAdd.length})
+        </h3>
+        <p style="margin:0 0 12px;font-size:0.82rem;color:#a0b0c8;line-height:1.5;">
+          Deze regels zijn tijdens het doorlopen gemarkeerd voor registratie in het ERP.
+          Ze worden in één keer klaargezet in de IFS Migration Tool.
+        </p>
+        <div style="margin-bottom:16px;border:1px solid var(--ihc-steel,#1e3a6e);border-radius:6px;
+                    max-height:260px;overflow-y:auto">${listHtml}</div>
+        <div id="vmm-btnrow" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+        <div id="vmm-status" style="margin-top:10px;font-size:0.8rem;min-height:1.2em"></div>
+      `;
+
+      const btnRow = card.querySelector('#vmm-btnrow');
+      const statusEl = card.querySelector('#vmm-status');
+
+      const sendBtn = makeBtn(`📤 Alle ${queuedForAdd.length} naar IFS Migration Tool`, 'accent');
+      sendBtn.addEventListener('click', () => {
+        queuedForAdd.forEach(({ row, itemNo }) => queueQuickAdd(row, itemNo));
+        statusEl.style.color = '#4ade80';
+        statusEl.textContent = `✓ ${queuedForAdd.length} regel(s) klaargezet. IFS Migration Tool wordt geopend…`;
+        window.open('../IFS-Migration-Tool/index.html', '_blank');
+        setTimeout(finish, 900);
+      });
+      btnRow.appendChild(sendBtn);
+
+      const laterBtn = makeBtn('Later (niets versturen)', 'secondary');
+      laterBtn.addEventListener('click', finish);
+      btnRow.appendChild(laterBtn);
+    }
+
     function renderRow() {
-      if (idx >= unresolved.length) return finish();
+      if (idx >= unresolved.length) return renderSummary();
       const row = unresolved[idx];
       const ranked = rankCandidates(row, lookups);
       const ihcPo = trim(row[IL.C]);
+      const alreadyQueued = queuedForAdd.some(q => q.row === row);
 
       const listHtml = ranked.length
         ? ranked.map(({ candidate, score }, i) => {
             const pct = Math.round(score * 100);
             const line = trim(candidate[EXP.LINE]);
             const release = trim(candidate[EXP.RELEASE]);
+            const uref = trim(candidate[EXP.UREF]);
             return `
               <label class="vmm-cand${i === 0 ? ' vmm-best' : ''}" style="display:flex;gap:10px;align-items:flex-start;
                     padding:10px 12px;border-radius:6px;cursor:pointer;margin-bottom:6px;
@@ -165,6 +217,7 @@
                 <span style="flex:1;font-size:0.82rem;line-height:1.5">
                   <b style="color:#e8edf5">${escapeHtml(candidate[EXP.DESC])}</b>
                   ${i === 0 && score > 0 ? `<span style="color:#4ade80;font-size:0.72rem;margin-left:6px">★ beste match (${pct}%)</span>` : ''}
+                  <br><span style="color:var(--ihc-teal,#00B4D8);font-weight:700">Component/Mark (kolom M): ${escapeHtml(uref || '—')}</span>
                   <br><span style="color:#6b7a99">Line/Release: ${escapeHtml(line)}-${escapeHtml(release)}
                     &nbsp;·&nbsp; Qty: ${escapeHtml(trim(candidate[EXP.QTY]))} ${escapeHtml(trim(candidate[EXP.UOM]))}
                     &nbsp;·&nbsp; ${escapeHtml(trim(candidate[EXP.SUPPLIER]))}</span>
@@ -178,12 +231,14 @@
       card.innerHTML = `
         <h3 style="margin:0 0 4px;font-size:1.02rem;color:var(--ihc-teal,#00B4D8);font-weight:700;">
           🔗 Handmatige koppeling (${idx + 1}/${unresolved.length})
+          ${queuedForAdd.length ? `<span style="font-size:0.7rem;color:#fbbf24;font-weight:400"> · ${queuedForAdd.length} klaargezet voor ERP</span>` : ''}
         </h3>
         <p style="margin:0 0 14px;font-size:0.82rem;color:#a0b0c8;line-height:1.5;">
           Deze itemlijst-regel kon niet automatisch gekoppeld worden.
           <br><b style="color:#e8edf5">${escapeHtml(row[IL.D] || '—')}</b> —
           ${escapeHtml(row[IL.E] || '(geen omschrijving)')}
           ${ihcPo ? `<br>PO: <b style="color:#e8edf5">${escapeHtml(ihcPo)}</b>` : ''}
+          ${alreadyQueued ? '<br><span style="color:#fbbf24">➕ Al gemarkeerd voor registratie</span>' : ''}
         </p>
         <div id="vmm-list" style="margin-bottom:16px">${listHtml}</div>
         <div id="vmm-btnrow" style="display:flex;gap:10px;flex-wrap:wrap"></div>
@@ -209,20 +264,21 @@
       skipBtn.addEventListener('click', () => { idx++; renderRow(); });
       btnRow.appendChild(skipBtn);
 
-      const addNewBtn = makeBtn('➕ Nieuw registreren (IFS Migration Tool)', 'accent');
-      addNewBtn.addEventListener('click', () => {
-        const itemNo = window.prompt(
-          `Nieuw itemnummer voor deze regel (PO ${ihcPo || '(onbekend)'}):`,
-          ''
-        );
-        if (itemNo === null || !trim(itemNo)) return;
-        queueQuickAdd(row, itemNo);
-        statusEl.style.color = '#4ade80';
-        statusEl.textContent = `✓ Klaargezet voor IFS Migration Tool (item ${trim(itemNo)}). Wordt in een nieuw tabblad geopend…`;
-        window.open('../IFS-Migration-Tool/index.html', '_blank');
-        setTimeout(() => { idx++; renderRow(); }, 1200);
-      });
-      btnRow.appendChild(addNewBtn);
+      if (!alreadyQueued) {
+        const addNewBtn = makeBtn('➕ Nieuw registreren (ERP)', 'accent');
+        addNewBtn.addEventListener('click', () => {
+          const itemNo = window.prompt(
+            `Nieuw itemnummer voor deze regel (PO ${ihcPo || '(onbekend)'}):`,
+            ''
+          );
+          if (itemNo === null || !trim(itemNo)) return;
+          queuedForAdd.push({ row, itemNo: trim(itemNo) });
+          statusEl.style.color = '#4ade80';
+          statusEl.textContent = `✓ Gemarkeerd (item ${trim(itemNo)}) — wordt aan het eind in één keer verstuurd.`;
+          setTimeout(() => { idx++; renderRow(); }, 700);
+        });
+        btnRow.appendChild(addNewBtn);
+      }
     }
 
     renderRow();
