@@ -426,6 +426,12 @@
      * Controleer of cross-referentie nodig is en voer het uit.
      * Roept onComplete(rows) aan zodra klaar (met of zonder invullen).
      *
+     * Gebruikt bij voorkeur de AL GEKOPPELDE, bedrijfsbrede Expediting-lijst
+     * (fileData.expediting.data — dezelfde bron die de Sub Project ID-
+     * selectie op deze pagina al gebruikt) in plaats van te vragen om een
+     * los bestand te uploaden. Het uploadscherm (showModal) is nu alleen
+     * nog een vangnet voor het geval er geen centrale lijst gekoppeld is.
+     *
      * @param {Object[]} rows        Geparsede itemlijst-rijen (object per rij)
      * @param {Function} onComplete  Callback na afronding: fn(rows)
      */
@@ -440,6 +446,22 @@
       );
 
       if (!needsRef) return onComplete(rows);
+
+      // Centrale, al-geladen bedrijfsbrede lijst? Gebruik die rechtstreeks —
+      // geen uploadprompt nodig.
+      const central = (typeof window.fileData !== 'undefined' && window.fileData
+                        && window.fileData.expediting && Array.isArray(window.fileData.expediting.data))
+        ? window.fileData.expediting.data : null;
+
+      if (central && central.length) {
+        const lookups = buildLookupsFromRows(central);
+        enrichRows(rows, lookups);
+        window.ValCrossref._lastLookups = lookups;
+        return onComplete(rows);
+      }
+
+      // Geen centrale lijst gekoppeld — vangnet: laat de gebruiker er zelf
+      // eentje uploaden.
       showModal(rows, onComplete);
     },
 
