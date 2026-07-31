@@ -103,14 +103,20 @@
   }
 
   /* ─── "Nieuw registreren" — overdracht naar IFS Migration Tool ────────── */
+  // Elke nieuwe L-Part hangt in IFS onder een BESTAANDE Order+Line+Release
+  // (LINE_NO/RELEASE_NO) — dat is niet hetzelfde als het PO-nummer alleen.
+  // Vandaar dat hier ook om Line/Release wordt gevraagd, niet alleen het
+  // itemnummer.
 
   const QUICK_ADD_KEY = 'ihcQuickAddQueue';
 
-  function queueQuickAdd(row, itemNo) {
+  function queueQuickAdd(row, itemNo, lineNo, releaseNo) {
     let queue = [];
     try { queue = JSON.parse(localStorage.getItem(QUICK_ADD_KEY) || '[]'); } catch (e) {}
     queue.push({
       po: trim(row[IL.C]),
+      lineNo: trim(lineNo),
+      releaseNo: trim(releaseNo),
       item: trim(itemNo),
       description: trim(row[IL.E]),
       qty: trim(row[IL.F]),
@@ -155,11 +161,12 @@
     function renderSummary() {
       if (!queuedForAdd.length) return finish();
 
-      const listHtml = queuedForAdd.map(({ row, itemNo }, i) => `
+      const listHtml = queuedForAdd.map(({ row, itemNo, lineNo, releaseNo }, i) => `
         <div style="display:flex;gap:10px;align-items:baseline;padding:8px 10px;
                     border-bottom:1px solid var(--ihc-steel,#1e3a6e);font-size:0.82rem">
           <b style="color:var(--ihc-teal,#00B4D8);min-width:90px">${escapeHtml(trim(row[IL.C]) || '(geen PO)')}</b>
-          <span style="color:#e8edf5;min-width:70px">${escapeHtml(itemNo)}</span>
+          <span style="color:#6b7a99;min-width:50px">L${escapeHtml(lineNo)}/${escapeHtml(releaseNo)}</span>
+          <span style="color:#e8edf5;min-width:110px">${escapeHtml(itemNo)}</span>
           <span style="color:#a0b0c8;flex:1">${escapeHtml(row[IL.E] || '(geen omschrijving)')}</span>
         </div>`).join('');
 
@@ -169,7 +176,8 @@
         </h3>
         <p style="margin:0 0 12px;font-size:0.82rem;color:#a0b0c8;line-height:1.5;">
           Deze regels zijn tijdens het doorlopen gemarkeerd voor registratie in het ERP.
-          Ze worden in één keer klaargezet in de IFS Migration Tool.
+          Klaarzetten, en gebruik daarna de knop <b style="color:#e8edf5">"➕ Maak L-Parts aan"</b>
+          bovenin de werkbalk om ze als klembord-tekst voor IFS te genereren.
         </p>
         <div style="margin-bottom:16px;border:1px solid var(--ihc-steel,#1e3a6e);border-radius:6px;
                     max-height:260px;overflow-y:auto">${listHtml}</div>
@@ -180,12 +188,11 @@
       const btnRow = card.querySelector('#vmm-btnrow');
       const statusEl = card.querySelector('#vmm-status');
 
-      const sendBtn = makeBtn(`📤 Alle ${queuedForAdd.length} naar IFS Migration Tool`, 'accent');
+      const sendBtn = makeBtn(`✓ Klaarzetten (${queuedForAdd.length})`, 'accent');
       sendBtn.addEventListener('click', () => {
-        queuedForAdd.forEach(({ row, itemNo }) => queueQuickAdd(row, itemNo));
+        queuedForAdd.forEach(({ row, itemNo, lineNo, releaseNo }) => queueQuickAdd(row, itemNo, lineNo, releaseNo));
         statusEl.style.color = '#4ade80';
-        statusEl.textContent = `✓ ${queuedForAdd.length} regel(s) klaargezet. IFS Migration Tool wordt geopend…`;
-        window.open('../IFS-Migration-Tool/index.html', '_blank');
+        statusEl.textContent = `✓ ${queuedForAdd.length} regel(s) klaargezet — gebruik "➕ Maak L-Parts aan" bovenin.`;
         setTimeout(finish, 900);
       });
       btnRow.appendChild(sendBtn);
@@ -272,9 +279,18 @@
             ''
           );
           if (itemNo === null || !trim(itemNo)) return;
-          queuedForAdd.push({ row, itemNo: trim(itemNo) });
+          const lineRelease = window.prompt(
+            `Onder welke bestaande Order-regel (Line-Release) valt dit nieuwe onderdeel?\n` +
+            `Bijvoorbeeld: 1-1`,
+            ''
+          );
+          if (lineRelease === null || !trim(lineRelease)) return;
+          const m = trim(lineRelease).match(/^(\d+)[-\/](\d+)$/);
+          if (!m) { window.alert('Ongeldig formaat — gebruik Line-Release, bv. 1-1.'); return; }
+          const [, lineNo, releaseNo] = m;
+          queuedForAdd.push({ row, itemNo: trim(itemNo), lineNo, releaseNo });
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = `✓ Gemarkeerd (item ${trim(itemNo)}) — wordt aan het eind in één keer verstuurd.`;
+          statusEl.textContent = `✓ Gemarkeerd (item ${trim(itemNo)}, Line ${lineNo}/${releaseNo}) — wordt aan het eind in één keer verwerkt.`;
           setTimeout(() => { idx++; renderRow(); }, 700);
         });
         btnRow.appendChild(addNewBtn);

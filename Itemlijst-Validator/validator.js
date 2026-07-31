@@ -576,6 +576,40 @@ const _FILL_COLS = new Set(_EXP_FILL_MAP.map(x => x[1]));
 // rechtstreeks uit de al-geladen expeditingData (geen los uploadscherm),
 // draait eerst de bestaande Strategie A/B-aanvulling, en laat de gebruiker
 // daarna zelf koppelen (of "Nieuw registreren") voor wat overblijft.
+// ── Handmatige koppeling op aanvraag, per rij (via de "+"-knop in de tabel) ──
+// Hergebruikt dezelfde vertaallaag en dezelfde popup als _valCrossrefEnrich,
+// maar dan voor precies één rij, op elk gewenst moment — niet alleen
+// automatisch na "Valideer" voor de nog onopgeloste rijen.
+function valOpenManualMatch(ri) {
+  const row = _valRows[ri];
+  if (!row || !window.ValCrossref || !window.ValManualMatch) return;
+
+  const trim = v => String(v ?? '').trim();
+  const IL = window.ValCrossref.IL;
+  const letters = Object.keys(IL);
+  const obj = { __row: row };
+  for (const L of letters) obj[IL[L]] = String(row.cells[COL[L]] ?? '').trim();
+
+  const expeditingData = (typeof _valExpRows === 'function')
+    ? _valExpRows()
+    : ((typeof fileData !== 'undefined' && fileData.expediting) ? fileData.expediting.data : null);
+
+  const lookups = (expeditingData && expeditingData.length)
+    ? window.ValCrossref.buildLookupsFromRows(expeditingData)
+    : { mapByMark: {}, mapByPO: {}, mapByOrder: {} };
+
+  window.ValManualMatch.showManualMatchModal([obj], [obj], lookups, () => {
+    for (const L of letters) {
+      const val = obj[IL[L]];
+      if (val && String(row.cells[COL[L]] ?? '').trim() !== val) {
+        row.cells[COL[L]] = val;
+        row._edited = true;
+      }
+    }
+    renderValidationTable();
+  });
+}
+
 async function _valCrossrefEnrich(expeditingData) {
   const trim = v => String(v ?? '').trim();
   const IL = window.ValCrossref.IL;                 // { B:'Project', C:'IHC PO', ... }
@@ -1254,9 +1288,12 @@ function renderValidationTable(usdPrice, usdRate) {
     }).join('');
 
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
+    const matchBtn = `<button type="button" class="val-match-btn" title="Handmatig koppelen aan Expediting-lijst / nieuw registreren"
+      onclick="valOpenManualMatch(${ri})">➕</button>`;
     return `<tr class="val-row ${rowCls}">
       <td class="val-cell val-cell-num">${ri+1}</td>
       <td class="val-cell" style="text-align:center">${rowStatus}</td>
+      <td class="val-cell" style="text-align:center">${matchBtn}</td>
       ${cells}
     </tr>`;
   }).join('');
@@ -1369,6 +1406,7 @@ function buildValHeader() {
   const th1 = `<tr>
     <th rowspan="2" style="width:30px">#</th>
     <th rowspan="2">Status</th>
+    <th rowspan="2" title="Handmatig koppelen aan Expediting-lijst / nieuw registreren">🔗</th>
     ${COLS_SHOW.map(col => {
       const owner = ownerMap[col];
       const cls   = /IHC/.test(owner) ? 'col-owner-ihc' : 'col-owner-sup';
