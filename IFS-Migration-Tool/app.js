@@ -835,17 +835,23 @@ const QuickAddQueue = {
     catch (e) { queue = []; }
     if (!Array.isArray(queue) || !queue.length) return;
 
-    const friendlyHeaders = ['IHC PO', 'Item', 'Item description', 'Quantity', 'Unit of measure', 'Supplier'];
-    // Reuse the SAME verified Itemlijst -> IFS technical-code mapping as
-    // the "Import Itemlijst (.xlsx)" feature (ITEMLIST_TO_IFS), so a
-    // quick-added row is translated identically either way.
-    const technicalHeaders = friendlyHeaders.map(h => findIfsCodeForHeader(h) || '');
-    const rows = queue.map(q => [q.po || '', q.item || '', q.description || '', q.qty || '', q.uom || '', q.supplier || '']);
+    // Exacte $n-kolomstructuur van de geverifieerde export (view
+    // CPartsWithoutPurchOrd / C_PARTS_WITHOUT_PURCH_ORD): $0 LINE_SEQ,
+    // $1 ORDER_NO, $2 LINE_NO, $3 RELEASE_NO, ($4 CONTRACT bewust
+    // overgeslagen — niet aanwezig in de echte export), $5 VENDOR_PART_NO,
+    // $6 VENDOR_PART_DESC, $7 QTY, $8 BUY_UNIT_MEAS. LINE_SEQ telt op over
+    // de hele batch (1,2,3,...), ongeacht welke PO/regel het betreft.
+    const friendlyHeaders  = ['Regel', 'IHC PO', 'Line', 'Release', '', 'Item', 'Item description', 'Quantity', 'Unit of measure'];
+    const technicalHeaders = ['LINE_SEQ', 'ORDER_NO', 'LINE_NO', 'RELEASE_NO', '', 'VENDOR_PART_NO', 'VENDOR_PART_DESC', 'QTY', 'BUY_UNIT_MEAS'];
+    const rows = queue.map((q, i) => [
+      String(i + 1), q.po || '', q.lineNo || '', q.releaseNo || '', '',
+      q.item || '', q.description || '', q.qty || '1', q.uom || 'pcs',
+    ]);
 
-    const lu = window.prompt('IFS Logical Unit (LU) voor deze nieuwe regel(s) — bv. CPartsWithoutPurchOrd:', '') || '';
-    const view = window.prompt('IFS View-naam voor deze nieuwe regel(s):', '') || '';
-
-    Store.append({ lu, view, friendlyHeaders, technicalHeaders, rows, source: 'quickadd' });
+    Store.append({
+      lu: '$LU=CPartsWithoutPurchOrd', view: '$VIEW=C_PARTS_WITHOUT_PURCH_ORD',
+      friendlyHeaders, technicalHeaders, rows, source: 'quickadd',
+    });
     localStorage.removeItem(this.KEY);
 
     StatusBar.show(
