@@ -684,18 +684,11 @@ async function _valCrossrefEnrich(expeditingData) {
   adapted.forEach(writeBack);
 
   // Rijen die na Strategie A+B nog steeds geen Component/Mark hebben,
-  // terwijl het PO-nummer wél bekend is — laat de gebruiker zelf kiezen.
-  if (window.ValManualMatch) {
-    const unresolved = adapted.filter(o => trim(o[IL.C]) && !trim(o[IL.H]));
-    if (unresolved.length) {
-      await new Promise(resolve => {
-        window.ValManualMatch.showManualMatchModal(adapted, unresolved, lookups, () => {
-          adapted.forEach(writeBack);
-          resolve();
-        });
-      });
-    }
-  }
+  // terwijl het PO-nummer wél bekend is, worden NIET meer automatisch in
+  // een pop-up getoond na "Valideer" — dat werkte storend bij grote
+  // aantallen (bv. 46 op een rij). De gebruiker koppelt zulke rijen nu
+  // zelf, op eigen moment, via de "+"-knop bij die specifieke rij
+  // (zie valOpenManualMatch hieronder).
 }
 
 
@@ -1289,7 +1282,7 @@ function renderValidationTable(usdPrice, usdRate) {
 
     const rowStatus = anyErr ? '❌' : anyWrn ? '⚠️' : '✅';
     const matchBtn = `<button type="button" class="val-match-btn" title="Handmatig koppelen aan Expediting-lijst / nieuw registreren"
-      onclick="valOpenManualMatch(${ri})">➕</button>`;
+      onclick="valOpenManualMatch(${ri})">+</button>`;
     return `<tr class="val-row ${rowCls}">
       <td class="val-cell val-cell-num">${ri+1}</td>
       <td class="val-cell" style="text-align:center">${rowStatus}</td>
@@ -1406,7 +1399,7 @@ function buildValHeader() {
   const th1 = `<tr>
     <th rowspan="2" style="width:30px">#</th>
     <th rowspan="2">Status</th>
-    <th rowspan="2" title="Handmatig koppelen aan Expediting-lijst / nieuw registreren">🔗</th>
+    <th rowspan="2" title="Handmatig koppelen aan Expediting-lijst / nieuw registreren">+</th>
     ${COLS_SHOW.map(col => {
       const owner = ownerMap[col];
       const cls   = /IHC/.test(owner) ? 'col-owner-ihc' : 'col-owner-sup';
