@@ -289,6 +289,12 @@
           if (!m) { window.alert('Ongeldig formaat — gebruik Line-Release, bv. 1-1.'); return; }
           const [, lineNo, releaseNo] = m;
           queuedForAdd.push({ row, itemNo: trim(itemNo), lineNo, releaseNo });
+          // Schrijf het nieuwe itemnummer meteen naar het rij-object (loopt
+          // straks mee met de normale terugschrijf-logica in validator.js),
+          // en markeer deze rij als "L-Parts aangemaakt" zodat de Item-kolom
+          // vergrendeld en groen kan worden weergegeven.
+          row[IL.D] = trim(itemNo);
+          row.__queuedForLParts = true;
           statusEl.style.color = '#4ade80';
           statusEl.textContent = `✓ Gemarkeerd (item ${trim(itemNo)}, Line ${lineNo}/${releaseNo}) — wordt aan het eind in één keer verwerkt.`;
           setTimeout(() => { idx++; renderRow(); }, 700);

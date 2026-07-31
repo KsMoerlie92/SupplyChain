@@ -150,6 +150,8 @@ let COL = {
 // State
 let _valRows     = [];   // parsed data rows [{cells:[], errors:{}, warnings:{}}]
 let _valHeaders  = [];   // header row (detected dynamically)
+let _valRedBaseline  = new Set();  // rij-indices die rood waren bij de laatste validatie
+let _valResolvedRows = new Set();  // subset daarvan, sindsdien bijgewerkt via de "+"-knop
 let _valOwners   = [];   // owner row (row before headers, if present)
 let _valCOO      = new Set(); // country codes from Master tab
 let _usdRate     = null; // cached EUR/USD rate
@@ -606,7 +608,18 @@ function valOpenManualMatch(ri) {
         row._edited = true;
       }
     }
+    // "Nieuw registreren" gebruikt? -> Item-kolom vergrendelen/groen tonen.
+    if (obj.__queuedForLParts) {
+      row._lpartsConfirmed = true;
+      row._edited = true;
+    }
+    // Telt deze rij mee voor de voortgangsbalk? (was rood, is nu behandeld
+    // via koppeling ÓF L-Parts-registratie)
+    const handled = obj.__queuedForLParts || String(row.cells[COL.H] ?? '').trim();
+    if (handled && _valRedBaseline.has(ri)) _valResolvedRows.add(ri);
+
     renderValidationTable();
+    renderMatchProgress();
   });
 }
 
@@ -1135,7 +1148,16 @@ async function runValidation() {
   // Sheet-level checks
   const sheetWarnings = validateSheet(_valRows).concat(colloCheck.warnings);
 
+  // Baseline voor de voortgangsbalk: welke rij-indices waren rood (fout) bij
+  // déze validatieronde? _valResolvedRows (persistent, niet opnieuw leeg-
+  // gemaakt) houdt bij welke daarvan intussen zijn bijgewerkt via de
+  // "+"-knop (koppeling of L-Parts-registratie).
+  _valRedBaseline = new Set(
+    _valRows.map((r, i) => i).filter(i => Object.keys(_valRows[i].errors).length > 0)
+  );
+
   renderValidationTable(usdPrice, usdRate);
+  renderMatchProgress();
 
   // Summary
   if (sumEl) {
@@ -1171,6 +1193,30 @@ async function runValidation() {
 }
 
 // ── Render validation table ────────────────────────────────────────────────
+// ── Voortgangsbalk: hoeveel oorspronkelijk rode regels zijn bijgewerkt ─────
+function renderMatchProgress() {
+  const el = document.getElementById('val-progress');
+  if (!el) return;
+  const total = _valRedBaseline.size;
+  if (!total) { el.style.display = 'none'; return; }
+
+  const resolved = [..._valRedBaseline].filter(i => _valResolvedRows.has(i)).length;
+  const pct = Math.round((resolved / total) * 100);
+
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-family:var(--mono);font-size:.7rem;color:var(--muted)">
+        🔗 Bijgewerkt via koppeling/L-Parts: <b style="color:var(--text)">${resolved} / ${total}</b> rode regels
+      </span>
+      <span style="font-family:var(--mono);font-size:.7rem;color:var(--muted)">${pct}%</span>
+    </div>
+    <div style="height:8px;background:rgba(239,68,68,.2);border-radius:4px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:#22c55e;transition:width .3s"></div>
+    </div>
+  `;
+}
+
 function renderValidationTable(usdPrice, usdRate) {
   const tbEl = document.getElementById('val-tbody');
   if (!tbEl) return;
@@ -1249,6 +1295,16 @@ function renderValidationTable(usdPrice, usdRate) {
           <input class="val-input" data-row="${ri}" data-col="${ci}"
             value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
           <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
+        </td>`;
+      }
+
+      // Item (D) — na "Nieuw registreren" (L-Parts): vergrendeld en groen,
+      // als bevestiging dat deze regel is klaargezet voor het ERP.
+      if (col === 'D' && row._lpartsConfirmed) {
+        return `<td class="val-cell" style="background:rgba(34,197,94,.18)" title="Klaargezet als L-Part — item vergrendeld">
+          <input class="val-input" value="${esc(disp)}" size="${inSize}" disabled
+            style="background:transparent;border-color:#22c55e;color:#4ade80;font-weight:700;cursor:not-allowed">
+          <span style="font-size:.62rem;color:#4ade80;display:block;margin-top:.1rem">✓ L-Part klaargezet</span>
         </td>`;
       }
 
@@ -1468,6 +1524,11 @@ function handleValFile(fileOrEvent) {
     // ── Remap COL to actual column positions by header name ───────────────
     // Also add virtual columns for DG / Inspection if missing from the file
     _remapColumns();
+
+    // Nieuw bestand geladen -> voortgang van een eventueel vorig bestand
+    // heeft hier geen betekenis meer.
+    _valRedBaseline = new Set();
+    _valResolvedRows = new Set();
 
     _valRows = (raw.slice(hdrIdx + 1) || [])
       // FIX: accept rows where col A (Delivery ref.) is filled AND either
