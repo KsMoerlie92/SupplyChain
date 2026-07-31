@@ -1,7 +1,7 @@
 {
   "meta": {
-    "bijgewerkt": "2026-07-27T11:38:49.346Z",
-    "events": 18,
+    "bijgewerkt": "2026-07-31T08:52:37.343Z",
+    "events": 43,
     "toelichting": "Teller van itemlijst-validaties. Commit dit bestand als shared/validatie-log.json."
   },
   "events": [
@@ -202,6 +202,281 @@
       "regels": 44,
       "fouten": 0,
       "waarschuwingen": 1
+    },
+    {
+      "id": "ms4igkdm-htlbcf",
+      "ts": "2026-07-28T10:26:26.218Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 11,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4iglah-exeh1v",
+      "ts": "2026-07-28T10:26:27.401Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 11,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4ihzxt-lyii4z",
+      "ts": "2026-07-28T10:27:33.041Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 11,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4ij8m9-pz8f81",
+      "ts": "2026-07-28T10:28:30.945Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 11,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4ij9vc-1pynd0",
+      "ts": "2026-07-28T10:28:32.568Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 11,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4muw7b-mm8qum",
+      "ts": "2026-07-28T12:29:33.191Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1320-088",
+      "supplier": "Rubber Design B.V.",
+      "bestand": "1320-088 ITEMLIJST Rubber Design.xlsx — 216 rijen",
+      "regels": 216,
+      "fouten": 0,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms4muwmz-ehhocr",
+      "ts": "2026-07-28T12:29:33.755Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1320-088",
+      "supplier": "Rubber Design B.V.",
+      "bestand": "1320-088 ITEMLIJST Rubber Design.xlsx — 216 rijen",
+      "regels": 216,
+      "fouten": 0,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7i4y86-zg3xw8",
+      "ts": "2026-07-30T12:40:42.822Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "734.00",
+      "supplier": "",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls 1.1.xlsx — 14 rijen",
+      "regels": 14,
+      "fouten": 224,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "ms7i4zbn-suw949",
+      "ts": "2026-07-30T12:40:44.243Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "734.00",
+      "supplier": "",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls 1.1.xlsx — 14 rijen",
+      "regels": 14,
+      "fouten": 224,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "ms7i5sqr-2ihx1u",
+      "ts": "2026-07-30T12:41:22.371Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-010",
+      "supplier": "Alfa Laval",
+      "bestand": "1321-010 ITEMLIJST Alfa Laval rdm.xlsx — 8 rijen",
+      "regels": 8,
+      "fouten": 8,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7i8d96-1a4l3m",
+      "ts": "2026-07-30T12:43:22.266Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-010",
+      "supplier": "Alfa Laval",
+      "bestand": "1321-010 ITEMLIJST TEST.xlsx — 8 rijen",
+      "regels": 8,
+      "fouten": 8,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "ms7ichbu-ducx3q",
+      "ts": "2026-07-30T12:46:34.170Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 9,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7icii9-m3mhsc",
+      "ts": "2026-07-30T12:46:35.697Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "E10000-128",
+      "supplier": "IHC Smit BV",
+      "bestand": "E10000-128 itemlijst shipment 59411.xlsx — 3 rijen",
+      "regels": 3,
+      "fouten": 9,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7ih8gi-x5h5ag",
+      "ts": "2026-07-30T12:50:15.955Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "ms7jmwvf-imkns4",
+      "ts": "2026-07-30T13:22:40.491Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 366,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7jmyd7-wxm1i1",
+      "ts": "2026-07-30T13:22:42.427Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 366,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7l6pzs-a1wn4e",
+      "ts": "2026-07-30T14:06:04.312Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 366,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7l6qrd-8p3r5a",
+      "ts": "2026-07-30T14:06:05.305Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 366,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms7w6qqk-qt3moz",
+      "ts": "2026-07-30T19:14:01.052Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 457,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms8mxaow-q99wo3",
+      "ts": "2026-07-31T07:42:29.984Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms8mxbje-3usutt",
+      "ts": "2026-07-31T07:42:31.082Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms8o68b5-0v7iob",
+      "ts": "2026-07-31T08:17:26.417Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-016",
+      "supplier": "Johnson Controls",
+      "bestand": "1321-016 ITEMLIJST - Johnson Controls.xlsx — 44 rijen",
+      "regels": 44,
+      "fouten": 0,
+      "waarschuwingen": 1
+    },
+    {
+      "id": "ms8p52v5-ah8hzc",
+      "ts": "2026-07-31T08:44:32.321Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms8p5wgf-upak65",
+      "ts": "2026-07-31T08:45:10.671Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 0
+    },
+    {
+      "id": "ms8p5xf6-vitopo",
+      "ts": "2026-07-31T08:45:11.922Z",
+      "tool": "itemlijst-validator",
+      "deliveryRef": "1321-017",
+      "supplier": "Hoppe Marine",
+      "bestand": "ITEMLIJST - 1321-017    Hoppe Marine.xlsx — 61 rijen",
+      "regels": 61,
+      "fouten": 458,
+      "waarschuwingen": 0
     }
   ]
 }
