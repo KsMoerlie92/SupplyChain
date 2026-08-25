@@ -841,11 +841,22 @@ const QuickAddQueue = {
     // overgeslagen — niet aanwezig in de echte export), $5 VENDOR_PART_NO,
     // $6 VENDOR_PART_DESC, $7 QTY, $8 BUY_UNIT_MEAS. LINE_SEQ telt op over
     // de hele batch (1,2,3,...), ongeacht welke PO/regel het betreft.
-    const friendlyHeaders  = ['Regel', 'IHC PO', 'Line', 'Release', '', 'Item', 'Item description', 'Quantity', 'Unit of measure'];
-    const technicalHeaders = ['LINE_SEQ', 'ORDER_NO', 'LINE_NO', 'RELEASE_NO', '', 'VENDOR_PART_NO', 'VENDOR_PART_DESC', 'QTY', 'BUY_UNIT_MEAS'];
+    // $9-$16 (CREATION, EXECUTED_DATE, SEQ_NO en de vier IFS-berekende
+    // GET_*-velden) worden hier bewust overgeslagen (lege technische naam
+    // -> Exporter.build() slaat ze vanzelf over): dit zijn door IFS zelf
+    // gezette/berekende velden. $17-$21 zijn wél echte IFS custom fields
+    // (CF$_C_*) en komen rechtstreeks uit de itemlijst (kolommen N/O/M/P/Q).
+    const friendlyHeaders  = ['Regel', 'IHC PO', 'Line', 'Release', '', 'Item', 'Item description', 'Quantity', 'Unit of measure',
+      '', '', '', '', '', '', '', '',
+      'Country of origin', 'Hs-code', 'Material', 'Value pc (EUR)', 'Value total'];
+    const technicalHeaders = ['LINE_SEQ', 'ORDER_NO', 'LINE_NO', 'RELEASE_NO', '', 'VENDOR_PART_NO', 'VENDOR_PART_DESC', 'QTY', 'BUY_UNIT_MEAS',
+      '', '', '', '', '', '', '', '',
+      'CF$_C_COUNTRY_OF_ORIGIN', 'CF$_C_HS_CODE', 'CF$_C_MATERIAL', 'CF$_C_VALUE_PER_UNIT', 'CF$_C_VALUE_TOTAL'];
     const rows = queue.map((q, i) => [
       String(i + 1), q.po || '', q.lineNo || '', q.releaseNo || '', '',
       q.item || '', q.description || '', q.qty || '1', q.uom || 'pcs',
+      '', '', '', '', '', '', '', '',
+      q.countryOfOrigin || '', q.hsCode || '', q.material || '', q.valuePerUnit || '', q.valueTotal || '',
     ]);
 
     Store.append({
