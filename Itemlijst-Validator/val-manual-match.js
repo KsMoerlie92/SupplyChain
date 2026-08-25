@@ -110,6 +110,43 @@
 
   const QUICK_ADD_KEY = 'ihcQuickAddQueue';
 
+  // ── Opvolgend componentnummer per Order+Line+Release ──────────────────
+  // Voorbeeld: PO 3156018519, Line 1/Release 1 heeft basisnummer "2253-000".
+  // Elke NIEUWE L-Part die onder diezelfde Line/Release wordt geregistreerd,
+  // krijgt automatisch een doorlopend volgnummer: 2253-000.01, .02, .03, ...
+  // Het basisnummer zelf wordt éénmalig gevraagd (bij de eerste keer voor
+  // die Line/Release) en daarna hergebruikt/opgehoogd — ook over meerdere
+  // popup-sessies heen, via localStorage.
+  const LPARTS_BASE_KEY = 'ihcLPartsBaseRegistry';
+
+  function loadBaseRegistry() {
+    try { return JSON.parse(localStorage.getItem(LPARTS_BASE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function saveBaseRegistry(reg) { localStorage.setItem(LPARTS_BASE_KEY, JSON.stringify(reg)); }
+
+  /**
+   * @returns {string|null} het automatisch gegenereerde itemnummer, of
+   *   null als de gebruiker het invoeren van het basisnummer annuleerde.
+   */
+  function getNextLPartNumber(po, lineNo, releaseNo) {
+    const key = `${po}|${lineNo}|${releaseNo}`;
+    const reg = loadBaseRegistry();
+    if (!reg[key]) {
+      const base = window.prompt(
+        `Nog geen basis-componentnummer bekend voor PO ${po}, Line ${lineNo}/${releaseNo}.\n` +
+        `Voer het basisnummer in (bv. 2253-000) — nieuwe L-Parts onder deze ` +
+        `Order-regel krijgen dan automatisch {basisnummer}.01, .02, .03, ...`,
+        ''
+      );
+      if (base === null || !trim(base)) return null;
+      reg[key] = { base: trim(base), count: 0 };
+    }
+    reg[key].count++;
+    const itemNo = `${reg[key].base}.${String(reg[key].count).padStart(2, '0')}`;
+    saveBaseRegistry(reg);
+    return itemNo;
+  }
+
   function queueQuickAdd(row, itemNo, lineNo, releaseNo) {
     let queue = [];
     try { queue = JSON.parse(localStorage.getItem(QUICK_ADD_KEY) || '[]'); } catch (e) {}
@@ -122,6 +159,14 @@
       qty: trim(row[IL.F]),
       uom: trim(row[IL.G]),
       supplier: trim(row[IL.K]),
+      // Extra velden voor de klembordexport ($17-$21) — rechtstreeks uit
+      // dezelfde itemlijst-rij, door validator.js op de rij gezet
+      // (kolommen M/N/O/P/Q, buiten de crossref-matchkolommen om).
+      material:        trim(row.__material),
+      countryOfOrigin: trim(row.__countryOfOrigin),
+      hsCode:          trim(row.__hsCode),
+      valuePerUnit:    trim(row.__valuePerUnit),
+      valueTotal:      trim(row.__valueTotal),
       ts: Date.now(),
     });
     localStorage.setItem(QUICK_ADD_KEY, JSON.stringify(queue));
@@ -274,11 +319,6 @@
       if (!alreadyQueued) {
         const addNewBtn = makeBtn('➕ Nieuw registreren (ERP)', 'accent');
         addNewBtn.addEventListener('click', () => {
-          const itemNo = window.prompt(
-            `Nieuw itemnummer voor deze regel (PO ${ihcPo || '(onbekend)'}):`,
-            ''
-          );
-          if (itemNo === null || !trim(itemNo)) return;
           const lineRelease = window.prompt(
             `Onder welke bestaande Order-regel (Line-Release) valt dit nieuwe onderdeel?\n` +
             `Bijvoorbeeld: 1-1`,
@@ -288,15 +328,17 @@
           const m = trim(lineRelease).match(/^(\d+)[-\/](\d+)$/);
           if (!m) { window.alert('Ongeldig formaat — gebruik Line-Release, bv. 1-1.'); return; }
           const [, lineNo, releaseNo] = m;
-          queuedForAdd.push({ row, itemNo: trim(itemNo), lineNo, releaseNo });
-          // Schrijf het nieuwe itemnummer meteen naar het rij-object (loopt
-          // straks mee met de normale terugschrijf-logica in validator.js),
-          // en markeer deze rij als "L-Parts aangemaakt" zodat de Item-kolom
-          // vergrendeld en groen kan worden weergegeven.
-          row[IL.D] = trim(itemNo);
+
+          // Componentnummer wordt NIET meer handmatig ingevoerd — automatisch
+          // opvolgend op het basisnummer van deze Line/Release (bv. 2253-000.01).
+          const itemNo = getNextLPartNumber(ihcPo, lineNo, releaseNo);
+          if (itemNo === null) return; // gebruiker annuleerde de basisnummer-invoer
+
+          queuedForAdd.push({ row, itemNo, lineNo, releaseNo });
+          row[IL.D] = itemNo;
           row.__queuedForLParts = true;
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = `✓ Gemarkeerd (item ${trim(itemNo)}, Line ${lineNo}/${releaseNo}) — wordt aan het eind in één keer verwerkt.`;
+          statusEl.textContent = `✓ Gemarkeerd (item ${itemNo}, Line ${lineNo}/${releaseNo}) — wordt aan het eind in één keer verwerkt.`;
           setTimeout(() => { idx++; renderRow(); }, 700);
         });
         btnRow.appendChild(addNewBtn);

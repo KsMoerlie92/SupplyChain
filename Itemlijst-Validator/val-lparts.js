@@ -50,6 +50,13 @@
    * Bouwt de exacte IFS-klembordtekst uit de wachtrij-items.
    * LINE_SEQ telt op over de HELE batch (1, 2, 3, ...), ongeacht van welke
    * PO/regel het item komt — exact zoals in de geverifieerde export.
+   *
+   * $9 t/m $16 (CREATION, EXECUTED_DATE, SEQ_NO en de vier
+   * C_PARTS_WITHOUT_PURCH_ORD_API.GET_*-velden) zijn door IFS zelf
+   * berekende/gezette velden — altijd leeg meegestuurd, nooit door ons
+   * ingevuld. $17 t/m $21 (CF$_C_*, IFS custom fields) komen wél uit de
+   * itemlijst zelf: Country of origin, Hs-code, Material, Value pc en
+   * Value total (kolommen N, O, M, P, Q).
    */
   function buildClipboardText(items, lu, view) {
     let buffer = `!IFS.COPYOBJECT\n$LU=${lu}\n$VIEW=${view}`;
@@ -64,6 +71,19 @@
       buffer += `\n-$6:VENDOR_PART_DESC=${it.description}`;
       buffer += `\n-$7:QTY=${it.qty || '1'}`;
       buffer += `\n-$8:BUY_UNIT_MEAS=${it.uom || 'pcs'}`;
+      buffer += `\n-$9:CREATION=`;
+      buffer += `\n-$10:EXECUTED_DATE=`;
+      buffer += `\n-$11:SEQ_NO=`;
+      buffer += `\n-$12:C_PARTS_WITHOUT_PURCH_ORD_API.GET_PO_RELEASE_NO(SEQ_NO, ORDER_NO, LINE_NO, RELEASE_NO)=`;
+      buffer += `\n-$13:C_PARTS_WITHOUT_PURCH_ORD_API.GET_PO_LINE_NO(SEQ_NO, ORDER_NO, LINE_NO, RELEASE_NO)=`;
+      buffer += `\n-$14:C_PARTS_WITHOUT_PURCH_ORD_API.GET_PART_NO(SEQ_NO, ORDER_NO, LINE_NO, RELEASE_NO)=`;
+      buffer += `\n-$15:C_PARTS_WITHOUT_PURCH_ORD_API.GET_PART_REV(SEQ_NO, ORDER_NO, LINE_NO, RELEASE_NO)=`;
+      buffer += `\n-$16:C_PARTS_WITHOUT_PURCH_ORD_API.GET_DEMAND_CODE(ORDER_NO, LINE_NO, RELEASE_NO)=`;
+      buffer += `\n-$17:CF$_C_COUNTRY_OF_ORIGIN=${it.countryOfOrigin || ''}`;
+      buffer += `\n-$18:CF$_C_HS_CODE=${it.hsCode || ''}`;
+      buffer += `\n-$19:CF$_C_MATERIAL=${it.material || ''}`;
+      buffer += `\n-$20:CF$_C_VALUE_PER_UNIT=${it.valuePerUnit || ''}`;
+      buffer += `\n-$21:CF$_C_VALUE_TOTAL=${it.valueTotal || ''}`;
       buffer += '\n-';
     });
     buffer += '\n\n';

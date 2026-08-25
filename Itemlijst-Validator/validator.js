@@ -591,6 +591,15 @@ function valOpenManualMatch(ri) {
   const letters = Object.keys(IL);
   const obj = { __row: row };
   for (const L of letters) obj[IL[L]] = String(row.cells[COL[L]] ?? '').trim();
+  // Extra velden — geen onderdeel van de crossref-matchkolommen zelf, maar
+  // wel nodig voor de L-Parts-klembordexport ($17-$21): rechtstreeks uit
+  // dezelfde itemlijst-rij (Material, Country of origin, Hs-code,
+  // Value pc, Value total).
+  obj.__material        = String(row.cells[COL.M] ?? '').trim();
+  obj.__countryOfOrigin = String(row.cells[COL.N] ?? '').trim();
+  obj.__hsCode          = String(row.cells[COL.O] ?? '').trim();
+  obj.__valuePerUnit    = String(row.cells[COL.P] ?? '').trim();
+  obj.__valueTotal      = String(row.cells[COL.Q] ?? '').trim();
 
   const expeditingData = (typeof _valExpRows === 'function')
     ? _valExpRows()
