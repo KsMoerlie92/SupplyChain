@@ -159,14 +159,10 @@
       qty: trim(row[IL.F]),
       uom: trim(row[IL.G]),
       supplier: trim(row[IL.K]),
-      // Extra velden voor de klembordexport ($17-$21) — rechtstreeks uit
-      // dezelfde itemlijst-rij, door validator.js op de rij gezet
-      // (kolommen M/N/O/P/Q, buiten de crossref-matchkolommen om).
-      material:        trim(row.__material),
-      countryOfOrigin: trim(row.__countryOfOrigin),
-      hsCode:          trim(row.__hsCode),
-      valuePerUnit:    trim(row.__valuePerUnit),
-      valueTotal:      trim(row.__valueTotal),
+      // Overige velden ($17-$21 CF$_C_*, enz.) — via de canonieke
+      // koppeltabel (shared/ifs-lparts-columns.js), rechtstreeks door
+      // validator.js op de rij gezet als row.__lpartsExtra.
+      extra: row.__lpartsExtra || {},
       ts: Date.now(),
     });
     localStorage.setItem(QUICK_ADD_KEY, JSON.stringify(queue));
