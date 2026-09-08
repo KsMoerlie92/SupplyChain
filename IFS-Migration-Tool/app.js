@@ -835,29 +835,30 @@ const QuickAddQueue = {
     catch (e) { queue = []; }
     if (!Array.isArray(queue) || !queue.length) return;
 
-    // Exacte $n-kolomstructuur van de geverifieerde export (view
-    // CPartsWithoutPurchOrd / C_PARTS_WITHOUT_PURCH_ORD): $0 LINE_SEQ,
-    // $1 ORDER_NO, $2 LINE_NO, $3 RELEASE_NO, ($4 CONTRACT bewust
-    // overgeslagen — niet aanwezig in de echte export), $5 VENDOR_PART_NO,
-    // $6 VENDOR_PART_DESC, $7 QTY, $8 BUY_UNIT_MEAS. LINE_SEQ telt op over
-    // de hele batch (1,2,3,...), ongeacht welke PO/regel het betreft.
-    // $9-$16 (CREATION, EXECUTED_DATE, SEQ_NO en de vier IFS-berekende
-    // GET_*-velden) worden hier bewust overgeslagen (lege technische naam
-    // -> Exporter.build() slaat ze vanzelf over): dit zijn door IFS zelf
-    // gezette/berekende velden. $17-$21 zijn wél echte IFS custom fields
-    // (CF$_C_*) en komen rechtstreeks uit de itemlijst (kolommen N/O/M/P/Q).
-    const friendlyHeaders  = ['Regel', 'IHC PO', 'Line', 'Release', '', 'Item', 'Item description', 'Quantity', 'Unit of measure',
-      '', '', '', '', '', '', '', '',
-      'Country of origin', 'Hs-code', 'Material', 'Value pc (EUR)', 'Value total'];
-    const technicalHeaders = ['LINE_SEQ', 'ORDER_NO', 'LINE_NO', 'RELEASE_NO', '', 'VENDOR_PART_NO', 'VENDOR_PART_DESC', 'QTY', 'BUY_UNIT_MEAS',
-      '', '', '', '', '', '', '', '',
-      'CF$_C_COUNTRY_OF_ORIGIN', 'CF$_C_HS_CODE', 'CF$_C_MATERIAL', 'CF$_C_VALUE_PER_UNIT', 'CF$_C_VALUE_TOTAL'];
-    const rows = queue.map((q, i) => [
-      String(i + 1), q.po || '', q.lineNo || '', q.releaseNo || '', '',
-      q.item || '', q.description || '', q.qty || '1', q.uom || 'pcs',
-      '', '', '', '', '', '', '', '',
-      q.countryOfOrigin || '', q.hsCode || '', q.material || '', q.valuePerUnit || '', q.valueTotal || '',
-    ]);
+    // Exacte $n-kolomstructuur — via de canonieke koppeltabel
+    // (shared/ifs-lparts-columns.js), dezelfde bron als de Itemlijst-
+    // Validator gebruikt voor de "Maak L-Parts aan"-popup. Een wijziging
+    // aan de kolomkoppeling hoeft dus maar op één plek te gebeuren.
+    //
+    // LET OP: Exporter.build() (verderop) gebruikt de ARRAY-INDEX als
+    // $n-nummer, dus hier moet positie 4 (CONTRACT, bewust afwezig in de
+    // geverifieerde export) als lege plek worden ingevoegd — anders schuift
+    // alles na de sortering één plek op t.o.v. de bedoelde $n-nummers.
+    const cols  = window.IFS_LPARTS_COLUMNS   || [];
+    const empty = window.IFS_LPARTS_EMPTY_POS || [];
+    const gap4  = [{ pos: 4, tech: '', ilCol: null, label: '' }];
+    const allPositions = cols.concat(empty, gap4).sort((a, b) => a.pos - b.pos);
+
+    const friendlyHeaders  = allPositions.map(c => c.ilCol ? c.label : '');
+    const technicalHeaders = allPositions.map(c => c.tech);
+    const rows = queue.map((q, i) => {
+      const values = Object.assign({
+        LINE_SEQ: String(i + 1), ORDER_NO: q.po || '', LINE_NO: q.lineNo || '',
+        RELEASE_NO: q.releaseNo || '', VENDOR_PART_NO: q.item || '',
+        VENDOR_PART_DESC: q.description || '', QTY: q.qty || '1', BUY_UNIT_MEAS: q.uom || 'pcs',
+      }, q.extra || {});
+      return allPositions.map(c => values[c.tech] || '');
+    });
 
     Store.append({
       lu: '$LU=CPartsWithoutPurchOrd', view: '$VIEW=C_PARTS_WITHOUT_PURCH_ORD',
