@@ -17,7 +17,6 @@
       { href: 'Expediting-Mailer/',   icon: '✉️', title: 'Expediting Mailer',    sub: 'Stel expediting-mails op per order' },
       { href: 'KPI-Dashboard/',       icon: '📊', title: 'Dashboard',            sub: 'KPI-cijfers per Sub Project ID' },
       { href: 'Large-Item-Overview/', icon: '🏗️', title: 'Large Item Overview',  sub: 'Large items, late items & FAT — bedrijfsbreed' },
-      { href: 'FAT-Overview/',        icon: '🧪', title: 'FAT Overview',         sub: 'Factory Acceptance Tests in beeld' },
       { href: 'IFS-Migration-Tool/',  icon: '🔁', title: 'IFS Migration Tool',   sub: 'Klembord-import/export & Itemlijst-registratie naar IFS' },
     ]},
     { label: 'Logistics', items: [
