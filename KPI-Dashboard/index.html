@@ -12,7 +12,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="../shared/expediting-core.js"></script>
-  <script src="../shared/expediting-data.js"></script>
 </head>
 <body>
 
@@ -27,6 +26,7 @@
           </p>
         </div>
       </div>
+      <div id="milestones" class="milestones" aria-label="Mijlpalen"></div>
     </div>
   </header>
 
@@ -71,8 +71,6 @@
       <div class="upload-actions">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.json" hidden />
         <button id="uploadBtn"          class="btn btn-primary">📄 Lijst kiezen…</button>
-        <button id="exportBtn"          class="btn btn-ghost"  >📊 Exporteer projecten (Excel)</button>
-        <button id="exportPdfBtn"       class="btn btn-ghost"  >🧾 Exporteer rapport (PDF)</button>
         <button id="downloadHistoryBtn" class="btn btn-ghost"  >⬇ Download bijgewerkte history</button>
         <button id="resetBtn"           class="btn btn-ghost"  >↺ Reset naar origineel</button>
       </div>
@@ -81,27 +79,6 @@
         Sleep hier je bedrijfsbrede lijst (.xlsx)
       </div>
       <div id="uploadStatus" class="upload-status" role="status" aria-live="polite"></div>
-    </section>
-
-    <section class="upload-panel" aria-label="Validatie-logs samenvoegen">
-      <div class="upload-info">
-        <h3>Validatie-logs (Itemlijst-Validator)</h3>
-        <p>
-          Voedt de KPI <strong>“Itemlijsten gevalideerd”</strong>. Iedere gebruiker heeft een
-          eigen <code>validatie-log.json</code> (zelfde naam) — laad ze hier
-          <strong>allemaal tegelijk</strong>. Ze worden <strong>samengevoegd en ontdubbeld op
-          event-<code>id</code></strong>, dus overlappende of dubbel geüploade logs tellen nooit
-          dubbel. Download daarna de samengevoegde log en commit als
-          <code>shared/validatie-log.json</code>.
-        </p>
-      </div>
-      <div class="upload-actions">
-        <input type="file" id="valLogInput" accept=".json,application/json" multiple hidden />
-        <button id="valLogBtn"         class="btn btn-primary">➕ Validatie-logs laden…</button>
-        <button id="valLogDownloadBtn" class="btn btn-ghost"  >⬇ Download samengevoegde log</button>
-        <button id="valLogResetBtn"    class="btn btn-ghost"  >↺ Log wissen (lokaal)</button>
-      </div>
-      <div id="valLogStatus" class="upload-status" role="status" aria-live="polite"></div>
     </section>
 
     <section aria-label="KPI-overzicht">

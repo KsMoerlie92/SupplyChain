@@ -53,10 +53,13 @@ function warnIfStale() {
 function init() {
   document.getElementById('appTitle').textContent = CONFIG.meta.title;
   document.getElementById('appSubtitle').textContent = CONFIG.meta.subtitle;
-  const ms = document.getElementById('milestones'); ms.innerHTML = '';
-  (CONFIG.meta.milestones || []).forEach(m => {
-    const s = document.createElement('span'); s.className='pill'; s.textContent=m; ms.appendChild(s);
-  });
+  const ms = document.getElementById('milestones');
+  if (ms) {
+    ms.innerHTML = '';
+    (CONFIG.meta.milestones || []).forEach(m => {
+      const s = document.createElement('span'); s.className='pill'; s.textContent=m; ms.appendChild(s);
+    });
+  }
   buildSubprojectSelect(); buildKpiSelect(); buildMeetmomentSelect();
   document.getElementById('subprojectSelect').addEventListener('change', renderAll);
   document.getElementById('kpiSelect').addEventListener('change', renderAll);
@@ -290,8 +293,11 @@ function computeSnapshot(headers, rows, meta){
   return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,warnings:warn}, aggregate, subprojects };
 }
 
-function setStatus(msg, cls){ document.getElementById('uploadStatus').innerHTML =
-  '<span class="'+(cls||'info-msg')+'">'+msg+'</span>'; }
+function setStatus(msg, cls){
+  const el = document.getElementById('uploadStatus');
+  if (!el) { console.warn('setStatus: element #uploadStatus niet gevonden in de pagina — melding niet getoond:', msg); return; }
+  el.innerHTML = '<span class="'+(cls||'info-msg')+'">'+msg+'</span>';
+}
 function handleFiles(list){
   if (!list || !list.length) return; const file = list[0]; const name = file.name.toLowerCase();
   setStatus('Bezig met verwerken van ' + file.name + ' …', 'info-msg');
@@ -362,7 +368,7 @@ function renderBadge(mm){
 function renderCards(mm){
   const spid = document.getElementById('subprojectSelect').value;
   const kpiSel = document.getElementById('kpiSelect').value;
-  const wrap = document.getElementById('kpiCards'); wrap.innerHTML = '';
+  const wrap = document.getElementById('kpiCards'); if (!wrap) return; wrap.innerHTML = '';
   CONFIG.kpis.forEach(kpi => {
     const value = getValue(mm, spid, kpi.id); const st = getStatus(kpi, value);
     const node = getNode(mm, spid);
@@ -452,7 +458,7 @@ function hexAlpha(hex, a){ const c=hex.replace('#','');
   return 'rgba('+r+','+g+','+b+','+a+')'; }
 function renderTable(){
   const spid = document.getElementById('subprojectSelect').value;
-  const table = document.getElementById('detailsTable'); table.innerHTML = '';
+  const table = document.getElementById('detailsTable'); if (!table) return; table.innerHTML = '';
   const thead = document.createElement('thead'); const tbody = document.createElement('tbody');
   const hr = document.createElement('tr'); hr.appendChild(th('Meetmoment'));
   CONFIG.kpis.forEach(k => hr.appendChild(th(k.name))); thead.appendChild(hr);
