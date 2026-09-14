@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal IHC — Itemlijst Template Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="../PO-Matcher/styles.css">
+<style>
+  .tg-wrap{max-width:980px;margin:0 auto;padding:1.5rem}
+  .tg-search{display:flex;gap:.6rem;margin-bottom:1rem}
+  .tg-search input{flex:1;background:var(--navy-mid,#0F2040);border:1px solid var(--border,#1e3a6e);
+    border-radius:6px;padding:.6rem .8rem;color:var(--text,#e8edf5);font-family:var(--mono,monospace);font-size:.9rem}
+  .tg-search input::placeholder{color:var(--muted,#6b7a99)}
+  .btn-tg{background:var(--ihc-teal,#00B4D8);color:var(--ihc-navy,#0A1628);border:none;border-radius:6px;
+    padding:.6rem 1.1rem;font-weight:700;font-size:.85rem;cursor:pointer;font-family:Barlow,sans-serif;
+    transition:opacity .15s;white-space:nowrap}
+  .btn-tg:hover{opacity:.85}
+  .btn-tg:disabled{opacity:.4;cursor:not-allowed}
+  .btn-tg-secondary{background:transparent;color:var(--text,#e8edf5);border:1px solid var(--border,#1e3a6e)}
+  .btn-tg-accent{background:var(--ihc-red,#D91F2C);color:#fff}
+  #tg-status{min-height:1.4em;margin-bottom:1rem;font-size:.85rem}
+  .info-msg{color:var(--muted,#6b7a99)}
+  .success-msg{color:#4ade80}
+  .error-msg{color:#f87171}
+  .tg-empty{color:var(--muted,#6b7a99);font-size:.88rem;padding:2rem 0;text-align:center}
+  .tg-section-label{font-family:var(--mono,monospace);font-size:.7rem;color:var(--ihc-teal,#00B4D8);
+    text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 .5rem}
+  .tg-list{border:1px solid var(--border,#1e3a6e);border-radius:8px;overflow:hidden}
+  .tg-row{display:flex;align-items:center;gap:.7rem;padding:.55rem .8rem;font-size:.82rem;
+    border-bottom:1px solid var(--border,#1e3a6e);cursor:pointer}
+  .tg-row:last-child{border-bottom:none}
+  .tg-row:hover{background:rgba(0,180,216,.06)}
+  .tg-row-extra{cursor:default;background:rgba(217,31,44,.05)}
+  .tg-col{color:var(--text,#e8edf5)}
+  .tg-col-line{min-width:56px;font-family:var(--mono,monospace);color:var(--muted,#6b7a99)}
+  .tg-col-desc{flex:1;min-width:0}
+  .tg-col-qty{min-width:90px;color:var(--muted,#6b7a99)}
+  .tg-col-supplier{min-width:120px;color:var(--muted,#6b7a99)}
+  .tg-col-mark{min-width:110px;font-family:var(--mono,monospace);color:var(--ihc-teal,#00B4D8)}
+  .tg-col-mark i{color:var(--muted,#6b7a99);font-style:italic}
+  .tg-del{background:none;border:none;color:#f87171;cursor:pointer;font-size:.85rem;margin-left:auto}
+  #tg-actions{display:none;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem;align-items:center}
+  #tg-count{font-size:.82rem;color:var(--muted,#6b7a99);margin-right:auto}
+  #tg-link-box{display:none;margin-top:1rem;padding:.8rem 1rem;background:var(--navy-mid,#0F2040);
+    border:1px solid var(--border,#1e3a6e);border-radius:8px}
+  #tg-link-box label{font-family:var(--mono,monospace);font-size:.7rem;color:var(--muted,#6b7a99);
+    text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:.4rem}
+  #tg-link-row{display:flex;gap:.5rem}
+  #tg-link-value{flex:1;background:var(--ihc-navy,#0A1628);border:1px solid var(--border,#1e3a6e);
+    border-radius:6px;padding:.5rem .7rem;color:var(--text,#e8edf5);font-family:var(--mono,monospace);font-size:.78rem}
+  #tg-link-note{font-size:.72rem;color:var(--muted,#6b7a99);margin-top:.5rem;line-height:1.5}
+  .tg-crosslink{display:inline-flex;align-items:center;gap:.4rem;margin-top:1.5rem;font-size:.82rem;
+    color:var(--ihc-teal,#00B4D8);text-decoration:none}
+  .tg-crosslink:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="site-wrapper">
+  <section class="content-panel">
+    <div class="tg-wrap">
+      <div class="section-head"><span class="red-mark"></span>Itemlijst Template Generator</div>
+      <p style="color:var(--muted,#6b7a99);font-size:.85rem;margin-bottom:1.2rem">
+        Zoek een PO op, selecteer welke regels in de itemlijst-template moeten, voeg eventueel nieuwe
+        onderdelen toe die nog niet op de PO staan, en genereer of mail de template naar de leverancier.
+      </p>
+
+      <div class="tg-search">
+        <input type="text" id="tg-po-input" placeholder="PO-nummer, bv. 3156018519">
+        <button type="button" class="btn-tg" id="btn-tg-search">🔍 Opzoeken</button>
+      </div>
+
+      <div id="tg-status"></div>
+
+      <div id="tg-results"></div>
+
+      <div id="tg-actions">
+        <span id="tg-count"></span>
+        <button type="button" class="btn-tg btn-tg-secondary" id="btn-tg-add-extra">➕ Nieuw onderdeel (niet op PO)</button>
+        <button type="button" class="btn-tg" id="btn-tg-generate" disabled>⬇️ Template genereren</button>
+        <button type="button" class="btn-tg btn-tg-accent" id="btn-tg-mail" disabled>📧 Mail naar leverancier</button>
+        <button type="button" class="btn-tg btn-tg-secondary" id="btn-tg-link">🔗 Genereer link</button>
+      </div>
+
+      <div id="tg-link-box">
+        <label>Unieke link voor deze PO</label>
+        <div id="tg-link-row">
+          <input type="text" id="tg-link-value" readonly>
+          <button type="button" class="btn-tg btn-tg-secondary" id="btn-tg-link-copy">📋 Kopiëren</button>
+        </div>
+        <div id="tg-link-note">
+          Let op: dit is geen echte toegangsbeveiliging — de website heeft geen server die rechten kan
+          controleren. De link maakt het PO-nummer alleen niet direct afleesbaar in de adresbalk.
+          Voor extern delen met leveranciers (fase 2) moet dit samen met IT verder uitgewerkt worden.
+        </div>
+      </div>
+
+      <a class="tg-crosslink" href="../Itemlijst-Validator/index.html">
+        → Een ingevulde itemlijst terugontvangen? Controleer die in de Itemlijst Validator
+      </a>
+    </div>
+  </section>
+</div>
+
+<!-- Zelfde datalaag als Itemlijst-Validator/PO-Matcher -->
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script src="../shared/lparts-numbering.js"></script>
+
+<script src="template-generator.js"></script>
+<script src="template-generator-ui.js"></script>
+<script src="template-mail.js"></script>
+
+<script src="../shared/shared.js"></script>
+</body>
+</html>
