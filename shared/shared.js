@@ -22,6 +22,7 @@
       { href: '../Legplan/',             icon: '📦', title: 'Logistic Portal',    sub: 'Legplan, CIPL & shipment-informatie' },
       { href: '../DG-Overview/',         icon: '⚠️', title: 'DG Overview',        sub: 'Gevaarlijke stoffen in de lijst' },
       { href: '../Itemlijst-Validator/', icon: '📋', title: 'Itemlijst Validator', sub: 'Valideer & corrigeer itemlijsten' },
+      { href: '../Itemlijst-Template-Generator/', icon: '📝', title: 'Itemlijst Template Generator', sub: 'Template per PO opstellen & naar leverancier mailen' },
     ]},
   ];
 
