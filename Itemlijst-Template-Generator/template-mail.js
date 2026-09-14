@@ -16,13 +16,9 @@
 
   function css(el, s) { Object.assign(el.style, s); return el; }
 
-  function rowsToXlsxBase64(cols, rows) {
-    const wsData = [cols, ...rows.map(r => cols.map(h => r[h] ?? ''))];
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = cols.map(h => ({ wch: Math.max(h.length + 2, 12) }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Itemlijst');
-    return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+  async function rowsToXlsxBase64(cols, rows) {
+    if (!window.TemplateXlsxWriter) throw new Error('Template-schrijfmodule niet geladen.');
+    return window.TemplateXlsxWriter.buildFilledTemplate(cols, rows);
   }
 
   function buildEml(to, subject, body, xlsxBase64, attachFilename) {
@@ -188,7 +184,7 @@
     cancelBtn.addEventListener('click', close);
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
-    sendBtn.addEventListener('click', () => {
+    sendBtn.addEventListener('click', async () => {
       const to = trim(fTo._input.value);
       if (!to) { statusMsg.style.color = '#f87171'; statusMsg.textContent = 'Vul het e-mailadres van de leverancier in.'; return; }
 
@@ -196,7 +192,7 @@
       try {
         const finalSubject = trim(fSubj._input.value) || subject;
         const finalBody = trim(fBody._input.value) || body;
-        const xlsxB64 = rowsToXlsxBase64(cols, rows);
+        const xlsxB64 = await rowsToXlsxBase64(cols, rows);
         const emlText = buildEml(to, finalSubject, finalBody, xlsxB64, filename);
         const emlFile = filename.replace('.xlsx', '.eml');
         downloadBlob(emlText, emlFile, 'message/rfc822');

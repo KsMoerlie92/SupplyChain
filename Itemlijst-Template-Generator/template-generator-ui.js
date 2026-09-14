@@ -136,17 +136,19 @@
 
   /* ─── Template genereren (download) ──────────────────────────────────── */
 
-  function generateXlsx() {
+  async function generateXlsx() {
     const rows = TG.buildTemplateRows(currentPO);
     if (!rows.length) return;
-    const wb = XLSX.utils.book_new();
-    const wsData = [TG.IL_COLS, ...rows.map(r => TG.IL_COLS.map(h => r[h] ?? ''))];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = TG.IL_COLS.map(h => ({ wch: Math.max(h.length + 2, 12) }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Itemlijst');
+    if (!window.TemplateXlsxWriter) { setStatus('Template-schrijfmodule niet geladen.', 'error-msg'); return; }
+
     const filename = `${currentPO}_Itemlijst_template.xlsx`;
-    XLSX.writeFile(wb, filename);
-    setStatus(`✓ ${filename} gedownload.`, 'success-msg');
+    setStatus('⏳ Template opbouwen…');
+    try {
+      await window.TemplateXlsxWriter.downloadFilledTemplate(TG.IL_COLS, rows, filename);
+      setStatus(`✓ ${filename} gedownload — met behoud van de opmaak, tabel en keuzelijsten.`, 'success-msg');
+    } catch (err) {
+      setStatus(`⚠ ${err.message}`, 'error-msg');
+    }
   }
 
   /* ─── Unieke link ─────────────────────────────────────────────────────── */
