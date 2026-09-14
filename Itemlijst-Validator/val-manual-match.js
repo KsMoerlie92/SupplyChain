@@ -115,36 +115,26 @@
   // Elke NIEUWE L-Part die onder diezelfde Line/Release wordt geregistreerd,
   // krijgt automatisch een doorlopend volgnummer: 2253-000.01, .02, .03, ...
   // Het basisnummer zelf wordt éénmalig gevraagd (bij de eerste keer voor
-  // die Line/Release) en daarna hergebruikt/opgehoogd — ook over meerdere
-  // popup-sessies heen, via localStorage.
-  const LPARTS_BASE_KEY = 'ihcLPartsBaseRegistry';
-
-  function loadBaseRegistry() {
-    try { return JSON.parse(localStorage.getItem(LPARTS_BASE_KEY) || '{}'); } catch (e) { return {}; }
-  }
-  function saveBaseRegistry(reg) { localStorage.setItem(LPARTS_BASE_KEY, JSON.stringify(reg)); }
+  // die Line/Release) en daarna hergebruikt/opgehoogd — via het gedeelde
+  // register in shared/lparts-numbering.js (window.LPartsNumbering), zodat
+  // deze pagina en de Itemlijst Template Generator gegarandeerd hetzelfde
+  // register gebruiken.
 
   /**
    * @returns {string|null} het automatisch gegenereerde itemnummer, of
    *   null als de gebruiker het invoeren van het basisnummer annuleerde.
    */
   function getNextLPartNumber(po, lineNo, releaseNo) {
-    const key = `${po}|${lineNo}|${releaseNo}`;
-    const reg = loadBaseRegistry();
-    if (!reg[key]) {
-      const base = window.prompt(
-        `Nog geen basis-componentnummer bekend voor PO ${po}, Line ${lineNo}/${releaseNo}.\n` +
-        `Voer het basisnummer in (bv. 2253-000) — nieuwe L-Parts onder deze ` +
-        `Order-regel krijgen dan automatisch {basisnummer}.01, .02, .03, ...`,
-        ''
-      );
-      if (base === null || !trim(base)) return null;
-      reg[key] = { base: trim(base), count: 0 };
+    if (!window.LPartsNumbering) {
+      console.warn('val-manual-match.js: shared/lparts-numbering.js niet gevonden — laad dat script eerst.');
+      return null;
     }
-    reg[key].count++;
-    const itemNo = `${reg[key].base}.${String(reg[key].count).padStart(2, '0')}`;
-    saveBaseRegistry(reg);
-    return itemNo;
+    return window.LPartsNumbering.getNext(po, lineNo, releaseNo, () => window.prompt(
+      `Nog geen basis-componentnummer bekend voor PO ${po}, Line ${lineNo}/${releaseNo}.\n` +
+      `Voer het basisnummer in (bv. 2253-000) — nieuwe L-Parts onder deze ` +
+      `Order-regel krijgen dan automatisch {basisnummer}.01, .02, .03, ...`,
+      ''
+    ));
   }
 
   function queueQuickAdd(row, itemNo, lineNo, releaseNo) {
