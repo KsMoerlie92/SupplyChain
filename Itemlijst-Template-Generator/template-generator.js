@@ -67,7 +67,11 @@
     const lineNo = trim(r['Line No']);
     const releaseNo = trim(r['Release No']);
     const item = (lineNo && releaseNo) ? `'${lineNo}-${releaseNo}` : lineNo;
-    const po = trim(r[C.po]) || trim(r[C.orderNo]);
+    // IHC PO moet het KALE PO-nummer zijn — kolom B (Order No) van de
+    // bedrijfsbrede Expediting-lijst. Kolom A (Purchase Order No) is een
+    // GECOMBINEERDE sleutel (PO-Line-Release, bv. "3156006528-40-1") en
+    // mag hier dus nooit gebruikt worden.
+    const po = trim(r[C.orderNo]);
     const uref = trim(r[C.uref]);
     const out = {};
     IL_COLS.forEach(h => { out[h] = ''; });
@@ -89,7 +93,11 @@
     const out = {};
     IL_COLS.forEach(h => { out[h] = ''; });
     out['IHC PO'] = it.po;
-    out['Item'] = it.itemNo;
+    // Item (kolom D) krijgt de Line-Release-referentie met een L-voorvoegsel
+    // (bv. "L1-1") — dit markeert de regel als nieuw/L-Part, in tegenstelling
+    // tot een gewone PO-regel (die "'1-1", zonder L, in dezelfde kolom krijgt).
+    // Het systeemnummer zelf (bv. "2253-000.01") hoort in Component/Mark/Label.
+    out['Item'] = `L${it.lineNo}-${it.releaseNo}`;
     out['Item description'] = it.description;
     out['Quantity'] = it.qty || '1';
     out['Unit of measure'] = it.uom || 'pcs';
