@@ -369,13 +369,17 @@ function renderCards(mm){
   const spid = document.getElementById('subprojectSelect').value;
   const kpiSel = document.getElementById('kpiSelect').value;
   const wrap = document.getElementById('kpiCards'); if (!wrap) return; wrap.innerHTML = '';
+  // Kaarten die een eigen, vaste themakleur hebben (los van de status-kleur
+  // van de linkerrand/stip) — zie .card-theme-* in styles.css.
+  const THEMED = new Set(['avg_delay','critical_delay','not_yet_expedited','not_confirmed_pct','stale_admin_pct']);
   CONFIG.kpis.forEach(kpi => {
     const value = getValue(mm, spid, kpi.id); const st = getStatus(kpi, value);
     const node = getNode(mm, spid);
     // onderscheid: nooit berekend (oude snapshot) vs. wel berekend maar leeg
     const nietBerekend = kpi.auto && value === null && node && node.kpis && !(kpi.id in node.kpis);
     const card = document.createElement('div');
-    card.className = 'card ' + st.cls + (kpi.id===kpiSel ? ' active' : '');
+    const themeCls = THEMED.has(kpi.id) ? (' card-theme-' + kpi.id) : '';
+    card.className = 'card ' + st.cls + themeCls + (kpi.id===kpiSel ? ' active' : '');
     card.title = nietBerekend
       ? 'Niet berekend in dit meetmoment (oudere versie) — upload de lijst opnieuw.'
       : kpi.definition;
@@ -396,7 +400,32 @@ function renderCards(mm){
     });
     wrap.appendChild(card);
   });
+  renderValidatedListsCard(wrap);
 }
+
+/** Aparte kaart: aantal unieke itemlijsten gecontroleerd via de Itemlijst
+ * Validator. Geen norm/status (net als Field expedite visits) — bron is
+ * shared/validatie-log.json, niet kpi-history.json, dus dit loopt niet mee
+ * in de generieke CONFIG.kpis-lus hierboven. */
+function renderValidatedListsCard(wrap){
+  const card = document.createElement('div');
+  card.className = 'card na card-theme-validated_lists';
+  card.title = 'Aantal unieke itemlijsten dat met de Itemlijst-Validator is gecontroleerd. Bron: samengevoegde validatie-log.json.';
+  card.innerHTML =
+    '<div class="card-head"><span class="card-name">Itemlijsten gevalideerd</span>' +
+    '<span class="status-dot na"></span></div>' +
+    '<div class="card-value">—<span class="unit"></span></div>' +
+    '<div class="card-norm">Norm: —</div><span class="card-auto auto">validatie-log</span>' +
+    '<div class="card-def">Aantal unieke itemlijsten dat met de Itemlijst-Validator is gecontroleerd. Bron: samengevoegde validatie-log.json.</div>';
+  wrap.appendChild(card);
+  if (window.ValidatieLog && typeof ValidatieLog.stats === 'function') {
+    ValidatieLog.stats().then(s => {
+      const valEl = card.querySelector('.card-value');
+      if (valEl) valEl.innerHTML = String(s.totaal) + '<span class="unit"></span>';
+    }).catch(() => {});
+  }
+}
+
 function editManual(kpiId){
   const mm = currentMM(); const spid = document.getElementById('subprojectSelect').value;
   const kpi = kpiById(kpiId); if (!mm) return;
