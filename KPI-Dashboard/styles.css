@@ -3,8 +3,25 @@
   --ihc-red:#D91F2C; --ihc-navy:#0A1628; --ihc-mid:#0F2040; --ihc-muted:#6b7a99;
   --ihc-mono:'JetBrains Mono','Courier New',monospace;
   --ihc-nav-h:48px;
-  --kpi-navy:#003366; --kpi-navy-2:#0a4a86; --gold:#E8B923; --blue:#4A90C2;
-  --bg:#f4f6f9; --card:#ffffff; --muted:#6b7280; --border:#e2e8f0;
+  --kpi-navy-2:#5dade2; --gold:#E8B923; --blue:#4A90C2;
+  /* Donker = standaard (zelfde conventie als shared/nav.css: geen
+     data-theme-attribuut, of "dark", betekent donker). Licht wordt hieronder
+     bewust overschreven via html[data-theme="light"] — die heeft hogere
+     specificiteit dan dit kale :root, dus die wint zodra hij van toepassing is. */
+  --bg:#0A1628; --card:#0F2040; --text:#e8edf5; --muted:#6b7a99; --border:#1e3a6e;
+  --kpi-navy:#7fb3e8;
+  --ok:#4ade80; --ok-bg:rgba(74,222,128,.15);
+  --warn:#fbbf24; --warn-bg:rgba(251,191,36,.15);
+  --bad:#f87171; --bad-bg:rgba(248,113,113,.15);
+  --na:#6b7a99; --na-bg:rgba(107,122,153,.15);
+  --shadow:0 2px 8px rgba(0,0,0,.3);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.45);
+}
+/* Licht thema — bewuste keuze via de thema-schakelaar (zelfde waarden als
+   dit bestand vóór de donker-standaard-herziening had). */
+html[data-theme="light"]{
+  --bg:#f4f6f9; --card:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#e2e8f0;
+  --kpi-navy:#003366; --kpi-navy-2:#0a4a86;
   --ok:#2e7d32; --ok-bg:#C6EFCE;
   --warn:#8a6d00; --warn-bg:#FFEB9C;
   --bad:#C62828; --bad-bg:#FFC7CE;
@@ -15,7 +32,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg); color:#1f2937; line-height:1.45;}
+  background:var(--bg); color:var(--text); line-height:1.45;}
 /* plakt onder de vaste shared nav (die is 48px + 2px rand) */
 .app-header{position:sticky; top:calc(var(--ihc-nav-h) + 2px); z-index:50; background:var(--ihc-mid); color:var(--ihc-white,#fff);
   height:var(--ihc-nav-h); border-bottom:2px solid var(--ihc-red); box-shadow:var(--shadow);}
@@ -49,7 +66,7 @@ select{appearance:none; -webkit-appearance:none; -moz-appearance:none;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   border:1px solid var(--border); border-radius:8px; padding:9px 34px 9px 12px; font-size:.9rem;
-  color:#1f2937; min-width:190px; cursor:pointer; transition:border .15s, box-shadow .15s;}
+  color:var(--text); min-width:190px; cursor:pointer; transition:border .15s, box-shadow .15s;}
 #subprojectSelect{min-width:260px}
 select:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(232,185,35,.35)}
 
@@ -105,7 +122,7 @@ select:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(2
 .card-theme-validated_lists{background:#6A5027}
 .card-head{display:flex; align-items:center; justify-content:space-between; gap:8px}
 .card-name{font-weight:700; color:var(--kpi-navy); font-size:.92rem}
-.card-value{font-size:1.8rem; font-weight:800; color:#111827; line-height:1.1}
+.card-value{font-size:1.8rem; font-weight:800; color:var(--text); line-height:1.1}
 .card-value .unit{font-size:.9rem; font-weight:600; color:var(--muted); margin-left:2px}
 .card-norm{font-size:.78rem; color:var(--muted)}
 .card-auto{font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px}
