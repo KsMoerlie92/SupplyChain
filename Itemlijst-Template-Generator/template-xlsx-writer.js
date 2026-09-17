@@ -26,7 +26,7 @@
 
   const COL_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
   const DATA_START_ROW = 3;   // eerste data-rij in template-base.xlsx
-  const DATA_MAX_ROW = 99;    // laatste voorbereide rij in template-base.xlsx
+  const TEMPLATE_MAX_ROW = 99; // laatste rij die de template zelf al kant-en-klaar heeft
 
   let _baseBufferPromise = null;
   function loadBaseTemplate() {
@@ -39,6 +39,50 @@
     return _baseBufferPromise;
   }
 
+  // Exacte stijl-index per kolom, precies zoals de template 'm op rij 99 heeft
+  // staan — gebruikt om nieuwe rijen (>97 regels) te klonen wanneer dat nodig is.
+  const ROW_STYLES = {A:14,B:15,C:15,D:15,E:14,F:15,G:14,H:15,I:15,J:15,K:15,L:15,M:15,N:15,O:15,P:16,Q:16,R:15,S:15,T:17,U:17,V:17,W:13,X:17,Y:17,Z:23,AA:18};
+  const W_FORMULA = 'Table1[[#This Row],[Length cm]]*Table1[[#This Row],[Width cm]]*Table1[[#This Row],[Height cm]]/1000000';
+
+  function buildClonedRow(r) {
+    let cells = '';
+    COL_LETTERS.forEach(L => {
+      const s = ROW_STYLES[L]; const ref = L + r;
+      if (L === 'W') cells += `<c r="${ref}" s="${s}"><f>${W_FORMULA}</f><v>0</v></c>`;
+      else if (L === 'Z') cells += `<c r="${ref}" s="${s}" t="b"><v>0</v></c>`;
+      else cells += `<c r="${ref}" s="${s}"/>`;
+    });
+    return `<row r="${r}" spans="1:27">${cells}</row>`;
+  }
+
+  /**
+   * Breidt de template uit voorbij de kant-en-klare 97 rijen: kloont nieuwe
+   * rijen met exact dezelfde opmaak/formule als de laatste bestaande rij, en
+   * werkt het rijbereik bij in: de sheet-dimension, de vier dropdown-
+   * validaties (Country of origin, Unit of measure, Type of packaging,
+   * Inspection Level), de valuta-validatie (Value pc/Value total) en de
+   * HS-code-lengtevalidatie. Wordt alleen aangeroepen als er meer regels
+   * nodig zijn dan de template al kant-en-klaar heeft.
+   */
+  function extendSheetIfNeeded(sheet, neededMaxRow) {
+    if (neededMaxRow <= TEMPLATE_MAX_ROW) return sheet;
+    let newRowsXml = '';
+    for (let r = TEMPLATE_MAX_ROW + 1; r <= neededMaxRow; r++) newRowsXml += buildClonedRow(r);
+    sheet = sheet.replace('</sheetData>', newRowsXml + '</sheetData>');
+    sheet = sheet.replace(/<dimension ref="A1:AA\d+"\/>/, `<dimension ref="A1:AA${neededMaxRow}"/>`);
+    // Vier dropdown-validaties, elk van de vorm "<xm:sqref>KOL3:KOL99</xm:sqref>"
+    sheet = sheet.replace(/<xm:sqref>([A-Z]{1,2})3:\1(99)<\/xm:sqref>/g,
+      (m, col) => `<xm:sqref>${col}3:${col}${neededMaxRow}</xm:sqref>`);
+    sheet = sheet.replace('sqref="P3:Q99"', `sqref="P3:Q${neededMaxRow}"`);
+    sheet = sheet.replace('sqref="O3 O5 O7:O11 O13:O98"',
+      `sqref="O3 O5 O7:O11 O13:O98 O99:O${neededMaxRow}"`);
+    return sheet;
+  }
+  function extendTableRefIfNeeded(tableXml, neededMaxRow) {
+    if (neededMaxRow <= TEMPLATE_MAX_ROW) return tableXml;
+    return tableXml.replace(/ref="A2:AA\d+"/, `ref="A2:AA${neededMaxRow}"`);
+  }
+
   /**
    * @param {ArrayBuffer} baseBuffer   ruwe bytes van template-base.xlsx
    * @param {string[]} cols            kolomvolgorde (A t/m AA), 27 namen
@@ -46,10 +90,7 @@
    * @returns {Uint8Array} de kant-en-klare xlsx, met opmaak behouden
    */
   function patchTemplate(baseBuffer, cols, rows) {
-    const maxRows = DATA_MAX_ROW - DATA_START_ROW + 1;
-    if (rows.length > maxRows) {
-      throw new Error(`Te veel regels (${rows.length}) voor de template — deze biedt ruimte voor maximaal ${maxRows} regels.`);
-    }
+    const neededMaxRow = DATA_START_ROW + rows.length - 1;
 
     const cfb = XLSX.CFB.read(new Uint8Array(baseBuffer), { type: 'array' });
     const find = (p) => {
@@ -70,7 +111,13 @@
     };
 
     let sheet = readTxt('xl/worksheets/sheet1.xml');
+    let table1 = readTxt('xl/tables/table1.xml');
     const notFound = [];
+
+    // Meer regels dan de kant-en-klare 97? Dan eerst de template zelf
+    // uitbreiden (nieuwe, gekloonde rijen + bijgewerkte validatiebereiken).
+    sheet = extendSheetIfNeeded(sheet, neededMaxRow);
+    table1 = extendTableRefIfNeeded(table1, neededMaxRow);
 
     rows.forEach((row, i) => {
       const r = DATA_START_ROW + i;
@@ -93,6 +140,7 @@
     if (notFound.length) console.warn('template-xlsx-writer: cellen buiten het voorbereide templatebereik, overgeslagen:', notFound);
 
     write('xl/worksheets/sheet1.xml', sheet);
+    write('xl/tables/table1.xml', table1);
     return XLSX.CFB.write(cfb, { fileType: 'zip', type: 'array', compression: true });
   }
 
@@ -129,5 +177,5 @@
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  window.TemplateXlsxWriter = { buildFilledTemplate, downloadFilledTemplate, DATA_MAX_ROW, DATA_START_ROW };
+  window.TemplateXlsxWriter = { buildFilledTemplate, downloadFilledTemplate, TEMPLATE_MAX_ROW, DATA_START_ROW };
 })();
