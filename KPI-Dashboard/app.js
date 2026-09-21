@@ -468,10 +468,10 @@ function renderChart(){
   const hasCounts = expVals.some(v => v!==null) || nbVals.some(v => v!==null);
   if (hasCounts){
     datasets.push({ type:'bar', label:'Expediteerbaar (regels)', data:expVals,
-      backgroundColor:hexAlpha(COUNT_COLOR_EXP,0.55), borderWidth:0, borderRadius:2,
+      backgroundColor:hexAlpha(COUNT_COLOR_EXP,0.35), borderWidth:0, borderRadius:2,
       yAxisID:'y1', stack:'counts', order:0 });
     datasets.push({ type:'bar', label:'Niet bevestigd (regels)', data:nbVals,
-      backgroundColor:hexAlpha(COUNT_COLOR_NB,0.55), borderWidth:0, borderRadius:2,
+      backgroundColor:hexAlpha(COUNT_COLOR_NB,0.35), borderWidth:0, borderRadius:2,
       yAxisID:'y1', stack:'counts', order:0 });
   }
 
@@ -508,7 +508,12 @@ function renderChart(){
 function makeDataset(label, data, color, type){
   const base = { label, data:(data||[]).map(v => (v===null||v===undefined)?null:v),
     borderColor:color, backgroundColor:type==='bar'?color:hexAlpha(color,0.15), borderWidth:2, spanGaps:true };
-  if (type==='line'){ base.tension=0.3; base.pointRadius=4; base.pointBackgroundColor=color; base.fill=false; }
+  if (type==='line'){
+    const cardBg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#0A1628';
+    base.tension=0.3; base.borderWidth=3.5; base.pointRadius=5; base.pointHoverRadius=7;
+    base.pointBackgroundColor=color; base.pointBorderColor=cardBg; base.pointBorderWidth=2;
+    base.fill=false; base.order=1;
+  }
   return base;
 }
 function thresholdLine(label, value, n, color){
