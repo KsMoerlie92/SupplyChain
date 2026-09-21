@@ -441,6 +441,15 @@ function editManual(kpiId){
   localStorage.setItem(LS_KEY, JSON.stringify(HISTORY)); renderAll();
   setStatus('Handmatige KPI "' + kpi.name + '" bijgewerkt. Vergeet niet te downloaden + committen.', 'info-msg');
 }
+function getCounts(mm, spid){
+  const n = getNode(mm, spid); const c = n && n.kpis && n.kpis._counts;
+  return { expediteerbaar: c ? c.expediteerbaar : null, niet_bevestigd: c ? c.niet_bevestigd : null };
+}
+// Vaste, neutrale kleuren voor de achtergrond-staven (aantal PO-regels) — los
+// van de KPI-kleurenpalette, zodat de staven duidelijk "achtergrond" blijven
+// t.o.v. de felgekleurde KPI-lijnen.
+const COUNT_COLOR_EXP = '#5B7A99';   // expediteerbaar
+const COUNT_COLOR_NB  = '#94A3B8';   // niet bevestigd
 function renderChart(){
   const spid = document.getElementById('subprojectSelect').value;
   const kpiSel = document.getElementById('kpiSelect').value;
@@ -449,13 +458,30 @@ function renderChart(){
   if (chart){ chart.destroy(); chart=null; }
   const asc = historyAsc(); const labels = asc.map(mm => mm.meetmoment.label);
   let datasets = []; let type = 'line'; let yTitle = '';
+
+  // Achtergrond: aantal PO-regels per meetmoment (expediteerbaar + niet
+  // bevestigd, gestapeld), op de rechter-as — vóór de KPI-lijnen ingevoegd
+  // zodat die er als achtergrond onder liggen (lagere 'order' = eerder
+  // getekend = onder de later getekende lijnen).
+  const expVals = asc.map(mm => getCounts(mm, spid).expediteerbaar);
+  const nbVals  = asc.map(mm => getCounts(mm, spid).niet_bevestigd);
+  const hasCounts = expVals.some(v => v!==null) || nbVals.some(v => v!==null);
+  if (hasCounts){
+    datasets.push({ type:'bar', label:'Expediteerbaar (regels)', data:expVals,
+      backgroundColor:hexAlpha(COUNT_COLOR_EXP,0.55), borderWidth:0, borderRadius:2,
+      yAxisID:'y1', stack:'counts', order:0 });
+    datasets.push({ type:'bar', label:'Niet bevestigd (regels)', data:nbVals,
+      backgroundColor:hexAlpha(COUNT_COLOR_NB,0.55), borderWidth:0, borderRadius:2,
+      yAxisID:'y1', stack:'counts', order:0 });
+  }
+
   if (kpiSel !== 'Alle'){
     const kpi = kpiById(kpiSel); type = (kpi.direction==='count_only')?'bar':'line'; yTitle = kpi.unit;
     const vals = asc.map(mm => getValue(mm, spid, kpi.id));
-    datasets.push(makeDataset(kpi.name, vals, PALETTE[0], type));
+    datasets.push(Object.assign(makeDataset(kpi.name, vals, PALETTE[0], type), {yAxisID:'y', order:1}));
     if (kpi.direction !== 'count_only'){
-      datasets.push(thresholdLine('Groen-grens ('+kpi.green+')', kpi.green, labels.length, '#2e7d32'));
-      datasets.push(thresholdLine('Geel-grens ('+kpi.yellow+')', kpi.yellow, labels.length, '#8a6d00'));
+      datasets.push(Object.assign(thresholdLine('Groen-grens ('+kpi.green+')', kpi.green, labels.length, '#2e7d32'), {yAxisID:'y', order:1}));
+      datasets.push(Object.assign(thresholdLine('Geel-grens ('+kpi.yellow+')', kpi.yellow, labels.length, '#8a6d00'), {yAxisID:'y', order:1}));
     }
     note.textContent = kpi.name + ' — norm ' + kpi.norm + ' · scope: ' +
       (spid==='__ALL__'?'bedrijfsbreed':spid) + (asc.length<2?' · (upload meer lijsten voor een trend)':'');
@@ -463,14 +489,21 @@ function renderChart(){
     type = 'line';
     CONFIG.kpis.forEach((kpi, idx) => {
       const vals = asc.map(mm => getValue(mm, spid, kpi.id));
-      if (vals.some(v => v!==null && v!==undefined)) datasets.push(makeDataset(kpi.name, vals, PALETTE[idx%PALETTE.length], 'line'));
+      if (vals.some(v => v!==null && v!==undefined)) datasets.push(Object.assign(makeDataset(kpi.name, vals, PALETTE[idx%PALETTE.length], 'line'), {yAxisID:'y', order:1}));
     });
     note.textContent = "Alle KPI's — let op: eenheden verschillen (%, dagen, #). Scope: " +
       (spid==='__ALL__'?'bedrijfsbreed':spid);
   }
   chart = new Chart(ctx, { type, data:{labels, datasets},
     options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true, title:{display:!!yTitle, text:yTitle}}} } });
+      plugins:{legend:{position:'bottom'}},
+      scales:{
+        y:{beginAtZero:true, title:{display:!!yTitle, text:yTitle}},
+        y1:{ beginAtZero:true, position:'right', stacked:true,
+          title:{display:hasCounts, text:'Aantal PO-regels', color:COUNT_COLOR_EXP},
+          ticks:{color:COUNT_COLOR_EXP},
+          grid:{drawOnChartArea:false} },
+      } } });
 }
 function makeDataset(label, data, color, type){
   const base = { label, data:(data||[]).map(v => (v===null||v===undefined)?null:v),
