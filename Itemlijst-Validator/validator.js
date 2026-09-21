@@ -4,6 +4,15 @@
 
 // ── Master validation lists (from Itemlijst Master tab) ───────────────────
 const VL_UOM  = new Set(['Piece(s)','Bucket(s)','Meter','Set(s)','Kilogram']);
+// Veelgebruikte afkortingen/varianten die de leverancier invult — worden vóór
+// validatie automatisch omgezet naar de officiële waarde uit VL_UOM.
+const UOM_ALIASES = {
+  'pce':'Piece(s)', 'pcs':'Piece(s)', 'pc':'Piece(s)', 'piece':'Piece(s)', 'pieces':'Piece(s)', 'stuk':'Piece(s)', 'stuks':'Piece(s)',
+  'bucket':'Bucket(s)', 'buckets':'Bucket(s)', 'emmer':'Bucket(s)',
+  'set':'Set(s)', 'sets':'Set(s)',
+  'kg':'Kilogram', 'kgs':'Kilogram', 'kilogram':'Kilogram', 'kilograms':'Kilogram', 'kilo':'Kilogram',
+  'm':'Meter', 'mtr':'Meter', 'meter':'Meter', 'meters':'Meter', 'metre':'Meter', 'metres':'Meter',
+};
 const VL_PKG  = new Set(['Pallet','Case','Crate','Carton','Skid','Loose','Reel','Bundle','Bag']);
 // Inspectieniveaus — keuzelijst (dropdown) in de validatortabel
 const INSP_OPTIONS = ["Foto's en Steekproef", "Foto's", "Fysiek controleren", "TBD", "Geen Controle", "Volledige Controle"];
@@ -175,8 +184,13 @@ function _remapColumns() {
   const find = (pattern) => hdrs.findIndex(h => h && new RegExp(pattern,'i').test(String(h)));
 
   // Re-detect key columns by name so they work regardless of position
-  const dgIdx   = find('dangerous');
-  const inspIdx = find('inspection');
+  // Bredere herkenning: "Dangerous Goods?", "Dangerous Goods", "DG", "DG?" en
+  // Nederlandse varianten ("Gevaarlijke stoffen"). Eerst breed zoeken; alleen
+  // als er ECHT niets gevonden wordt, een nieuwe (virtuele) kolom aanmaken —
+  // anders ontstaat er een dubbele "Dangerous Goods?"-kolom naast de al
+  // bestaande, net-niet-herkende kolom uit het bestand.
+  const dgIdx   = find('dangerous|gevaarlijk|^dg\\??$');
+  const inspIdx = find('inspection|controle.*niveau|inspection.*level');
 
   let nextVirtual = hdrs.length; // append virtual cols after file cols
 
@@ -355,13 +369,24 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (qty === null) errors['F'] = 'Quantity moet een getal zijn';
   else if (qty <= 0)  errors['F'] = 'Quantity moet groter zijn dan 0';
 
-  // ── G: Unit of measure — required, must be in list ────────────────────────
-  const uom = vs('G');
+  // ── G: Unit of measure — bekende afkortingen (pce, kg, ...) eerst automatisch
+  //      omzetten naar de officiële waarde, dan pas tegen de toegestane lijst valideren.
+  let uom = vs('G');
+  if (uom) {
+    const normalized = UOM_ALIASES[uom.toLowerCase()];
+    if (normalized && normalized !== uom) { cells[COL.G] = normalized; uom = normalized; }
+  }
   if (!uom)                errors['G'] = 'Unit of measure is verplicht';
   else if (!VL_UOM.has(uom)) errors['G'] = `'${uom}' niet in toegestane lijst`;
 
-  // ── H: Mark/Label — required ──────────────────────────────────────────────
-  if (!vs('H')) errors['H'] = 'Component (Mark/Label) is verplicht';
+  // ── H: Mark/Label — opschonen (bv. een overtollige ";" of "," aan het einde,
+  //      soms per ongeluk meegekopieerd door de leverancier) vóór validatie.
+  let hClean = vs('H');
+  if (hClean) {
+    const stripped = hClean.replace(/[;,]+\s*$/, '').trim();
+    if (stripped !== hClean) { cells[COL.H] = stripped; hClean = stripped; }
+  }
+  if (!hClean) errors['H'] = 'Component (Mark/Label) is verplicht';
 
   // ── K: Supplier — required ────────────────────────────────────────────────
   if (!vs('K')) errors['K'] = 'Supplier is verplicht';
@@ -417,6 +442,37 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
     const pct  = expected > 0 ? (diff / expected) * 100 : 0;
     if (pct > 1) {
       warnings['Q'] = `Value total (${qVal}) wijkt ${pct.toFixed(1)}% af van Value pc × Qty (${expected.toFixed(2)})`;
+    }
+  }
+
+  // ── P kruiscontrole tegen de bedrijfsbrede Expediting-lijst ────────────────
+  // Alleen als de Expediting-regel voor dit onderdeel (gevonden via H/Mark-
+  // Label, kolom M "Unified Reference Code") zelf een WAARDE > 0 heeft —
+  // staat daar 0 of niets, dan zegt dat niets en wordt niet vergeleken.
+  // Apart van de rode fout-markering (✗): dit wordt een losse, gele
+  // waarschuwing (⚠), zodat "verplicht veld ontbreekt/fout formaat" en
+  // "wijkt af van de centrale lijst" duidelijk twee verschillende dingen
+  // blijven voor wie de tabel leest.
+  if (pVal !== null && hClean && expeditingData && expeditingData.length) {
+    const hCodesForP = parseHColumn(hClean);
+    const expRow = expeditingData.find(row => {
+      const mVal = String(Object.values(row)[12] || '').trim(); // kolom M: Unified Reference Code
+      return hCodesForP.includes(mVal);
+    });
+    if (expRow) {
+      const expTotalRaw = Object.values(expRow)[23]; // kolom: Total/Currency
+      const expQtyRaw   = Object.values(expRow)[14]; // kolom: Qty
+      const expTotal = _parseNum(expTotalRaw);
+      const expQty   = _parseNum(expQtyRaw);
+      if (expTotal !== null && expTotal > 0 && expQty !== null && expQty > 0) {
+        const expPerUnit = expTotal / expQty;
+        const diffP = Math.abs(pVal - expPerUnit);
+        const pctP  = expPerUnit > 0 ? (diffP / expPerUnit) * 100 : 0;
+        if (pctP > 5) {
+          warnings['P_expCheck'] =
+            `Value pc (${pVal}) wijkt ${pctP.toFixed(1)}% af van de waarde in de bedrijfsbrede Expediting-lijst (≈ ${expPerUnit.toFixed(2)} EUR/stuk)`;
+        }
+      }
     }
   }
 
@@ -1264,10 +1320,10 @@ function renderValidationTable(usdPrice, usdRate) {
       let cellCls = IHC_COLS.has(col) ? 'val-cell-ihc' : '';
       if (VIRT_COLS.has(col)) cellCls += ' val-cell-virtual';
       if (err) cellCls += ' val-cell-err';
-      else if (wrn) cellCls += ' val-cell-warn';
+      else if (wrn || (col === 'P' && row.warnings?.P_expCheck)) cellCls += ' val-cell-warn';
       if (isDesc) cellCls += ' val-cell-desc';
 
-      const tooltip = err || wrn || (cmp ? `Berekend: ${cmp}` : '');
+      const tooltip = err || wrn || (col === 'P' ? row.warnings?.P_expCheck : '') || (cmp ? `Berekend: ${cmp}` : '');
       const tAttr   = tooltip ? `title="${esc(tooltip)}"` : '';
 
       // HS-code cell: format indicator + live-check icon (updated async)
@@ -1295,12 +1351,31 @@ function renderValidationTable(usdPrice, usdRate) {
         </td>`;
       }
 
+      // Value pc (P): kleine gele ⚠ als de waarde afwijkt van de bedrijfsbrede
+      // Expediting-lijst (los van een eventuele rode fout — zie P_expCheck
+      // hierboven in validateRow). Zelfde patroon als het HS-code-icoon bij O.
+      const pExpWarn = row.warnings?.P_expCheck;
+      const pWarnIcon = pExpWarn
+        ? `<span class="hs-icon" style="color:#eab308;font-weight:700;margin-right:.25rem" title="${esc(pExpWarn)}">⚠</span>` : '';
+
       // USD value — show EUR conversion below
       if (col === 'P' && usdPrice && cmp) {
         return `<td class="val-cell ${cellCls}" ${tAttr}>
-          <input class="val-input" data-row="${ri}" data-col="${ci}"
-            value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
+          <div style="display:flex;align-items:center;gap:.2rem">
+            ${pWarnIcon}
+            <input class="val-input" data-row="${ri}" data-col="${ci}"
+              value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
+          </div>
           <div style="font-size:.6rem;color:var(--teal);margin-top:.1rem">≈ ${Number(cmp).toLocaleString('nl-NL')} EUR</div>
+        </td>`;
+      }
+      if (col === 'P' && pWarnIcon) {
+        return `<td class="val-cell ${cellCls}" ${tAttr}>
+          <div style="display:flex;align-items:center;gap:.2rem">
+            ${pWarnIcon}
+            <input class="val-input" data-row="${ri}" data-col="${ci}"
+              value="${esc(disp)}" size="${inSize}" oninput="valCellEdit(${ri},${ci},this.value)">
+          </div>
         </td>`;
       }
 
@@ -1475,10 +1550,32 @@ function buildValHeader() {
       const fill = _FILL_COLS.has(col);
       const mark = fill ? '<span class="val-fill-mark" title="Automatisch aangevuld vanuit de centrale Expediting-lijst">🔗</span>' : '';
       const tip = fill ? 'Automatisch aangevuld vanuit Expediting' : (VIRT_COLS.has(col) ? 'Door IHC in te vullen vóór export' : hdr);
+      // Inspection Level (AA): "vul alles in één keer"-keuzelijst bovenaan de
+      // kolom, zodat niet elke rij apart hoeft te worden ingesteld.
+      if (col === 'AA') {
+        const bulkOpts = INSP_OPTIONS.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+        return `<th class="${cls}" title="${esc(tip)}">${esc(hdr)}${mark}
+          <select class="val-select" style="display:block;margin-top:.25rem;font-size:.65rem"
+            title="Vul deze waarde in bij alle regels in één keer"
+            onchange="if(this.value){valBulkFillColumn('AA', this.value); this.value='';}">
+            <option value="">↓ vul alles...</option>
+            ${bulkOpts}
+          </select>
+        </th>`;
+      }
       return `<th class="${cls}" title="${esc(tip)}">${esc(hdr)}${mark}</th>`;
     }).join('')}
   </tr>`;
   thEl.innerHTML = th1 + th2;
+}
+
+// ── Vul één kolom bij alle rijen in één keer (bv. Inspection Level) ─────────
+function valBulkFillColumn(colLetter, value) {
+  if (!_valRows.length) return;
+  const ci = COL[colLetter];
+  _valRows.forEach(row => { row.cells[ci] = value; row._edited = true; });
+  if (typeof runValidation === 'function') runValidation();
+  else if (typeof renderValidationTable === 'function') renderValidationTable();
 }
 
 // ── Load Itemlijst file ────────────────────────────────────────────────────
