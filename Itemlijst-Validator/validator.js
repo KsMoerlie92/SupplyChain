@@ -320,7 +320,7 @@ function _detectCurrency(raw) {
   return 'EUR';
 }
 
-async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
+async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData, inspectionRules) {
   const errors   = {};  // col letter → error message
   const warnings = {};  // col letter → warning message
   const computed = {};  // col letter → computed value to write back
@@ -499,6 +499,20 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (v('Y') !== null && v('Y') !== '' && yVal === null) errors['Y'] = 'Nett weight moet numeriek zijn';
   if (xVal !== null && yVal !== null && yVal > xVal)
     errors['Y'] = `Nett weight (${yVal}) mag niet groter zijn dan Gross weight (${xVal})`;
+
+  // ── AA: Inspection Level — eerst automatisch aanvullen vanuit de projectregels
+  //      (shared/inspection-rules.js), maar ALLEEN als de cel nog leeg is; een
+  //      al ingevulde waarde (handmatig of eerder aangevuld) wordt nooit overschreven.
+  if (!vs('AA') && inspectionRules && inspectionRules.length && window.InspectionRules) {
+    const spid = vs('B'); // Project (Sub Project ID) van déze rij
+    const match = InspectionRules.lookup(inspectionRules, spid, hClean, vs('K'));
+    if (match) {
+      cells[COL.AA] = match.level;
+      computed.AA_auto = true;
+      computed.AA_auto_rule = match.rule.type === 'component'
+        ? `component "${match.rule.match}"` : `leverancier "${match.rule.match}"`;
+    }
+  }
 
   // ── AA: Inspection Level — optional but must be valid if filled ───────────
   const aaVal = vs('AA');
@@ -1164,6 +1178,12 @@ async function runValidation() {
     ? _valExpRows()
     : ((typeof fileData !== 'undefined' && fileData.expediting) ? fileData.expediting.data : null);
 
+  // Inspection Level-projectregels (kolom AA) — bedrijfsbreed gecommit via de
+  // Admin-pagina. Vult alleen lege AA-cellen aan, per rij op basis van diens
+  // eigen Sub Project ID (kolom B) + Component/Mark (H) of Supplier (K).
+  const inspectionRules = (window.InspectionRules && typeof InspectionRules.loadRules === 'function')
+    ? await InspectionRules.loadRules() : [];
+
   // Slim aanvullen vanuit Expediting (H ↔ Unified Reference Code) — alleen lege cellen
   let filledFields = 0, filledRows = 0;
   if (expeditingData && expeditingData.length) {
@@ -1195,7 +1215,7 @@ async function runValidation() {
   // Validate each row
   let totalErrors = 0, totalWarnings = 0;
   for (const row of _valRows) {
-    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData);
+    const result = await validateRow(row.cells, usdPrice, usdRate, coo, expeditingData, inspectionRules);
     row.errors   = result.errors;
     row.warnings = result.warnings;
     row.computed = result.computed;
@@ -1399,12 +1419,21 @@ function renderValidationTable(usdPrice, usdRate) {
         // Onbekende bestaande waarde tóch tonen zodat niets stil verdwijnt
         const strayOpt = (cur && !matched)
           ? `<option value="${esc(cur)}" selected>${esc(cur)} (onbekend)</option>` : '';
+        // Automatisch aangevuld vanuit een projectregel (Admin-pagina)? Toon
+        // hetzelfde 🔗-icoon als bij vanuit Expediting aangevulde velden.
+        const autoTip = row.computed?.AA_auto
+          ? `Automatisch ingevuld — projectregel: ${esc(row.computed.AA_auto_rule)}` : '';
+        const autoMark = autoTip
+          ? `<span class="val-fill-mark" title="${autoTip}">🔗</span>` : '';
         return `<td class="val-cell ${cellCls}" ${tAttr}>
-          <select class="val-input val-select" data-row="${ri}" data-col="${ci}"
-            onchange="valCellEdit(${ri},${ci},this.value)">
-            <option value="" ${!cur ? 'selected' : ''}>—</option>
-            ${strayOpt}${optsHtml}
-          </select>
+          <div style="display:flex;align-items:center;gap:.2rem">
+            ${autoMark}
+            <select class="val-input val-select" data-row="${ri}" data-col="${ci}"
+              onchange="valCellEdit(${ri},${ci},this.value)">
+              <option value="" ${!cur ? 'selected' : ''}>—</option>
+              ${strayOpt}${optsHtml}
+            </select>
+          </div>
         </td>`;
       }
 
@@ -1942,6 +1971,15 @@ ${labelPages}
 //    → Try direct browser fetch first, then GAS proxy (TARIFF_PROXY_URL)
 // 3. Expand panel: shows Vietnam/ERGA OMNES export restrictions + footnotes
 // 4. Fallback: deep-link to tariffnumber.com page
+
+// De directe fetch (stap 2, "eerst") naar tariffnumber.com faalt in de browser
+// altijd door CORS — hun server stuurt geen CORS-headers voor cross-origin
+// verzoeken. Zonder een werkende proxy-URL hieronder wordt dus NOOIT de
+// export/dual-use-informatie opgehaald, en valt de app altijd terug op de
+// "controleer handmatig"-melding. Zet hier de /exec-URL van de gedeployde
+// tariffnumber-proxy.gs (zie SETUP-instructies bovenin dat bestand) om dit
+// automatisch te laten werken.
+const TARIFF_PROXY_URL = ''; // bv. 'https://script.google.com/macros/s/AKfycb.../exec'
 
 // EU TARIC error message for invalid codes (matches official text)
 const TARIC_INVALID_MSG =
