@@ -2,336 +2,384 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IHC Expedite 2.0 — Expediting &amp; Logistics</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · IHC Expedite 2.0</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
 <style>
-:root{
-  --bg:#F4F7FB; --surface:#FFFFFF; --ink:#0A1628; --body:#5A6B85;
-  --line:#E2E8F2; --line-soft:#EEF2F8;
-  --red:#D91F2C; --red-dark:#B0161F; --teal:#00A8C8; --navy:#0A1628;
-  --cond:'Barlow Condensed',sans-serif; --sans:'Barlow',sans-serif; --mono:'JetBrains Mono',monospace;
-  --shadow:0 1px 2px rgba(10,22,40,.04), 0 8px 24px rgba(10,22,40,.06);
-  --shadow-lift:0 4px 10px rgba(10,22,40,.08), 0 18px 40px rgba(10,22,40,.12);
-}
+:root{--ihc-red:#D91F2C;--ihc-navy:#0A1628;--ihc-mid:#0F2040;--ihc-steel:#1e3a6e;--ihc-teal:#00B4D8;--ihc-white:#F0F4FA;--ihc-muted:#6b7a99;--ihc-mono:'JetBrains Mono','Courier New',monospace;}
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
-a{text-decoration:none;color:inherit}
-
-/* ── Top navigation ─────────────────────────────────────────────── */
-.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(8px);
-  border-bottom:1px solid var(--line);display:flex;align-items:stretch;height:64px;padding:0 clamp(1rem,4vw,3rem)}
-.brand{display:flex;align-items:center;gap:.6rem;margin-right:2.5rem}
-.brand-logo{height:28px;width:auto;display:block}
-.brand .mark{background:var(--red);color:#fff;padding:.05em .4em;border-radius:4px;font-weight:700}
-.brand small{font-family:var(--mono);font-size:.6rem;font-weight:500;color:var(--body);letter-spacing:.18em;
-  text-transform:uppercase;align-self:flex-end;margin-bottom:.35rem}
-
-.nav-menu{display:flex;align-items:stretch;gap:.25rem}
-.nav-item{position:relative;display:flex;align-items:center}
-.nav-trigger{display:inline-flex;align-items:center;gap:.4rem;height:100%;padding:0 1rem;border:none;background:none;cursor:pointer;
-  font-family:var(--cond);font-weight:600;font-size:1.02rem;letter-spacing:.03em;text-transform:uppercase;color:var(--ink);
-  border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
-.nav-trigger .caret{width:14px;height:14px;fill:var(--body);transform:rotate(90deg);transition:transform .2s,fill .2s}
-.nav-item:hover .nav-trigger,.nav-item.open .nav-trigger,.nav-item:focus-within .nav-trigger{color:var(--red);border-color:var(--red)}
-.nav-item:hover .nav-trigger .caret,.nav-item.open .nav-trigger .caret,.nav-item:focus-within .nav-trigger .caret{transform:rotate(-90deg);fill:var(--red)}
-
-/* dropdown panel — ERIKS-style hover-down */
-.dropdown{position:absolute;top:100%;left:0;min-width:320px;background:var(--surface);border:1px solid var(--line);
-  border-radius:12px;box-shadow:var(--shadow-lift);padding:.5rem;opacity:0;visibility:hidden;transform:translateY(6px);
-  transition:opacity .16s ease,transform .16s ease,visibility .16s;pointer-events:none}
-.nav-item:hover .dropdown,.nav-item.open .dropdown,.nav-item:focus-within .dropdown{opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto}
-.dd-link{display:flex;align-items:center;gap:.85rem;padding:.7rem .8rem;border-radius:8px;transition:background .14s}
-.dd-link:hover{background:var(--line-soft)}
-.dd-ico{flex:0 0 38px;height:38px;display:grid;place-items:center;font-size:1.15rem;border-radius:8px;
-  background:linear-gradient(135deg,#0F2040,#1e3a6e);color:#fff}
-.dd-txt{flex:1;min-width:0}
-.dd-title{font-family:var(--cond);font-weight:600;font-size:1rem;color:var(--ink);text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.dd-sub{font-size:.74rem;color:var(--body);margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dd-chev{flex:0 0 auto;width:18px;height:18px;fill:var(--line);transition:fill .14s,transform .14s}
-.dd-link:hover .dd-chev{fill:var(--red);transform:translateX(2px)}
-
-.nav-spacer{flex:1}
-.nav-tag{display:flex;align-items:center;font-family:var(--mono);font-size:.62rem;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--body)}
-.nav-burger{display:none}
-
-/* ── Hero ──────────────────────────────────────────────────────── */
-.hero{position:relative;overflow:hidden;background:linear-gradient(120deg,#0A1628 0%,#0F2040 55%,#13294f 100%);color:#fff}
-.hero::after{content:"";position:absolute;inset:0;background:url('img/hero.png') right center/cover no-repeat;
-  opacity:.28;mix-blend-mode:luminosity;mask-image:linear-gradient(90deg,transparent 12%,#000 70%)}
-.hero-inner{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:clamp(2.5rem,7vw,5rem) clamp(1rem,4vw,3rem)}
-.hero-eyebrow{font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.28em;text-transform:uppercase;
-  color:var(--teal);display:flex;align-items:center;gap:.6rem}
-.hero-eyebrow::before{content:"";width:28px;height:2px;background:var(--red)}
-.hero h1{font-family:var(--cond);font-weight:700;font-size:clamp(2.2rem,5.5vw,3.6rem);line-height:1.02;
-  letter-spacing:.01em;margin:.9rem 0 .8rem;max-width:16ch}
-.hero h1 em{font-style:normal;color:var(--red);background:#fff;padding:0 .15em;border-radius:3px}
-.hero p{max-width:48ch;color:rgba(240,244,250,.78);font-size:1.02rem}
-
-/* ── Sections ──────────────────────────────────────────────────── */
-.wrap{max-width:1180px;margin:0 auto;padding:clamp(2.5rem,6vw,4.5rem) clamp(1rem,4vw,3rem)}
-.section + .section{padding-top:0}
-.sec-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.5rem}
-.sec-eyebrow{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--red)}
-.sec-head h2{font-family:var(--cond);font-weight:700;font-size:clamp(1.6rem,3.5vw,2.2rem);text-transform:uppercase;letter-spacing:.02em;color:var(--ink)}
-.sec-rule{flex:1;height:1px;background:var(--line);align-self:center}
-
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1.4rem}
-
-.card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  overflow:hidden;box-shadow:var(--shadow);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift);border-color:#cdd9ec}
-.card-img{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#0F2040,#1e3a6e)}
-.card-img img{width:100%;height:100%;object-fit:cover;display:block}
-.card-img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(10,22,40,.35))}
-.card-badge{position:absolute;top:.7rem;left:.7rem;z-index:1;font-family:var(--mono);font-size:.58rem;font-weight:700;
-  letter-spacing:.12em;text-transform:uppercase;color:#fff;background:rgba(10,22,40,.55);backdrop-filter:blur(4px);
-  border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:.25em .55em}
-.card-badge.dg{background:rgba(217,31,44,.85);border-color:rgba(255,255,255,.35)}
-.card-body{padding:1.1rem 1.2rem 1.2rem;display:flex;flex-direction:column;flex:1}
-.card-title{font-family:var(--cond);font-weight:700;font-size:1.3rem;text-transform:uppercase;letter-spacing:.01em;color:var(--ink);line-height:1.05}
-.card-desc{font-size:.85rem;color:var(--body);margin-top:.4rem;flex:1}
-.card-cta{display:inline-flex;align-items:center;gap:.35rem;margin-top:1rem;font-family:var(--mono);font-size:.7rem;
-  font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
-.card-cta svg{width:16px;height:16px;fill:var(--red);transition:transform .16s}
-.card:hover .card-cta svg{transform:translateX(3px)}
-
-footer{border-top:1px solid var(--line);padding:1.6rem clamp(1rem,4vw,3rem);text-align:center;
-  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;color:#9fb0c8;text-transform:uppercase}
-
-/* ── Responsive ────────────────────────────────────────────────── */
-@media (max-width:760px){
-  .nav-burger{display:inline-flex;align-items:center;margin-left:auto;border:none;background:none;cursor:pointer;padding:.5rem;font-size:1.4rem;color:var(--ink)}
-  .nav-spacer,.nav-tag{display:none}
-  .nav-menu{position:fixed;top:64px;left:0;right:0;flex-direction:column;align-items:stretch;gap:0;background:var(--surface);
-    border-bottom:1px solid var(--line);padding:.5rem;box-shadow:var(--shadow);
-    max-height:0;overflow:hidden;transition:max-height .25s ease;z-index:49}
-  .nav-menu.show{max-height:80vh;overflow:auto}
-  .nav-item{flex-direction:column;align-items:stretch}
-  .nav-trigger{height:auto;padding:.9rem 1rem;justify-content:space-between;border-bottom:1px solid var(--line-soft)}
-  .dropdown{position:static;min-width:0;border:none;box-shadow:none;border-radius:0;padding:.25rem .25rem .75rem;
-    opacity:1;visibility:visible;transform:none;pointer-events:auto;display:none}
-  .nav-item.open .dropdown{display:block}
-  .nav-item:hover .dropdown,.nav-item:focus-within .dropdown{opacity:1}
-}
-.brand-logo-dark{display:none}
-.nav-actions{display:flex;align-items:center;gap:.5rem;margin-left:.5rem}
-.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:7px;
-  border:1px solid var(--line);background:transparent;cursor:pointer;text-decoration:none;font-size:1.05rem;line-height:1;
-  color:var(--ink);transition:background .15s,border-color .15s,transform .1s}
-.icon-btn:hover{border-color:var(--red);background:rgba(217,31,44,.10)}
-.icon-btn:active{transform:scale(.92)}
-
-/* ── Donker thema (hoofdpagina) — schakelt mee met de subpagina's ──────────── */
-html[data-theme="dark"]{
-  --bg:#0A1628; --surface:#0F2040; --ink:#F0F4FA; --body:#9FB0C8;
-  --line:#1e3a6e; --line-soft:#16263F; color-scheme:dark;
-}
-html[data-theme="dark"] .nav{background:rgba(10,22,40,.9)}
-html[data-theme="dark"] .brand-logo-light{display:none}
-html[data-theme="dark"] .brand-logo-dark{display:block}
-
-@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto}}
+body{font-family:'Barlow',Arial,sans-serif;background:var(--ihc-navy);color:var(--ihc-white);min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:1.5rem}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.7rem;font-weight:800;letter-spacing:.02em;margin-bottom:.2rem}
+h1 .r{color:var(--ihc-red)}
+.lead{color:var(--ihc-muted);margin-bottom:1.2rem;font-size:.95rem}
+.panel{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:10px;padding:1.4rem;margin-bottom:1.2rem}
+.dz{border:2px dashed var(--ihc-steel);border-radius:10px;padding:2.2rem;text-align:center;transition:.15s;cursor:pointer}
+.dz.drag{background:#0c1a36;border-color:var(--ihc-teal)}
+.dz b{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem}
+.btn{display:inline-block;background:var(--ihc-teal);color:var(--ihc-navy);border:0;border-radius:7px;padding:.6rem 1.2rem;font-weight:700;font-family:var(--ihc-mono);font-size:.8rem;cursor:pointer;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+.btn.red{background:var(--ihc-red);color:#fff}
+.muted{color:var(--ihc-muted);font-size:.78rem;font-family:var(--ihc-mono)}
+.status{padding:.7rem 1rem;border-radius:8px;font-size:.82rem;margin-top:.8rem;font-family:var(--ihc-mono)}
+.status.ok{background:#0c2a1f;border:1px solid #2a9d6b;color:#8fe3c0}
+.status.none{background:#3a2a00;border:1px solid #e0a500;color:#ffd98a}
+.kpis{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem}
+.kpi{background:#0c1a36;border:1px solid var(--ihc-steel);border-radius:8px;padding:.7rem 1rem;text-align:center;flex:1;min-width:92px}
+.kpi b{display:block;font-size:1.4rem;font-family:'Barlow Condensed',sans-serif;color:var(--ihc-teal)}
+.kpi small{color:var(--ihc-muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em}
+code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(--ihc-mono);font-size:.78rem}
+/* ── Code-gate (lichte afscherming) ──────────────────────────────────────── */
+#admin-main{display:none}
+.gate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:rgba(5,12,26,.92);backdrop-filter:blur(6px)}
+.gate-card{width:min(360px,92vw);background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-top:3px solid var(--ihc-red);border-radius:12px;padding:1.6rem;text-align:center}
+.gate-card h2{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.04em;margin:.2rem 0;color:var(--ihc-white)}
+.gate-card p{color:var(--ihc-muted);font-size:.8rem;margin:0 0 1rem}
+.gate-card input{width:100%;box-sizing:border-box;text-align:center;letter-spacing:.5em;font-family:var(--ihc-mono);font-size:1.2rem;padding:.6rem;border-radius:8px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);outline:none}
+.gate-card input:focus{border-color:var(--ihc-red)}
+.gate-btn{margin-top:.9rem;width:100%;padding:.65rem;border:none;border-radius:8px;cursor:pointer;background:var(--ihc-red);color:#fff;font-family:var(--ihc-mono);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.78rem}
+.gate-err{color:#ef4444;font-size:.74rem;min-height:1.1em;margin-top:.5rem}
 </style>
 </head>
 <body>
-
-<!-- chevron sprite (provided icon) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="chev" viewBox="0 0 32 32"><path d="M22 16L12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></symbol>
-</svg>
-
-<nav class="nav">
-  <a class="brand" href="./"><img class="brand-logo brand-logo-light" src="shared/logo.png" alt="Royal IHC"><img class="brand-logo brand-logo-dark" src="shared/logo-dark.png" alt="Royal IHC"><small>Expedite&nbsp;2.0</small></a>
-
-  <button class="nav-burger" aria-label="Menu" onclick="document.getElementById('navMenu').classList.toggle('show')">☰</button>
-
-  <div class="nav-menu" id="navMenu">
-    <!-- EXPEDITING -->
-    <div class="nav-item">
-      <button class="nav-trigger" onclick="toggleDD(this)">Expediting <svg class="caret"><use href="#chev"/></svg></button>
-      <div class="dropdown">
-        <a class="dd-link" href="PO-Matcher/">
-          <span class="dd-ico">🔍</span>
-          <span class="dd-txt"><span class="dd-title">Expediting Tool</span><span class="dd-sub">Expediting- vs. moederlijst &amp; late items</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="Expediting-Mailer/">
-          <span class="dd-ico">✉️</span>
-          <span class="dd-txt"><span class="dd-title">Expediting Mailer</span><span class="dd-sub">Stel expediting-mails op per order</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="Large-Item-Overview/">
-          <span class="dd-ico">🏗️</span>
-          <span class="dd-txt"><span class="dd-title">Large Item Overview</span><span class="dd-sub">Large items, late items &amp; FAT — bedrijfsbreed</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="KPI-Dashboard/">
-          <span class="dd-ico">📊</span>
-          <span class="dd-txt"><span class="dd-title">Dashboard</span><span class="dd-sub">KPI-cijfers per Sub Project ID</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-      </div>
-    </div>
-    <!-- LOGISTICS -->
-    <div class="nav-item">
-      <button class="nav-trigger" onclick="toggleDD(this)">Logistics <svg class="caret"><use href="#chev"/></svg></button>
-      <div class="dropdown">
-        <a class="dd-link" href="Legplan/">
-          <span class="dd-ico">📦</span>
-          <span class="dd-txt"><span class="dd-title">Logistic Portal</span><span class="dd-sub">Legplan, CIPL &amp; shipment-informatie</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="DG-Overview/">
-          <span class="dd-ico">⚠️</span>
-          <span class="dd-txt"><span class="dd-title">DG Overview</span><span class="dd-sub">Gevaarlijke stoffen in de lijst</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="Itemlijst-Validator/">
-          <span class="dd-ico">📋</span>
-          <span class="dd-txt"><span class="dd-title">Itemlijst Validator</span><span class="dd-sub">Valideer &amp; corrigeer itemlijsten</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-        <a class="dd-link" href="Itemlijst-Template-Generator/">
-          <span class="dd-ico">📝</span>
-          <span class="dd-txt"><span class="dd-title">Itemlijst Template Generator</span><span class="dd-sub">Template per PO opstellen &amp; naar leverancier mailen</span></span>
-          <svg class="dd-chev"><use href="#chev"/></svg>
-        </a>
-      </div>
-    </div>
+<!-- Code-gate -->
+<div class="gate" id="admin-gate">
+  <div class="gate-card">
+    <div style="font-size:1.6rem">🔒</div>
+    <h2>Admin</h2>
+    <p>Voer de toegangscode in.</p>
+    <input id="gate-input" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+    <button class="gate-btn" id="gate-btn">Ontgrendelen</button>
+    <div class="gate-err" id="gate-err"></div>
   </div>
-
-  <div class="nav-spacer"></div>
-  <div class="nav-actions">
-    <a class="icon-btn" href="Admin/" title="Admin — centrale expediting-upload" aria-label="Admin">⚙️</a>
-    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Wissel thema" title="Donker thema">🌙</button>
-  </div>
-</nav>
-
-<!-- HERO -->
-<header class="hero">
-  <div class="hero-inner">
-    <div class="hero-eyebrow">Logistics &amp; Expediting</div>
-    <h1>Eén werkruimte voor <em>expediting</em> &amp; logistiek</h1>
-    <p>Kies hieronder een tool, of gebruik de menubalk. Van expediting-matching en mailing tot legplannen, gevaarlijke stoffen en itemlijst-validatie.</p>
-  </div>
-</header>
-
-<main class="wrap">
-  <!-- EXPEDITING SECTION -->
-  <section class="section">
-    <div class="sec-head">
-      <span class="sec-eyebrow">01</span>
-      <h2>Expediting</h2>
-      <span class="sec-rule"></span>
-    </div>
-    <div class="grid">
-      <a class="card" href="PO-Matcher/">
-        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/expediting-tool.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Expediting Tool</div>
-          <p class="card-desc">Koppel de expeditinglijst aan de moederlijst en beheer late items, banden en OB-ophalen.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-      <a class="card" href="Expediting-Mailer/">
-        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/expediting-mailer.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Expediting Mailer</div>
-          <p class="card-desc">Stel expediting-mails op per order of per regel — straks met slimme template-generatie.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-      <a class="card" href="Large-Item-Overview/">
-        <div class="card-img"><span class="card-badge">Expediting</span><img src="img/large-item-overview.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Large Item Overview</div>
-          <p class="card-desc">Grote items, late items en FAT-status — bedrijfsbreed in één overzicht met tabbladen.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-    </div>
-  </section>
-
-  <!-- LOGISTICS SECTION -->
-  <section class="section" style="padding-top:clamp(2rem,4vw,3rem)">
-    <div class="sec-head">
-      <span class="sec-eyebrow">02</span>
-      <h2>Logistics</h2>
-      <span class="sec-rule"></span>
-    </div>
-    <div class="grid">
-      <a class="card" href="Legplan/">
-        <div class="card-img"><span class="card-badge">Shipment</span><img src="img/logistic-portal.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Logistic Portal</div>
-          <p class="card-desc">Legplan &amp; CIPL: containerindeling, documentgeneratie en shipment-informatie met HS-controle.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-      <a class="card" href="DG-Overview/">
-        <div class="card-img"><span class="card-badge dg">Hazardous</span><img src="img/dg-overview.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">DG Overview</div>
-          <p class="card-desc">Analyseer de expeditinglijst op gevaarlijke stoffen volgens IHM, IMDG, EU SRR en CLP/REACH.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-      <a class="card" href="Itemlijst-Validator/">
-        <div class="card-img"><span class="card-badge">Validatie</span><img src="img/itemlijst-validator.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Itemlijst Validator</div>
-          <p class="card-desc">Valideer en corrigeer itemlijsten, vul aan vanuit expediting en controleer HS-codes.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-      <a class="card" href="Itemlijst-Template-Generator/">
-        <div class="card-img"><span class="card-badge">Validatie</span><img src="img/itemlijst-template-generator.png" alt="" loading="lazy" onerror="this.style.display='none'"></div>
-        <div class="card-body">
-          <div class="card-title">Itemlijst Template Generator</div>
-          <p class="card-desc">Stel per PO een itemlijst-template samen, inclusief nieuwe L-Parts, en mail 'm naar de leverancier.</p>
-          <span class="card-cta">Openen <svg><use href="#chev"/></svg></span>
-        </div>
-      </a>
-    </div>
-  </section>
-</main>
-
-<footer>Royal IHC — Intern gebruik · Logistics &amp; Expediting</footer>
-
+</div>
 <script>
-// ── Thema (gedeeld met de subpagina's via 'ihc-theme') ────────────────────
-(function(){
-  try { const t = localStorage.getItem('ihc-theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  } catch(e){}
-  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
-  const tb = document.getElementById('theme-toggle');
-  const sync = () => { if(tb){ tb.textContent = isDark() ? '☀️' : '🌙'; tb.title = isDark() ? 'Licht thema' : 'Donker thema'; } };
-  sync();
-  if (tb) tb.addEventListener('click', () => {
-    const toDark = !isDark();
-    document.documentElement.setAttribute('data-theme', toDark ? 'dark' : 'light');
-    try { localStorage.setItem('ihc-theme', toDark ? 'dark' : 'light'); } catch(e){}
-    sync();
-  });
+(function () {
+  var CODE = '2708';
+  var gate = document.getElementById('admin-gate');
+  var input = document.getElementById('gate-input');
+  var errEl = document.getElementById('gate-err');
+  function unlock() {
+    gate.style.display = 'none';
+    var main = document.getElementById('admin-main');
+    if (main) main.style.display = 'block';
+  }
+  function tryCode() {
+    if (input.value.trim() === CODE) { errEl.textContent = ''; unlock(); }
+    else { errEl.textContent = 'Onjuiste code.'; input.value = ''; input.focus(); }
+  }
+  document.getElementById('gate-btn').addEventListener('click', tryCode);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryCode(); });
+  setTimeout(function () { input.focus(); }, 50);
 })();
-
-// Mobiel/touch: klik opent de dropdown; buiten klikken sluit alles
-function toggleDD(btn){
-  if (window.matchMedia('(min-width:761px)').matches) return; // desktop = hover
-  const item = btn.closest('.nav-item');
-  const open = item.classList.contains('open');
-  document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));
-  if(!open) item.classList.add('open');
-}
-document.addEventListener('click', e=>{
-  if(!e.target.closest('.nav-item')) document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));
-});
 </script>
+
+<div class="wrap" id="admin-main">
+  <h1>Bedrijfsbrede Expedite<span class="r">lijst</span></h1>
+  <p class="lead">Upload de bedrijfsbrede Expediten (totaaloverzicht) hier één keer. Hij wordt centraal in de browser opgeslagen en is daarna
+    beschikbaar op PO Matcher (selectie op Sub Project ID), Itemlijst Validator en de Expediting Mailer — zonder opnieuw uploaden.</p>
+
+  <div class="panel">
+    <div class="dz" id="dz" onclick="document.getElementById('file').click()">
+      <p><b>Sleep de .xlsx hierheen</b> of klik om te kiezen</p>
+      <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
+      <p class="muted" style="margin-top:.6rem">Tabblad <code>Result</code> · headerrij wordt automatisch gedetecteerd</p>
+      <p class="muted" id="msg" style="margin-top:.4rem">—</p>
+    </div>
+    <p class="muted" style="margin-top:.9rem;line-height:1.55">
+      Na het inlezen wordt automatisch <code>expediting-data.json</code> gedownload.
+      Commit dat bestand naar <code>shared/</code> in de repo (net als de andere bestanden) en deploy —
+      daarna gebruikt iedereen op alle pagina's automatisch dezelfde lijst.
+      <button class="btn" id="redownload" style="margin-left:.4rem">↻ Bestand opnieuw downloaden</button>
+    </p>
+  </div>
+
+  <div class="panel">
+    <h1 style="font-size:1.1rem;margin-bottom:.6rem">Huidige status</h1>
+    <div id="statusBox"></div>
+    <div class="kpis" id="kpis" style="display:none"></div>
+    <p style="margin-top:1rem"><button class="btn red" id="clear">Centrale lijst wissen</button></p>
+  </div>
+
+  <div class="panel">
+    <h1 style="font-size:1.1rem;margin-bottom:.3rem">Inspection Level — projectregels</h1>
+    <p class="lead" style="margin-bottom:.9rem">
+      Bepaalt automatisch kolom AA (Inspection Level) in de Itemlijst Validator, op basis van component
+      (Mark/Label) en/of leverancier, per project. Wordt eenmalig bij projectstart ingesteld en kan
+      gaandeweg bijgesteld worden — bijvoorbeeld als de prestaties van een leverancier verslechteren.
+      Vult alleen lege AA-velden aan; een handmatig ingevulde waarde wordt nooit overschreven.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-bottom:.7rem">
+      <select id="ir-type" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+        <option value="component">Component (Mark/Label)</option>
+        <option value="supplier">Leverancier</option>
+      </select>
+      <input id="ir-match" placeholder="bv. 2253-* of Winteb" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+      <input id="ir-subproject" placeholder="Sub Project ID (of * = alle)" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+      <select id="ir-level" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+        <option>Foto's en Steekproef</option><option>Foto's</option><option>Fysiek controleren</option>
+        <option>TBD</option><option>Geen Controle</option><option>Volledige Controle</option>
+      </select>
+      <button class="btn" id="ir-add">+ Toevoegen</button>
+    </div>
+
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.9rem;flex-wrap:wrap">
+      <label class="btn" style="cursor:pointer">📄 JSON importeren (samenvoegen)
+        <input type="file" id="ir-file" accept=".json" hidden>
+      </label>
+      <label class="btn" style="cursor:pointer">🎨 Risicoprofiel-Excel importeren
+        <input type="file" id="ir-risk-file" accept=".xlsx,.xlsm" hidden>
+      </label>
+      <button class="btn" id="ir-download">↓ Download voor commit</button>
+      <button class="btn red" id="ir-clear">Alle regels wissen</button>
+      <span class="muted" id="ir-msg"></span>
+    </div>
+    <p class="muted" style="margin-top:-.4rem;margin-bottom:.9rem;line-height:1.5">
+      Risicoprofiel-Excel: verwacht kolom A (code, bv. 1046), C (omschrijving) en O (Risicoprofiel,
+      kleur bepaalt het niveau — rood → Fysiek controleren, oranje → Foto's en Steekproef, groen →
+      Geen Controle). Vraagt om het Sub Project ID vóór het importeren.
+    </p>
+
+    <div id="ir-table"></div>
+    <p class="muted" style="margin-top:.9rem;line-height:1.55">
+      Na wijzigen wordt <code>inspection-rules.json</code> gedownload. Commit dat bestand naar
+      <code>shared/</code> (net als expediting-data.json) en deploy — daarna gebruikt de Itemlijst
+      Validator deze regels automatisch.
+    </p>
+  </div>
+</div>
+
+<!-- Expediting datalaag -->
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script src="../shared/inspection-rules.js"></script>
+<script>
+const dz=document.getElementById('dz'),fi=document.getElementById('file');
+let _lastCommitJSON=null;
+function _offerDownload(text,name){
+  const blob=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+fi.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)read(f);});
+
+function read(file){
+  document.getElementById('msg').textContent='Inlezen…';
+  const r=new FileReader();
+  r.onload=async ev=>{ try{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+    const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const lines=ExpeditingCore.normalizeFromRaw(raw);
+    const rawTable=ExpeditingCore.rawTable(raw);
+    await ExpeditingData.save(lines,{filename:file.name},rawTable);
+    _lastCommitJSON = ExpeditingData.buildCommitJSON(rawTable,{filename:file.name});
+    _offerDownload(_lastCommitJSON,'expediting-data.json');
+    document.getElementById('msg').textContent='Verwerkt ✓ — commit het gedownloade expediting-data.json naar shared/';
+    showStatus();
+  }catch(err){ document.getElementById('msg').textContent='Fout: '+err.message; } };
+  r.readAsArrayBuffer(file);
+}
+async function showStatus(){
+  const meta=await ExpeditingData.metaLocal(), lines=await ExpeditingData.loadLocal();
+  const box=document.getElementById('statusBox'), kpis=document.getElementById('kpis');
+  if(!meta||!lines){ box.className='status none'; box.textContent='Nog geen lijst geladen. Upload hierboven om te beginnen.'; kpis.style.display='none'; return; }
+  const sup=ExpeditingCore.aggregate(lines);
+  const multi=sup.filter(s=>s.nProj>1).length, late=lines.filter(o=>o.late).length, unconf=lines.filter(o=>o.unconf).length;
+  box.className='status ok';
+  box.innerHTML='Actief: <b>'+ExpeditingCore.esc(meta.filename||'lijst')+'</b> · geüpload '+new Date(meta.uploaded).toLocaleString('nl-NL');
+  kpis.style.display='flex';
+  kpis.innerHTML=[[lines.length,'open regels'],[sup.length,'leveranciers'],[multi,'multi-project'],[late,'te laat'],[unconf,'onbevestigd']]
+    .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
+}
+document.getElementById('clear').onclick=async()=>{ if(confirm('Centrale lijst wissen?')){ await ExpeditingData.clear(); showStatus(); } };
+document.getElementById('redownload').onclick=async()=>{
+  const raw=await ExpeditingData.loadRawLocal(), m=await ExpeditingData.metaLocal();
+  if(!raw){ alert('Nog geen lijst geüpload in deze browser. Upload eerst hierboven.'); return; }
+  _offerDownload(ExpeditingData.buildCommitJSON(raw, m||{}), 'expediting-data.json');
+};
+showStatus();
+
+// ── Inspection Level — projectregels ────────────────────────────────────────
+function _irEsc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function irRender(){
+  const rules = await InspectionRules.loadLocal();
+  const box = document.getElementById('ir-table');
+  if (!rules.length){ box.innerHTML = '<p class="muted">Nog geen regels toegevoegd.</p>'; return; }
+  const rows = rules.map((r,i)=>`
+    <tr style="border-bottom:1px solid var(--ihc-steel)">
+      <td style="padding:.4rem .5rem">${r.type==='component'?'Component':'Leverancier'}</td>
+      <td style="padding:.4rem .5rem"><code>${_irEsc(r.match)}</code></td>
+      <td style="padding:.4rem .5rem">${_irEsc(r.subProjectId||'*')}</td>
+      <td style="padding:.4rem .5rem">${_irEsc(r.inspectionLevel)}</td>
+      <td style="padding:.4rem .5rem"><button class="btn red" style="padding:.25rem .6rem;font-size:.7rem" onclick="irRemove(${i})">✕</button></td>
+    </tr>`).join('');
+  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.8rem">
+    <thead><tr style="text-align:left;color:var(--ihc-muted);font-family:var(--ihc-mono);font-size:.7rem;text-transform:uppercase">
+      <th style="padding:.4rem .5rem">Type</th><th style="padding:.4rem .5rem">Match</th>
+      <th style="padding:.4rem .5rem">Sub Project ID</th><th style="padding:.4rem .5rem">Inspection Level</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function irCommitDownload(){
+  const rules = await InspectionRules.loadLocal();
+  const meta = await InspectionRules.metaLocal();
+  _offerDownload(InspectionRules.buildCommitJSON(rules, meta||{}), 'inspection-rules.json');
+}
+window.irRemove = async function(i){
+  const rules = await InspectionRules.loadLocal();
+  rules.splice(i,1);
+  await InspectionRules.saveLocal(rules);
+  await irRender();
+  await irCommitDownload();
+  document.getElementById('ir-msg').textContent = 'Verwijderd ✓ — nieuw bestand gedownload, commit naar shared/';
+};
+document.getElementById('ir-add').onclick = async () => {
+  const type = document.getElementById('ir-type').value;
+  const match = document.getElementById('ir-match').value.trim();
+  const subProjectId = document.getElementById('ir-subproject').value.trim() || '*';
+  const inspectionLevel = document.getElementById('ir-level').value;
+  if (!match){ document.getElementById('ir-msg').textContent = 'Vul eerst component of leverancier in.'; return; }
+  const rules = await InspectionRules.loadLocal();
+  rules.push({ type, match, subProjectId, inspectionLevel, datum: new Date().toISOString().slice(0,10) });
+  await InspectionRules.saveLocal(rules);
+  document.getElementById('ir-match').value = '';
+  document.getElementById('ir-subproject').value = '';
+  await irRender();
+  await irCommitDownload();
+  document.getElementById('ir-msg').textContent = 'Toegevoegd ✓ — nieuw bestand gedownload, commit naar shared/';
+};
+document.getElementById('ir-file').onchange = async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.rules) ? parsed.rules : null);
+    if (!incoming) throw new Error('Verwacht een array, of een object met een "rules"-array.');
+    const existing = await InspectionRules.loadLocal();
+    await InspectionRules.saveLocal(existing.concat(incoming));
+    await irRender();
+    await irCommitDownload();
+    document.getElementById('ir-msg').textContent = `${incoming.length} regel(s) samengevoegd ✓ — nieuw bestand gedownload, commit naar shared/`;
+  } catch (err) {
+    document.getElementById('ir-msg').textContent = 'Fout bij importeren: ' + err.message;
+  }
+  e.target.value = '';
+};
+// ── Risicoprofiel-Excel importeren (kleur-gecodeerd, per project) ──────────
+// Verwacht: kolom A = code (Ind_No/component-basis), C = omschrijving,
+// O = Risicoprofiel (celkleur bepaalt het niveau). SheetJS (gratis editie)
+// leest celkleuren niet betrouwbaar uit — daarom hier, net als bij de
+// Itemlijst-template, rechtstreeks op ZIP/XML-niveau gelezen (XLSX.CFB).
+const RISK_COLOR_MAP = {
+  'FFFF0000': 'Fysiek controleren',     // rood = hoog risico
+  'FFFFC000': "Foto's en Steekproef",   // oranje = middel risico
+  'FF00B050': 'Geen Controle',          // groen = laag risico
+  'FF92D050': 'Geen Controle',          // lichtgroen = laag risico
+};
+const RISK_SEVERITY = { 'Fysiek controleren': 3, "Foto's en Steekproef": 2, 'Geen Controle': 1 };
+
+async function parseRiskProfileExcel(arrayBuffer) {
+  const cfb = XLSX.CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
+  const find = (p) => { const i = cfb.FullPaths.findIndex(f => f.replace(/^Root Entry\//, '') === p); return i < 0 ? null : cfb.FileIndex[i]; };
+  const readTxt = (p) => { const f = find(p); if (!f) return ''; const c = f.content; let s=''; for(let i=0;i<c.length;i++) s+=String.fromCharCode(c[i]); return decodeURIComponent(escape(s)); };
+
+  const stylesXml = readTxt('xl/styles.xml');
+  const sheetXml  = readTxt('xl/worksheets/sheet1.xml');
+  const sstXml    = readTxt('xl/sharedStrings.xml');
+
+  const fillsBlock = (stylesXml.match(/<fills[^>]*>([\s\S]*?)<\/fills>/) || [,''])[1];
+  const fills = [...fillsBlock.matchAll(/<fill>([\s\S]*?)<\/fill>/g)].map(m => {
+    const rgbMatch = m[1].match(/<fgColor rgb="([0-9A-Fa-f]{8})"/);
+    return rgbMatch ? rgbMatch[1] : null;
+  });
+  const xfsBlock = (stylesXml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/) || [,''])[1];
+  const xfs = [...xfsBlock.matchAll(/<xf\b[^>]*\/?>/g)].map(m => {
+    const fm = m[0].match(/fillId="(\d+)"/);
+    return fm ? +fm[1] : 0;
+  });
+  const colorForStyle = s => { const fillId = xfs[s]; return fillId != null ? fills[fillId] : null; };
+
+  const sst = [...sstXml.matchAll(/<si>(?:<t[^>]*>([^<]*)<\/t>|<r>[\s\S]*?<\/r>)<\/si>/g)].map(m => m[1] ?? '');
+  function cellText(rowXml, colLetter, rowNum) {
+    const re = new RegExp('<c r="' + colLetter + rowNum + '"([^>]*)>(?:<v>([^<]*)<\\/v>)?');
+    const m = rowXml.match(re);
+    if (!m) return '';
+    const isShared = /t="s"/.test(m[1]);
+    if (isShared && m[2] !== undefined) return sst[+m[2]] ?? '';
+    return m[2] ?? '';
+  }
+
+  const rows = [...sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)];
+  const rawMatches = []; // {code, level}
+  for (const [, r, rowXml] of rows) {
+    const cellM = rowXml.match(/<c r="O\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+    if (!cellM) continue;
+    const sMatch = cellM[1].match(/\ss="(\d+)"/);
+    if (!sMatch) continue;
+    const color = colorForStyle(+sMatch[1]);
+    const level = RISK_COLOR_MAP[color];
+    if (!level) continue;
+    const code = cellText(rowXml, 'A', r).trim();
+    if (!code) continue;
+    rawMatches.push({ code, level });
+  }
+
+  // Per code dedupliceren; bij tegenstrijdige kleuren de strengste variant
+  // aanhouden. Eerst ALLE niveaus per code verzamelen (orde-onafhankelijk),
+  // dán pas de strengste kiezen — zo wordt een conflict altijd gemeld, ook
+  // als de strengste variant toevallig als eerste in het bestand voorkomt.
+  const levelsByCode = {};
+  rawMatches.forEach(({ code, level }) => {
+    (levelsByCode[code] = levelsByCode[code] || new Set()).add(level);
+  });
+  const conflicts = Object.keys(levelsByCode).filter(code => levelsByCode[code].size > 1);
+  const codes = Object.keys(levelsByCode);
+  const rules = codes.map(code => {
+    const best = [...levelsByCode[code]].sort((a, b) => RISK_SEVERITY[b] - RISK_SEVERITY[a])[0];
+    return { code, level: best };
+  });
+  return { rules, conflicts, totalColoredRows: rawMatches.length };
+}
+
+document.getElementById('ir-risk-file').onchange = async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const spid = prompt('Voor welk Sub Project ID geldt dit risicoprofiel? (bv. YN1323)', '');
+  if (!spid) { e.target.value = ''; return; }
+  try {
+    const buf = await file.arrayBuffer();
+    const { rules: parsed, conflicts, totalColoredRows } = await parseRiskProfileExcel(buf);
+    const newRules = parsed.map(p => ({
+      type: 'component', match: p.code + '-*', subProjectId: spid.trim(),
+      inspectionLevel: p.level, bron: 'risicoprofiel-import', datum: new Date().toISOString().slice(0,10),
+    }));
+    const existing = await InspectionRules.loadLocal();
+    await InspectionRules.saveLocal(existing.concat(newRules));
+    await irRender();
+    await irCommitDownload();
+    let msg = `${newRules.length} regel(s) geïmporteerd voor ${_irEsc(spid)} (uit ${totalColoredRows} gekleurde regels) ✓ — nieuw bestand gedownload, commit naar shared/`;
+    if (conflicts.length) msg += ` · ⚠ ${conflicts.length} code(s) hadden tegenstrijdige kleuren, strengste variant aangehouden: ${conflicts.join(', ')}`;
+    document.getElementById('ir-msg').textContent = msg;
+  } catch (err) {
+    document.getElementById('ir-msg').textContent = 'Fout bij importeren: ' + err.message;
+  }
+  e.target.value = '';
+};
+
+document.getElementById('ir-download').onclick = irCommitDownload;
+document.getElementById('ir-clear').onclick = async () => {
+  if (!confirm('Alle Inspection Level-regels wissen?')) return;
+  await InspectionRules.clearLocal();
+  await irRender();
+  document.getElementById('ir-msg').textContent = 'Gewist. Download/commit een leeg bestand als dit ook centraal moet vervallen.';
+};
+irRender();
+</script>
+<script src="../shared/shared.js"></script>
 </body>
 </html>
