@@ -102,11 +102,60 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
     <div class="kpis" id="kpis" style="display:none"></div>
     <p style="margin-top:1rem"><button class="btn red" id="clear">Centrale lijst wissen</button></p>
   </div>
+
+  <div class="panel">
+    <h1 style="font-size:1.1rem;margin-bottom:.3rem">Inspection Level — projectregels</h1>
+    <p class="lead" style="margin-bottom:.9rem">
+      Bepaalt automatisch kolom AA (Inspection Level) in de Itemlijst Validator, op basis van component
+      (Mark/Label) en/of leverancier, per project. Wordt eenmalig bij projectstart ingesteld en kan
+      gaandeweg bijgesteld worden — bijvoorbeeld als de prestaties van een leverancier verslechteren.
+      Vult alleen lege AA-velden aan; een handmatig ingevulde waarde wordt nooit overschreven.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-bottom:.7rem">
+      <select id="ir-type" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+        <option value="component">Component (Mark/Label)</option>
+        <option value="supplier">Leverancier</option>
+      </select>
+      <input id="ir-match" placeholder="bv. 2253-* of Winteb" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+      <input id="ir-subproject" placeholder="Sub Project ID (of * = alle)" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+      <select id="ir-level" style="padding:.5rem;border-radius:6px;border:1px solid var(--ihc-steel);background:var(--ihc-navy);color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem">
+        <option>Foto's en Steekproef</option><option>Foto's</option><option>Fysiek controleren</option>
+        <option>TBD</option><option>Geen Controle</option><option>Volledige Controle</option>
+      </select>
+      <button class="btn" id="ir-add">+ Toevoegen</button>
+    </div>
+
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.9rem;flex-wrap:wrap">
+      <label class="btn" style="cursor:pointer">📄 JSON importeren (samenvoegen)
+        <input type="file" id="ir-file" accept=".json" hidden>
+      </label>
+      <label class="btn" style="cursor:pointer">🎨 Risicoprofiel-Excel importeren
+        <input type="file" id="ir-risk-file" accept=".xlsx,.xlsm" hidden>
+      </label>
+      <button class="btn" id="ir-download">↓ Download voor commit</button>
+      <button class="btn red" id="ir-clear">Alle regels wissen</button>
+      <span class="muted" id="ir-msg"></span>
+    </div>
+    <p class="muted" style="margin-top:-.4rem;margin-bottom:.9rem;line-height:1.5">
+      Risicoprofiel-Excel: verwacht kolom A (code, bv. 1046), C (omschrijving) en O (Risicoprofiel,
+      kleur bepaalt het niveau — rood → Fysiek controleren, oranje → Foto's en Steekproef, groen →
+      Geen Controle). Vraagt om het Sub Project ID vóór het importeren.
+    </p>
+
+    <div id="ir-table"></div>
+    <p class="muted" style="margin-top:.9rem;line-height:1.55">
+      Na wijzigen wordt <code>inspection-rules.json</code> gedownload. Commit dat bestand naar
+      <code>shared/</code> (net als expediting-data.json) en deploy — daarna gebruikt de Itemlijst
+      Validator deze regels automatisch.
+    </p>
+  </div>
 </div>
 
 <!-- Expediting datalaag -->
 <script src="../shared/expediting-core.js"></script>
 <script src="../shared/expediting-data.js"></script>
+<script src="../shared/inspection-rules.js"></script>
 <script>
 const dz=document.getElementById('dz'),fi=document.getElementById('file');
 let _lastCommitJSON=null;
@@ -156,6 +205,180 @@ document.getElementById('redownload').onclick=async()=>{
   _offerDownload(ExpeditingData.buildCommitJSON(raw, m||{}), 'expediting-data.json');
 };
 showStatus();
+
+// ── Inspection Level — projectregels ────────────────────────────────────────
+function _irEsc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function irRender(){
+  const rules = await InspectionRules.loadLocal();
+  const box = document.getElementById('ir-table');
+  if (!rules.length){ box.innerHTML = '<p class="muted">Nog geen regels toegevoegd.</p>'; return; }
+  const rows = rules.map((r,i)=>`
+    <tr style="border-bottom:1px solid var(--ihc-steel)">
+      <td style="padding:.4rem .5rem">${r.type==='component'?'Component':'Leverancier'}</td>
+      <td style="padding:.4rem .5rem"><code>${_irEsc(r.match)}</code></td>
+      <td style="padding:.4rem .5rem">${_irEsc(r.subProjectId||'*')}</td>
+      <td style="padding:.4rem .5rem">${_irEsc(r.inspectionLevel)}</td>
+      <td style="padding:.4rem .5rem"><button class="btn red" style="padding:.25rem .6rem;font-size:.7rem" onclick="irRemove(${i})">✕</button></td>
+    </tr>`).join('');
+  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.8rem">
+    <thead><tr style="text-align:left;color:var(--ihc-muted);font-family:var(--ihc-mono);font-size:.7rem;text-transform:uppercase">
+      <th style="padding:.4rem .5rem">Type</th><th style="padding:.4rem .5rem">Match</th>
+      <th style="padding:.4rem .5rem">Sub Project ID</th><th style="padding:.4rem .5rem">Inspection Level</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function irCommitDownload(){
+  const rules = await InspectionRules.loadLocal();
+  const meta = await InspectionRules.metaLocal();
+  _offerDownload(InspectionRules.buildCommitJSON(rules, meta||{}), 'inspection-rules.json');
+}
+window.irRemove = async function(i){
+  const rules = await InspectionRules.loadLocal();
+  rules.splice(i,1);
+  await InspectionRules.saveLocal(rules);
+  await irRender();
+  await irCommitDownload();
+  document.getElementById('ir-msg').textContent = 'Verwijderd ✓ — nieuw bestand gedownload, commit naar shared/';
+};
+document.getElementById('ir-add').onclick = async () => {
+  const type = document.getElementById('ir-type').value;
+  const match = document.getElementById('ir-match').value.trim();
+  const subProjectId = document.getElementById('ir-subproject').value.trim() || '*';
+  const inspectionLevel = document.getElementById('ir-level').value;
+  if (!match){ document.getElementById('ir-msg').textContent = 'Vul eerst component of leverancier in.'; return; }
+  const rules = await InspectionRules.loadLocal();
+  rules.push({ type, match, subProjectId, inspectionLevel, datum: new Date().toISOString().slice(0,10) });
+  await InspectionRules.saveLocal(rules);
+  document.getElementById('ir-match').value = '';
+  document.getElementById('ir-subproject').value = '';
+  await irRender();
+  await irCommitDownload();
+  document.getElementById('ir-msg').textContent = 'Toegevoegd ✓ — nieuw bestand gedownload, commit naar shared/';
+};
+document.getElementById('ir-file').onchange = async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.rules) ? parsed.rules : null);
+    if (!incoming) throw new Error('Verwacht een array, of een object met een "rules"-array.');
+    const existing = await InspectionRules.loadLocal();
+    await InspectionRules.saveLocal(existing.concat(incoming));
+    await irRender();
+    await irCommitDownload();
+    document.getElementById('ir-msg').textContent = `${incoming.length} regel(s) samengevoegd ✓ — nieuw bestand gedownload, commit naar shared/`;
+  } catch (err) {
+    document.getElementById('ir-msg').textContent = 'Fout bij importeren: ' + err.message;
+  }
+  e.target.value = '';
+};
+// ── Risicoprofiel-Excel importeren (kleur-gecodeerd, per project) ──────────
+// Verwacht: kolom A = code (Ind_No/component-basis), C = omschrijving,
+// O = Risicoprofiel (celkleur bepaalt het niveau). SheetJS (gratis editie)
+// leest celkleuren niet betrouwbaar uit — daarom hier, net als bij de
+// Itemlijst-template, rechtstreeks op ZIP/XML-niveau gelezen (XLSX.CFB).
+const RISK_COLOR_MAP = {
+  'FFFF0000': 'Fysiek controleren',     // rood = hoog risico
+  'FFFFC000': "Foto's en Steekproef",   // oranje = middel risico
+  'FF00B050': 'Geen Controle',          // groen = laag risico
+  'FF92D050': 'Geen Controle',          // lichtgroen = laag risico
+};
+const RISK_SEVERITY = { 'Fysiek controleren': 3, "Foto's en Steekproef": 2, 'Geen Controle': 1 };
+
+async function parseRiskProfileExcel(arrayBuffer) {
+  const cfb = XLSX.CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
+  const find = (p) => { const i = cfb.FullPaths.findIndex(f => f.replace(/^Root Entry\//, '') === p); return i < 0 ? null : cfb.FileIndex[i]; };
+  const readTxt = (p) => { const f = find(p); if (!f) return ''; const c = f.content; let s=''; for(let i=0;i<c.length;i++) s+=String.fromCharCode(c[i]); return decodeURIComponent(escape(s)); };
+
+  const stylesXml = readTxt('xl/styles.xml');
+  const sheetXml  = readTxt('xl/worksheets/sheet1.xml');
+  const sstXml    = readTxt('xl/sharedStrings.xml');
+
+  const fillsBlock = (stylesXml.match(/<fills[^>]*>([\s\S]*?)<\/fills>/) || [,''])[1];
+  const fills = [...fillsBlock.matchAll(/<fill>([\s\S]*?)<\/fill>/g)].map(m => {
+    const rgbMatch = m[1].match(/<fgColor rgb="([0-9A-Fa-f]{8})"/);
+    return rgbMatch ? rgbMatch[1] : null;
+  });
+  const xfsBlock = (stylesXml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/) || [,''])[1];
+  const xfs = [...xfsBlock.matchAll(/<xf\b[^>]*\/?>/g)].map(m => {
+    const fm = m[0].match(/fillId="(\d+)"/);
+    return fm ? +fm[1] : 0;
+  });
+  const colorForStyle = s => { const fillId = xfs[s]; return fillId != null ? fills[fillId] : null; };
+
+  const sst = [...sstXml.matchAll(/<si>(?:<t[^>]*>([^<]*)<\/t>|<r>[\s\S]*?<\/r>)<\/si>/g)].map(m => m[1] ?? '');
+  function cellText(rowXml, colLetter, rowNum) {
+    const re = new RegExp('<c r="' + colLetter + rowNum + '"([^>]*)>(?:<v>([^<]*)<\\/v>)?');
+    const m = rowXml.match(re);
+    if (!m) return '';
+    const isShared = /t="s"/.test(m[1]);
+    if (isShared && m[2] !== undefined) return sst[+m[2]] ?? '';
+    return m[2] ?? '';
+  }
+
+  const rows = [...sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)];
+  const rawMatches = []; // {code, level}
+  for (const [, r, rowXml] of rows) {
+    const cellM = rowXml.match(/<c r="O\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+    if (!cellM) continue;
+    const sMatch = cellM[1].match(/\ss="(\d+)"/);
+    if (!sMatch) continue;
+    const color = colorForStyle(+sMatch[1]);
+    const level = RISK_COLOR_MAP[color];
+    if (!level) continue;
+    const code = cellText(rowXml, 'A', r).trim();
+    if (!code) continue;
+    rawMatches.push({ code, level });
+  }
+
+  // Per code dedupliceren; bij tegenstrijdige kleuren de strengste variant
+  // aanhouden. Eerst ALLE niveaus per code verzamelen (orde-onafhankelijk),
+  // dán pas de strengste kiezen — zo wordt een conflict altijd gemeld, ook
+  // als de strengste variant toevallig als eerste in het bestand voorkomt.
+  const levelsByCode = {};
+  rawMatches.forEach(({ code, level }) => {
+    (levelsByCode[code] = levelsByCode[code] || new Set()).add(level);
+  });
+  const conflicts = Object.keys(levelsByCode).filter(code => levelsByCode[code].size > 1);
+  const codes = Object.keys(levelsByCode);
+  const rules = codes.map(code => {
+    const best = [...levelsByCode[code]].sort((a, b) => RISK_SEVERITY[b] - RISK_SEVERITY[a])[0];
+    return { code, level: best };
+  });
+  return { rules, conflicts, totalColoredRows: rawMatches.length };
+}
+
+document.getElementById('ir-risk-file').onchange = async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const spid = prompt('Voor welk Sub Project ID geldt dit risicoprofiel? (bv. YN1323)', '');
+  if (!spid) { e.target.value = ''; return; }
+  try {
+    const buf = await file.arrayBuffer();
+    const { rules: parsed, conflicts, totalColoredRows } = await parseRiskProfileExcel(buf);
+    const newRules = parsed.map(p => ({
+      type: 'component', match: p.code + '-*', subProjectId: spid.trim(),
+      inspectionLevel: p.level, bron: 'risicoprofiel-import', datum: new Date().toISOString().slice(0,10),
+    }));
+    const existing = await InspectionRules.loadLocal();
+    await InspectionRules.saveLocal(existing.concat(newRules));
+    await irRender();
+    await irCommitDownload();
+    let msg = `${newRules.length} regel(s) geïmporteerd voor ${_irEsc(spid)} (uit ${totalColoredRows} gekleurde regels) ✓ — nieuw bestand gedownload, commit naar shared/`;
+    if (conflicts.length) msg += ` · ⚠ ${conflicts.length} code(s) hadden tegenstrijdige kleuren, strengste variant aangehouden: ${conflicts.join(', ')}`;
+    document.getElementById('ir-msg').textContent = msg;
+  } catch (err) {
+    document.getElementById('ir-msg').textContent = 'Fout bij importeren: ' + err.message;
+  }
+  e.target.value = '';
+};
+
+document.getElementById('ir-download').onclick = irCommitDownload;
+document.getElementById('ir-clear').onclick = async () => {
+  if (!confirm('Alle Inspection Level-regels wissen?')) return;
+  await InspectionRules.clearLocal();
+  await irRender();
+  document.getElementById('ir-msg').textContent = 'Gewist. Download/commit een leeg bestand als dit ook centraal moet vervallen.';
+};
+irRender();
 </script>
 <script src="../shared/shared.js"></script>
 </body>
