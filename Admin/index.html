@@ -133,14 +133,17 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
       <label class="btn" style="cursor:pointer">🎨 Risicoprofiel-Excel importeren
         <input type="file" id="ir-risk-file" accept=".xlsx,.xlsm" hidden>
       </label>
+      <a class="btn" href="risicoprofilering-template.xlsx" download="Risicoprofilering-uploadtemplate.xlsx">⬇ Download template</a>
       <button class="btn" id="ir-download">↓ Download voor commit</button>
       <button class="btn red" id="ir-clear">Alle regels wissen</button>
       <span class="muted" id="ir-msg"></span>
     </div>
     <p class="muted" style="margin-top:-.4rem;margin-bottom:.9rem;line-height:1.5">
-      Risicoprofiel-Excel: verwacht kolom A (code, bv. 1046), C (omschrijving) en O (Risicoprofiel,
-      kleur bepaalt het niveau — rood → Fysiek controleren, oranje → Foto's en Steekproef, groen →
-      Geen Controle). Vraagt om het Sub Project ID vóór het importeren.
+      Risicoprofiel-Excel: verwacht kolom A (code, bv. 1046), B (omschrijving) en C (Risicoprofiel —
+      de celkleur bepaalt het niveau: rood → Fysiek controleren, oranje → Foto's en Steekproef, groen →
+      Geen Controle). Vraagt om het Sub Project ID vóór het importeren. Gebruik "Download template" voor
+      het lege basisbestand — inclusief legenda en voorbeeldrijen — om het bij een nieuw project aan te
+      leveren aan wie het risicoprofiel opstelt.
     </p>
 
     <div id="ir-table"></div>
@@ -307,18 +310,30 @@ async function parseRiskProfileExcel(arrayBuffer) {
 
   const sst = [...sstXml.matchAll(/<si>(?:<t[^>]*>([^<]*)<\/t>|<r>[\s\S]*?<\/r>)<\/si>/g)].map(m => m[1] ?? '');
   function cellText(rowXml, colLetter, rowNum) {
-    const re = new RegExp('<c r="' + colLetter + rowNum + '"([^>]*)>(?:<v>([^<]*)<\\/v>)?');
+    // Drie mogelijke vormen van een celwaarde in de OOXML: direct getal/tekst
+    // (<v>...</v>), verwijzing naar sharedStrings.xml (t="s", <v>index</v>),
+    // of een inline string (t="inlineStr", <is><t>...</t></is> — dit laatste
+    // is wat openpyxl standaard schrijft, dus zonder deze tak zou de
+    // eigen uploadtemplate zelf altijd een lege code opleveren).
+    const re = new RegExp('<c r="' + colLetter + rowNum + '"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)');
     const m = rowXml.match(re);
     if (!m) return '';
-    const isShared = /t="s"/.test(m[1]);
-    if (isShared && m[2] !== undefined) return sst[+m[2]] ?? '';
-    return m[2] ?? '';
+    const attrs = m[1] || '';
+    const inner = m[2] || '';
+    if (/t="inlineStr"/.test(attrs)) {
+      const t = inner.match(/<is>(?:<t[^>]*>([^<]*)<\/t>|<r>[\s\S]*?<\/r>)<\/is>/);
+      if (t) return t[1] ?? inner.replace(/<[^>]+>/g, '');
+    }
+    const vMatch = inner.match(/<v>([^<]*)<\/v>/);
+    if (!vMatch) return '';
+    const isShared = /t="s"/.test(attrs);
+    return isShared ? (sst[+vMatch[1]] ?? '') : vMatch[1];
   }
 
   const rows = [...sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)];
   const rawMatches = []; // {code, level}
   for (const [, r, rowXml] of rows) {
-    const cellM = rowXml.match(/<c r="O\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+    const cellM = rowXml.match(/<c r="C\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
     if (!cellM) continue;
     const sMatch = cellM[1].match(/\ss="(\d+)"/);
     if (!sMatch) continue;
