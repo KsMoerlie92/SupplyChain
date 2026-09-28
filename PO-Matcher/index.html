@@ -156,11 +156,11 @@
         <table id="result-table">
           <thead>
             <tr>
-              <th>IHC PO + Item <small>Expediting referentie</small></th>
-              <th>Leverancier <small>Moeder · Kol K</small></th>
-              <th>Qty <small>Moeder F / Exp O</small></th>
-              <th>Moeder Kol E</th>
-              <th>Status</th>
+              <th class="res-sortable" data-sort="ref" onclick="setResSort('ref')" style="cursor:pointer;user-select:none" title="Sorteer op IHC PO + Item">IHC PO + Item <small>Expediting referentie</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="supplier" onclick="setResSort('supplier')" style="cursor:pointer;user-select:none" title="Sorteer op Leverancier">Leverancier <small>Moeder · Kol K</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="qty" onclick="setResSort('qty')" style="cursor:pointer;user-select:none" title="Sorteer op Qty">Qty <small>Moeder F / Exp O</small><span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="colE" onclick="setResSort('colE')" style="cursor:pointer;user-select:none" title="Sorteer op Moeder Kol E">Moeder Kol E<span class="res-arrow"></span></th>
+              <th class="res-sortable" data-sort="status" onclick="setResSort('status')" style="cursor:pointer;user-select:none" title="Sorteer op Status">Status<span class="res-arrow"></span></th>
             </tr>
           </thead>
           <tbody id="result-tbody"></tbody>
