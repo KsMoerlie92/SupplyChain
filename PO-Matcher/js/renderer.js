@@ -172,8 +172,10 @@ function _resSortRows(rows) {
 function _updateResArrows() {
   document.querySelectorAll('#result-table thead th.res-sortable').forEach(th => {
     const k = th.dataset.sort;
+    const on = _resSortCol === k;
+    th.classList.toggle('res-sort-active', on);
     const sp = th.querySelector('.res-arrow');
-    if (sp) sp.textContent = (_resSortCol === k) ? (_resSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+    if (sp) sp.textContent = on ? (_resSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
   });
 }
 
