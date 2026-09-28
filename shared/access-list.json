@@ -1,0 +1,7 @@
+{
+  "_toelichting": "Toegangsgegevens voor shared/site-gate.js. Dit bestand staat bewust NERGENS gelinkt in navigatie/menu's — het is alleen te vinden door wie de exacte bestandsnaam al kent (bijvoorbeeld via deze broncode zelf). Dat is geen echte beveiliging, alleen een hogere drempel dan de gegevens rechtstreeks in site-gate.js zetten. Wachtwoorden staan als SHA-256-hash, nooit als platte tekst. Gebruiker toevoegen/wijzigen: zie de instructie in shared/site-gate.js.",
+  "users": [
+    { "user": "kris",   "passHash": "5dc3c3700c46499d89e7e810366d9d873e4da6b54c072f8ce515d47d7926878c" },
+    { "user": "jeroen", "passHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" }
+  ]
+}
