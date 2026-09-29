@@ -3,6 +3,6 @@
   "users": [
     { "user": "Kris",   "passHash": "5dc3c3700c46499d89e7e810366d9d873e4da6b54c072f8ce515d47d7926878c" },
     { "user": "Jeroen", "passHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" },
-    { "user": "Max", "passHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" }
+    { "user": "Max", "passHash": "499bc7df9d8873c1c38e6898177c343b2a34d2eb43178a9eb4efcb993366c8cd"}
   ]
 }
