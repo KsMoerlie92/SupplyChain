@@ -414,22 +414,18 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (!vs('H')) errors['H'] = 'Component (Mark/Label) is verplicht';
 
   // ── I: Supplier article number — verplicht (door leverancier aan te leveren) ──
-  // Bij Eriks/W&O met een serienummer (J) hoort dit ons eigen partnummer te
-  // zijn, automatisch gevuld vanuit Expediting (kolom K "Part No") via de
-  // Unified Reference Code-match op kolom H — zie _fillRowFromExpediting().
-  // Staat het hier toch nog leeg, dan kon die koppeling niet gelegd worden.
-  if (!vs('I')) {
-    if (_isPartNoSupplier(v('K')) && vs('J')) {
-      errors['I'] = 'Supplier article number (ons partnummer) ontbreekt — Unified Reference Code (kolom H) '
-        + 'kon niet gekoppeld worden aan de Expediting-lijst, of Part No (kolom K) staat daar leeg. '
-        + 'Controleer de koppeling handmatig.';
-    } else {
-      errors['I'] = 'Supplier article number is verplicht';
-    }
-  }
+  if (!vs('I')) errors['I'] = 'Supplier article number is verplicht';
 
-  // ── J: Serial number — optioneel, alleen relevant indien van toepassing ──
-  // (geen verplichte validatie; leverancier vult dit alleen in waar nodig)
+  // ── J: Serial number / (bij Eriks/W&O) ons eigen partnummer ──────────────
+  // Bij Eriks/W&O hoort hier ons eigen partnummer te staan, automatisch
+  // gevuld vanuit Expediting (kolom K "Part No") via de Unified Reference
+  // Code-match op kolom H — zie _fillRowFromExpediting(). Staat het hier
+  // na die poging nog leeg, dan kon die koppeling niet gelegd worden.
+  // Voor overige leveranciers blijft J optioneel (geen verplichte validatie).
+  if (!vs('J') && _isPartNoSupplier(v('K'))) {
+    warnings['J'] = 'Partnummer (kolom J) ontbreekt — Unified Reference Code (kolom H) kon niet gekoppeld '
+      + 'worden aan de Expediting-lijst, of Part No staat daar leeg. Controleer de koppeling handmatig.';
+  }
 
   // ── K: Supplier — required ────────────────────────────────────────────────
   if (!vs('K')) errors['K'] = 'Supplier is verplicht';
@@ -661,12 +657,12 @@ function _buildExpIndex(expeditingData) {
   return m;
 }
 
-// ── Eriks / W&O: ons eigen partnummer i.p.v. supplier article number ──────
-// Bij deze twee leveranciers hoort, zodra er een serienummer (kolom J) is
-// opgegeven, in kolom I (Supplier article number) óns eigen partnummer te
-// staan — niet een door de leverancier verzonnen artikelcode. Dat partnummer
-// staat in de Expediting-lijst, kolom K ("Part No"), op dezelfde rij als de
-// Unified Reference Code waarmee hierboven al gematcht wordt (itemlijst H).
+// ── Eriks / W&O: ons eigen partnummer in kolom J ───────────────────────────
+// Bij deze twee leveranciers hoort in kolom J (Serial number — deze kolom
+// wordt later hernoemd naar "Part NR") óns eigen partnummer te staan — niet
+// een door de leverancier verzonnen artikelcode. Dat partnummer staat in de
+// Expediting-lijst, kolom K ("Part No"), op dezelfde rij als de Unified
+// Reference Code waarmee hierboven al gematcht wordt (itemlijst H).
 function _isPartNoSupplier(supplierName) {
   const s = String(supplierName ?? '');
   return /\beriks\b/i.test(s) || /\bw\s*&\s*o\b/i.test(s);
@@ -722,16 +718,16 @@ function _fillRowFromExpediting(cells, expeditingData) {
     filled++;
   }
 
-  // ── I: Supplier article number — bij Eriks/W&O met een serienummer (J)
-  // vullen we ons eigen partnummer in (Expediting kolom K "Part No"),
-  // via dezelfde H ↔ Unified Reference Code-match hierboven. Alleen als I
-  // nog leeg is — een echt door de leverancier aangeleverd artikelnummer
-  // wordt nooit overschreven.
-  if (_isPartNoSupplier(cells[COL.K]) && String(cells[COL.J] ?? '').trim()
-      && !String(cells[COL.I] ?? '').trim()) {
+  // ── J: Serial number → bij Eriks/W&O vervangen door ons eigen partnummer
+  // (Expediting kolom K "Part No"), via dezelfde H ↔ Unified Reference
+  // Code-match hierboven. De leverancier vult hier een serienummer in, maar
+  // voor deze twee leveranciers hoort op die plek óns partnummer te staan —
+  // de crossreference overschrijft die cel dus bewust (kolom I blijft
+  // ongemoeid: dat blijft het eigen artikelnummer van de leverancier).
+  if (_isPartNoSupplier(cells[COL.K])) {
     const partNo = String(match['Part No'] ?? '').trim();
-    if (partNo) {
-      cells[COL.I] = partNo;
+    if (partNo && String(cells[COL.J] ?? '').trim() !== partNo) {
+      cells[COL.J] = partNo;
       filled++;
     }
   }
