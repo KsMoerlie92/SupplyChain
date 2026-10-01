@@ -180,7 +180,12 @@ function _remapColumns() {
   const hdrs = _valHeaders;
   const find = (pattern) => hdrs.findIndex(h => h && new RegExp(pattern,'i').test(String(h)));
 
-  let nextVirtual = hdrs.length; // append virtual cols after file cols
+  // Virtuele kolommen altijd ná de hoogste bekende kolompositie laten beginnen
+  // (nooit enkel na hdrs.length) — anders kan een kortere/niet-standaard
+  // aangeleverde itemlijst (minder kolommen dan de volledige template) een
+  // virtuele kolom (bv. Dangerous Goods) laten samenvallen met een vaste
+  // positie (bv. Height) en zo stilzwijgend data overschrijven.
+  let nextVirtual = Math.max(hdrs.length, ...Object.values(COL)) + 1;
 
   // Re-detect a field by header name so it works regardless of its position
   // in the actual file; fall back to a virtual (IHC-added) column when the
@@ -397,6 +402,7 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   const qty = vn('F');
   if (qty === null) errors['F'] = 'Quantity moet een getal zijn';
   else if (qty <= 0)  errors['F'] = 'Quantity moet groter zijn dan 0';
+  else computed['F'] = qty;   // schone numerieke waarde — export schrijft dit terug i.p.v. de ruwe tekst
   _fmtWarnIfTextual('F', 'Quantity', v('F'), errors, warnings);
 
   // ── G: Unit of measure — required, must be in list ────────────────────────
@@ -408,7 +414,19 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   if (!vs('H')) errors['H'] = 'Component (Mark/Label) is verplicht';
 
   // ── I: Supplier article number — verplicht (door leverancier aan te leveren) ──
-  if (!vs('I')) errors['I'] = 'Supplier article number is verplicht';
+  // Bij Eriks/W&O met een serienummer (J) hoort dit ons eigen partnummer te
+  // zijn, automatisch gevuld vanuit Expediting (kolom K "Part No") via de
+  // Unified Reference Code-match op kolom H — zie _fillRowFromExpediting().
+  // Staat het hier toch nog leeg, dan kon die koppeling niet gelegd worden.
+  if (!vs('I')) {
+    if (_isPartNoSupplier(v('K')) && vs('J')) {
+      errors['I'] = 'Supplier article number (ons partnummer) ontbreekt — Unified Reference Code (kolom H) '
+        + 'kon niet gekoppeld worden aan de Expediting-lijst, of Part No (kolom K) staat daar leeg. '
+        + 'Controleer de koppeling handmatig.';
+    } else {
+      errors['I'] = 'Supplier article number is verplicht';
+    }
+  }
 
   // ── J: Serial number — optioneel, alleen relevant indien van toepassing ──
   // (geen verplichte validatie; leverancier vult dit alleen in waar nodig)
@@ -463,6 +481,7 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   } else if (pCur !== 'EUR') {
     errors['P'] = `Waarde staat in ${pCur} — verwacht EUR. Zet de waarde om naar EUR of vink USD-koers aan.`;
   }
+  if (pVal !== null && !errors['P']) computed['P'] = pVal;   // schone EUR-waarde zonder valutateken/tekst
   _fmtWarnIfTextual('P', 'Value pc', v('P'), errors, warnings);
 
   // ── Q: Value total — required, numeric, alleen EUR toegestaan; warn if >1% off from P×F ─
@@ -480,6 +499,7 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
       warnings['Q'] = `Value total (${qVal}) wijkt ${pct.toFixed(1)}% af van Value pc × Qty (${expected.toFixed(2)})`;
     }
   }
+  if (qVal !== null && !errors['Q']) computed['Q'] = qVal;   // schone EUR-waarde zonder valutateken/tekst
   _fmtWarnIfTextual('Q', 'Value total', v('Q'), errors, warnings);
 
   // ── R/S/T/U/V/X/Y: at least one row must have these — checked at sheet level
@@ -491,6 +511,9 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
   _fmtWarnIfTextual('T', 'Length', v('T'), errors, warnings);
   _fmtWarnIfTextual('U', 'Width', v('U'), errors, warnings);
   _fmtWarnIfTextual('V', 'Height', v('V'), errors, warnings);
+  if (t !== null)  computed['T'] = t;
+  if (u !== null)  computed['U'] = u;
+  if (h2 !== null) computed['V'] = h2;
 
   // ── W: Volume — compute if T/U/V present ─────────────────────────────────
   if (t && u && h2) {
@@ -510,6 +533,8 @@ async function validateRow(cells, isUSDPrice, usdRate, coo, expeditingData) {
     errors['Y'] = `Nett weight (${yVal}) mag niet groter zijn dan Gross weight (${xVal})`;
   _fmtWarnIfTextual('X', 'Gross weight', v('X'), errors, warnings);
   _fmtWarnIfTextual('Y', 'Nett weight', v('Y'), errors, warnings);
+  if (xVal !== null) computed['X'] = xVal;
+  if (yVal !== null) computed['Y'] = yVal;
 
   // ── AA: Dangerous Goods — tickbox, geen tekstvalidatie nodig ──────────────
 
@@ -636,6 +661,17 @@ function _buildExpIndex(expeditingData) {
   return m;
 }
 
+// ── Eriks / W&O: ons eigen partnummer i.p.v. supplier article number ──────
+// Bij deze twee leveranciers hoort, zodra er een serienummer (kolom J) is
+// opgegeven, in kolom I (Supplier article number) óns eigen partnummer te
+// staan — niet een door de leverancier verzonnen artikelcode. Dat partnummer
+// staat in de Expediting-lijst, kolom K ("Part No"), op dezelfde rij als de
+// Unified Reference Code waarmee hierboven al gematcht wordt (itemlijst H).
+function _isPartNoSupplier(supplierName) {
+  const s = String(supplierName ?? '');
+  return /\beriks\b/i.test(s) || /\bw\s*&\s*o\b/i.test(s);
+}
+
 // Expediting-veldnaam → itemlijst-kolomletter. Alleen LEGE cellen worden gevuld.
 const _EXP_FILL_MAP = [
   ['Order No',          'C'],  // IHC PO (basis-PO = Order No)
@@ -685,6 +721,21 @@ function _fillRowFromExpediting(cells, expeditingData) {
     cells[ci] = (colLetter === 'O') ? _normalizeHSCode(String(val).trim()) : String(val).trim();
     filled++;
   }
+
+  // ── I: Supplier article number — bij Eriks/W&O met een serienummer (J)
+  // vullen we ons eigen partnummer in (Expediting kolom K "Part No"),
+  // via dezelfde H ↔ Unified Reference Code-match hierboven. Alleen als I
+  // nog leeg is — een echt door de leverancier aangeleverd artikelnummer
+  // wordt nooit overschreven.
+  if (_isPartNoSupplier(cells[COL.K]) && String(cells[COL.J] ?? '').trim()
+      && !String(cells[COL.I] ?? '').trim()) {
+    const partNo = String(match['Part No'] ?? '').trim();
+    if (partNo) {
+      cells[COL.I] = partNo;
+      filled++;
+    }
+  }
+
   return filled;
 }
 
@@ -1261,20 +1312,38 @@ function exportValidatedItemlijst() {
     ws['!ref'] = XLSX.utils.encode_range(range);
   }
 
+  // Kolommen die een schone numerieke waarde horen te zijn (zie validateRow —
+  // daar staat voor elk van deze de opgeschoonde waarde al klaar in
+  // row.computed, zonder valutateken/eenheid/tekst). Deze worden bij export
+  // ALTIJD als echt Excel-getal teruggeschreven, ook als de rij verder niet
+  // bewerkt is — anders bleef een origineel "€ 1.250,00"-tekstveld in
+  // onbewerkte rijen gewoon staan zoals het was. Twee decimalen voor
+  // geldbedragen en gewicht (conform de template-instructie), de rest vrij.
+  const NUMERIC_COLS  = new Set(['F','P','Q','T','U','V','X','Y']);
+  const TWO_DEC_COLS  = new Set(['P','Q','X','Y']);
+
   // Write back edited/computed values
   _valRows.forEach((row, ri) => {
     const wsRowIdx = dataRowStart + ri; // 0-based
     // Edited cells (including virtual column values)
     Object.entries(COL).forEach(([colLetter, colIdx]) => {
-      const val = row.cells[colIdx];
-      if (val !== undefined && val !== null && val !== '') {
-        const isVirtual = _virtualCols[colLetter];
-        if (row._edited || isVirtual) {
-          const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: colIdx });
-          if (!ws[addr]) ws[addr] = {};
-          ws[addr].v = val;
-          ws[addr].t = typeof val === 'boolean' ? 'b' : typeof val === 'number' ? 'n' : 's';
-        }
+      const isVirtual   = _virtualCols[colLetter];
+      const isNumericCol = NUMERIC_COLS.has(colLetter);
+      const cleanNum     = row.computed ? row.computed[colLetter] : undefined;
+      const useClean     = isNumericCol && cleanNum !== undefined;
+      const val = useClean ? cleanNum : row.cells[colIdx];
+      if (val === undefined || val === null || val === '') return;
+      // Numerieke kolommen altijd herschrijven (ook als de rij verder niet
+      // bewerkt is); overige kolommen zoals voorheen alleen bij edit/virtueel.
+      if (!(useClean || row._edited || isVirtual)) return;
+      const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: colIdx });
+      if (!ws[addr]) ws[addr] = {};
+      ws[addr].v = val;
+      ws[addr].t = useClean ? 'n' : (typeof val === 'boolean' ? 'b' : typeof val === 'number' ? 'n' : 's');
+      if (useClean) {
+        ws[addr].z = TWO_DEC_COLS.has(colLetter) ? '0.00' : 'General';
+      } else {
+        delete ws[addr].z; // geen oude valuta-/tekstopmaak laten hangen op een niet-numerieke herschrijving
       }
     });
     // Computed volume W
