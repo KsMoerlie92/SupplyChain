@@ -8,15 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/nav.css">
 <link rel="stylesheet" href="../PO-Matcher/styles.css">
-<style>
-  .val-match-btn{background:var(--ihc-red,#D91F2C);border:none;border-radius:4px;
-    color:#fff;cursor:pointer;font-size:.9rem;font-weight:700;line-height:1;
-    padding:3px 8px;transition:opacity .15s}
-  .val-match-btn:hover{opacity:.82}
-</style>
 </head>
 <body>
-<script src="../shared/site-gate.js"></script>
 
 <div class="site-wrapper">
   <section class="content-panel">
@@ -40,12 +33,9 @@
       <!-- Toolbar -->
       <div class="val-toolbar">
         <button class="btn-val btn-val-run"    id="btn-val-run"    disabled onclick="runValidation()">▶ Valideer</button>
-        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="_valExportMail()"
-          title="Opent een nieuwe mail met de bewerkte Itemlijst als bijlage — onderwerp: {Delivery ref} ITEMLIJST {Supplier}">📧 Exporteer &amp; mail</button>
-        <button class="btn-val" id="btn-val-lparts" onclick="ValLParts.openLPartsPopup()"
-          style="background:var(--ihc-red);color:#fff"
-          title="Toont alle als 'Nieuw registreren' gemarkeerde regels en genereert de IFS-klembordtekst">➕ Maak L-Parts aan</button>
-        <div id="val-consignee-wrap" style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
+        <button class="btn-val btn-val-export" id="btn-val-export" disabled onclick="exportValidatedItemlijst()">⬇ Export gecorrigeerde Itemlijst</button>
+        <button class="btn-val btn-val-labels" id="btn-val-labels" disabled onclick="generateMerkenLabels()">🏷️ Genereer label</button>
+        <div style="display:flex;align-items:center;gap:.3rem;margin-left:auto">
           <label style="font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap">Consignee:</label>
           <input type="text" id="val-consignee" class="val-consignee-input"
             value="PACIFIC SHIPBUILDING JSC" placeholder="Consignee naam"
@@ -53,10 +43,6 @@
         </div>
         <div id="val-sheet-warnings"></div>
       </div>
-
-      <!-- Voortgang: rode regels bijgewerkt via koppeling/L-Parts -->
-      <div id="val-progress" style="display:none;margin:10px 0 4px;padding:10px 14px;
-        background:var(--card,#0F2040);border:1px solid var(--border,#1e3a6e);border-radius:8px;"></div>
 
       <!-- Summary -->
       <div id="val-summary"></div>
@@ -87,13 +73,7 @@
 <script src="../shared/gn_codes_2026.js"></script>
 <script src="../PO-Matcher/js/utils.js"></script>
 <script src="../PO-Matcher/js/state.js"></script>
-<!-- Centrale expediting-datalaag (voor auto-koppeling + Sub Project ID) -->
-<script src="../shared/expediting-core.js"></script>
-<script src="../shared/expediting-data.js"></script>
-<script src="../shared/inspection-rules.js"></script>
-<script src="../shared/validatie-log.js"></script>
-<script src="../shared/ifs-lparts-columns.js"></script>
-<script src="../shared/lparts-numbering.js"></script>
+<script src="../shared/qrcode.min.js"></script>
 <script src="../PO-Matcher/js/validator.js"></script>
 <script>
 // Override setStatus to write to #val-summary (visible) instead of #status-msg (hidden)
@@ -105,14 +85,7 @@ setStatus = function(msg, isError) {
 };
 </script>
 
-<!-- Cross-referentie (vult C/D/H vanuit expediting) + export-mail (.eml met Excel-bijlage) -->
-<script src="val-crossref.js"></script>
-<script src="val-manual-match.js"></script>
-<script src="val-lparts.js"></script>
-<script src="val-export-mail.js"></script>
 
-<!-- Mail-template-generator (itemlijst) — plaatst zelf een knop in de toolbar -->
-<script src="val-mailgen.js"></script>
 
 <script src="../shared/shared.js"></script>
 </body>
